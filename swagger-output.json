@@ -1,0 +1,5165 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "version": "v1.0.0",
+    "title": "N2N-backend",
+    "description": ""
+  },
+  "host": "localhost:3000/api/v1/n2n",
+  "basePath": "/",
+  "tags": [
+    {
+      "name": "Index",
+      "description": ""
+    },
+    {
+      "name": "Users",
+      "description": ""
+    }
+  ],
+  "schemes": [
+    "http"
+  ],
+  "paths": {
+    "/getListMenu": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "kd_ref",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getAcl": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "id_acl",
+            "type": "string",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getPermissionCrud": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "jns_ref",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertNewProject": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new project",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_kategori_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_type_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_no": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_name": {
+                  "type": "string",
+                  "example": ""
+                },
+                "portofolio_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "category_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "est_nilai_penawaran": {
+                  "type": "string",
+                  "example": ""
+                },
+                "est_cogs": {
+                  "type": "string",
+                  "example": ""
+                },
+                "customer_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kd_area": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kd_status": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateProject": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new project",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_kategori_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_type_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_no": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_name": {
+                  "type": "string",
+                  "example": ""
+                },
+                "portofolio_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "category_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "est_nilai_penawaran": {
+                  "type": "string",
+                  "example": ""
+                },
+                "est_cogs": {
+                  "type": "string",
+                  "example": ""
+                },
+                "customer_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kd_area": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kd_status": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProject": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/searchProject": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/postListProject": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getLogActivity": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getLogBillingActivity": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailProject": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_id",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "kode",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailProjectByNo": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_no",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "kode",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/markAsProject": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "array",
+                  "example": [],
+                  "items": {}
+                },
+                "status": {
+                  "type": "string",
+                  "example": ""
+                }
+              },
+              "required": [
+                "project_id",
+                "status"
+              ]
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/markAsArchive": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "array",
+                  "example": [],
+                  "items": {}
+                },
+                "archive": {
+                  "type": "string",
+                  "example": ""
+                }
+              },
+              "required": [
+                "project_id",
+                "archive"
+              ]
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/markAsUnarchive": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "array",
+                  "example": [],
+                  "items": {}
+                }
+              },
+              "required": [
+                "project_id"
+              ]
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/markAsClone": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "array",
+                  "example": [],
+                  "items": {}
+                }
+              },
+              "required": [
+                "project_id"
+              ]
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/markAsActualID": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Mark As Actual Id",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_actual_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_id": {
+                  "type": "array",
+                  "example": [],
+                  "items": {}
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/markAsAcceleration": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Mark As Acceleration",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "array",
+                  "example": [],
+                  "items": {}
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertProjectStatus": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new project",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "id_tab_status": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kd_status": {
+                  "type": "string",
+                  "example": ""
+                },
+                "billing_id": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateProjectStatus": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Update a project status",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "flag_new_dok": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProjectForCostPersonil": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailCostPersonil": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailCostPersonilDetail": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "personel_id",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailCostOperasional": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailVendorProjectBilling": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "billing_id",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailCostOperasionalWithDokumenByCostId": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "cost_id",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProjectForCostOperasional": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProjectForVendorProjectBilling": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProjectForCostAdvanced": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailCostAdvance": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "cost_revenue_id",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProjectForTagihanVendor": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailTagihanVendor": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "billing_revenue_id",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deletePersonilDetail/{dpersonel_id}": {
+      "delete": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "dpersonel_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteOperationalDetail/{cost_id}": {
+      "delete": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "cost_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updatePersonilDetail": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a detail personil",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "sub_dpersonel_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "personel_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "user_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nik": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nama_personil": {
+                  "type": "string",
+                  "example": ""
+                },
+                "divisi_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "qty_date": {
+                  "type": "string",
+                  "example": ""
+                },
+                "satuan_date": {
+                  "type": "string",
+                  "example": ""
+                },
+                "flag_personil": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertPersonilDetail": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a detail personil",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "sub_dpersonel_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "personel_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "user_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nik": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nama_personil": {
+                  "type": "string",
+                  "example": ""
+                },
+                "divisi_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "qty_date": {
+                  "type": "string",
+                  "example": ""
+                },
+                "satuan_date": {
+                  "type": "string",
+                  "example": ""
+                },
+                "flag_personil": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertOperationalDetail": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a cost operational",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kategori_cost": {
+                  "type": "string",
+                  "example": ""
+                },
+                "mata_anggaran": {
+                  "type": "string",
+                  "example": ""
+                },
+                "divisi_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "jenis_cost": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nilai_cost": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tanggal_cost": {
+                  "type": "string",
+                  "example": ""
+                },
+                "no_pr": {
+                  "type": "string",
+                  "example": ""
+                },
+                "no_nodin": {
+                  "type": "string",
+                  "example": ""
+                },
+                "status": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertOperationalDetailDokumen": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a dokumen cost operational",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "cost_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "dokumen_id": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertBillingDokumen": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new project",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "billing_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "dokumen_id": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/uploadDokumen": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "array",
+                  "example": [],
+                  "items": {}
+                }
+              },
+              "required": [
+                "project_id"
+              ]
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/stampMaterai": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateDokumen": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "dokumen_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "lampiran": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertDokumenNoFile": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteDokumen/{dokumen_id}": {
+      "delete": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "dokumen_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/uploadDokumenBAMK": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "array",
+                  "example": [],
+                  "items": {}
+                }
+              },
+              "required": [
+                "project_id"
+              ]
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteDokumenBAMK": {
+      "delete": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "dokumen_id",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/billingCollection": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new Billing Collection",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "termin": {
+                  "type": "string",
+                  "example": ""
+                },
+                "divisi_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "portofolio_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "est_periode_billing": {
+                  "type": "string",
+                  "example": ""
+                },
+                "est_bulan_billing": {
+                  "type": "string",
+                  "example": ""
+                },
+                "est_billing": {
+                  "type": "string",
+                  "example": ""
+                },
+                "real_periode_billing": {
+                  "type": "string",
+                  "example": ""
+                },
+                "real_bulan_billing": {
+                  "type": "string",
+                  "example": ""
+                },
+                "real_billing": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kd_status": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kategori_billing": {
+                  "type": "string",
+                  "example": ""
+                },
+                "created_by": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getBillingCollection": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getBillingCollectionProjectActual": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getStatusBilling": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteBillingCollection/{billing_id}": {
+      "delete": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "billing_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteBillingDokumen/{billing_detail_id}": {
+      "delete": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "billing_detail_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "billing_id",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateKdStatus": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Update Kode Status",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "billing_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kd_status": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListBillingByTermin": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "billing_id",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListBillingProjectAkselerasi": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListBillingRealization": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListBillingCollections": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "monthYear",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/vendorPlanning": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new Vendor Planning",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "vendor_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nilai_kontrak": {
+                  "type": "string",
+                  "example": ""
+                },
+                "no_kontrak": {
+                  "type": "string",
+                  "example": ""
+                },
+                "judul_kontrak": {
+                  "type": "string",
+                  "example": ""
+                },
+                "flag_final": {
+                  "type": "string",
+                  "example": ""
+                },
+                "created_by": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/vendorRemind": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new Remind",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "remind_type": {
+                  "type": "string",
+                  "example": ""
+                },
+                "limit_time": {
+                  "type": "string",
+                  "example": ""
+                },
+                "limit_unit": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "project_type": {
+                  "type": "string",
+                  "example": ""
+                },
+                "subyek": {
+                  "type": "string",
+                  "example": ""
+                },
+                "content": {
+                  "type": "string",
+                  "example": ""
+                },
+                "email_send": {
+                  "type": "string",
+                  "example": ""
+                },
+                "email_send_cc": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getVendorPlanning": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteVendorPlanning/{project_vendor_id}": {
+      "delete": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_vendor_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/CBBPlanning": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new CBB Planning",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "divisi_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "coa_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "direct_cost": {
+                  "type": "string",
+                  "example": ""
+                },
+                "indirect_cost": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getCBBPlanning": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteCBBPlanning/{cbb_id}": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "cbb_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/costPersonilPlanning": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new Cost Personil Planning",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "project_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "role_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kualifikasi_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "qty_person": {
+                  "type": "string",
+                  "example": ""
+                },
+                "satuan_person": {
+                  "type": "string",
+                  "example": ""
+                },
+                "qty_date": {
+                  "type": "string",
+                  "example": ""
+                },
+                "satuan_date": {
+                  "type": "string",
+                  "example": ""
+                },
+                "cost_unit": {
+                  "type": "string",
+                  "example": ""
+                },
+                "cost_total": {
+                  "type": "string",
+                  "example": ""
+                },
+                "divisi_id": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getCostPersonilPlanning": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteCostPersonilPlanning/{personel_id}": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "personel_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListVendor": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListVendorPt": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailVendorPt": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "type": "string",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProjectVendor": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailProjectVendor": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_id",
+            "type": "string",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertVendorPt": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new vendor PT",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "nama_perusahaan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "alamat_perusahaan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "npwp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "no_telp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "email": {
+                  "type": "string",
+                  "example": ""
+                },
+                "status": {
+                  "type": "string",
+                  "example": ""
+                },
+                "keterangan": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertContactVendorPt": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a contact customer",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "vendor_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nama": {
+                  "type": "string",
+                  "example": ""
+                },
+                "no_telp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "email": {
+                  "type": "string",
+                  "example": ""
+                },
+                "jabatan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "status": {
+                  "type": "string",
+                  "example": ""
+                },
+                "keterangan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "alamat": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteContactVendorPt/{vendor_kontak_id}": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "vendor_kontak_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateVendorPt": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new customer",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "nama_perusahaan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "alamat_perusahaan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "npwp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "no_telp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "email": {
+                  "type": "string",
+                  "example": ""
+                },
+                "status": {
+                  "type": "string",
+                  "example": ""
+                },
+                "keterangan": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getProjectByType": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "type",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "keyword",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailVendorRealization": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_vendor_id",
+            "type": "string",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/dataRevenueStream": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new billing revenue",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "billing_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "status_pymad": {
+                  "type": "string",
+                  "example": ""
+                },
+                "status_kelengkapan_dokumen": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nominal_pymad": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tanggal_bast": {
+                  "type": "string",
+                  "example": ""
+                },
+                "no_invoice": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tanggal_invoice": {
+                  "type": "string",
+                  "example": ""
+                },
+                "status_invoice": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nominal_invoice": {
+                  "type": "string",
+                  "example": ""
+                },
+                "no_faktur": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tanggal_faktur": {
+                  "type": "string",
+                  "example": ""
+                },
+                "status_pelunasan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nominal_pelunasan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tanggal_pelunasan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "denda_pajak": {
+                  "type": "string",
+                  "example": ""
+                },
+                "pph": {
+                  "type": "string",
+                  "example": ""
+                },
+                "ppn": {
+                  "type": "string",
+                  "example": ""
+                },
+                "ppn_tarif": {
+                  "type": "string",
+                  "example": ""
+                },
+                "wapu": {
+                  "type": "string",
+                  "example": ""
+                },
+                "biaya_lain": {
+                  "type": "string",
+                  "example": ""
+                },
+                "outstanding": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nominal_dpp": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getBillingDocument": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "billing_id",
+            "type": "string",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListBillingRevenue": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListBillingMonitoring": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListDetailBillingMonitoring": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListDetailPerCustomer": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListNoFaktur": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailBillingRevenue": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "billing_id",
+            "type": "string",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getReportBillingRevenue": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "billing_id",
+            "type": "string",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListCustomer": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailCustomer": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "type": "string",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertCustomer": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new customer",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "kode_akun": {
+                  "type": "string",
+                  "example": "204"
+                },
+                "customer_name": {
+                  "type": "string",
+                  "example": ""
+                },
+                "npwp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "address": {
+                  "type": "string",
+                  "example": ""
+                },
+                "email": {
+                  "type": "string",
+                  "example": ""
+                },
+                "fax": {
+                  "type": "string",
+                  "example": ""
+                },
+                "telp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "description": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateCustomer": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new customer",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "kode_akun": {
+                  "type": "string",
+                  "example": "204"
+                },
+                "customer_name": {
+                  "type": "string",
+                  "example": ""
+                },
+                "npwp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "address": {
+                  "type": "string",
+                  "example": ""
+                },
+                "email": {
+                  "type": "string",
+                  "example": ""
+                },
+                "fax": {
+                  "type": "string",
+                  "example": ""
+                },
+                "telp": {
+                  "type": "string",
+                  "example": ""
+                },
+                "description": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertContactCustomer": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a contact customer",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "customer_id": {
+                  "type": "string",
+                  "example": ""
+                },
+                "nama_contact": {
+                  "type": "string",
+                  "example": ""
+                },
+                "address": {
+                  "type": "string",
+                  "example": ""
+                },
+                "email": {
+                  "type": "string",
+                  "example": ""
+                },
+                "phone": {
+                  "type": "string",
+                  "example": ""
+                },
+                "jabatan": {
+                  "type": "string",
+                  "example": ""
+                },
+                "gender": {
+                  "type": "string",
+                  "example": ""
+                },
+                "birthdate": {
+                  "type": "string",
+                  "example": ""
+                },
+                "membawahi": {
+                  "type": "string",
+                  "example": ""
+                },
+                "description": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteContactCustomer/{customer_contact_id}": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "customer_contact_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertReferensi": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new referensi",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "kd_ref": {
+                  "type": "string",
+                  "example": ""
+                },
+                "ur_ref": {
+                  "type": "string",
+                  "example": ""
+                },
+                "jns_ref": {
+                  "type": "string",
+                  "example": ""
+                },
+                "sub_kd_ref": {
+                  "type": "string",
+                  "example": ""
+                },
+                "sub_jns_ref": {
+                  "type": "string",
+                  "example": ""
+                },
+                "start_date": {
+                  "type": "string",
+                  "example": ""
+                },
+                "end_date": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListReferensi": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailReferensi": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertPortofolio": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new portofolio",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "kode_akun": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tahun": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kode": {
+                  "type": "string",
+                  "example": ""
+                },
+                "portofolio": {
+                  "type": "string",
+                  "example": ""
+                },
+                "keterangan": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updatePortofolio": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new portoflio",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "kode_akun": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tahun": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kode": {
+                  "type": "string",
+                  "example": ""
+                },
+                "portofolio": {
+                  "type": "string",
+                  "example": ""
+                },
+                "keterangan": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListPortofolio": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailPortofolio": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListKaryawan": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertKaryawan": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new portofolio",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "kode_akun": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tahun": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kode": {
+                  "type": "string",
+                  "example": ""
+                },
+                "portofolio": {
+                  "type": "string",
+                  "example": ""
+                },
+                "keterangan": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateKaryawan": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new portoflio",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "kode_akun": {
+                  "type": "string",
+                  "example": ""
+                },
+                "tahun": {
+                  "type": "string",
+                  "example": ""
+                },
+                "kode": {
+                  "type": "string",
+                  "example": ""
+                },
+                "portofolio": {
+                  "type": "string",
+                  "example": ""
+                },
+                "keterangan": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getReferensiByJenis": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "jns_ref",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getSubReferensiByJenis": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "jns_ref",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "kd_ref",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getSubReferensiByJenis2": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "jns_ref",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "kd_ref",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getValidasi": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "jns_ref",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "kd_ref",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getRefStatusProject": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getRefStatusRevenue": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getRefStatus": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getPortofolio": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getCustomers": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getStartDate": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getLinkedPID": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListDokumen": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListPegawai": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getRefDepartment": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getCustomerBySpuc": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailProjectProfile": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_id",
+            "type": "string",
+            "in": "query"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getProjectLog": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListBillingProject": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDataRemote": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDataIntegrasi": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/addMasterData": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/sendInvoice": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateTransaction": {
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/addSuratTagihan": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getLogApprovalSuratTagihan": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/inboundPeo": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDataPeo": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/addBeritaAcara": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListUserActivity": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListApproval": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListLokasi": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListNIPByRole": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListNotification": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getNotificationFaktur": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertNotification": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateNotification": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListTask": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertTask": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getTaskDetail": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateTask": {
+      "put": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteTask/{task_id}": {
+      "delete": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListRemarks": {
+      "get": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertRemark": {
+      "post": {
+        "tags": [
+          "Index"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Add a new notification",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "pengirim": {
+                  "type": "string",
+                  "example": ""
+                },
+                "penerima": {
+                  "type": "string",
+                  "example": ""
+                },
+                "title": {
+                  "type": "string",
+                  "example": ""
+                },
+                "text": {
+                  "type": "string",
+                  "example": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/assignTeam": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/deleteAssignTeam/{assign_id}": {
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "assign_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListUser": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertUser": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertProgressProject": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProgressProject": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListProgressProjectBilling": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertProgressBilling": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getOverall": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDataAreaChart": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDataRadialChart": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/gantipassword-user": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/register-user": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getSettingDok": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getListBillingAdjustment": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/insertBillingAdjustment": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/updateBillingAdjustment": {
+      "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/getDetailBillingAdjustment": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/login": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/logout": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    }
+  }
+}

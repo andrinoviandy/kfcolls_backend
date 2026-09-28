@@ -1,0 +1,30 @@
+const n2n = require('./costrack/costrack')
+const model = {}
+
+model.d_anggaran = n2n.D_ANGGARAN
+model.d_notifikasi = n2n.D_NOTIFIKASI
+model.d_notifikasi_push = n2n.D_NOTIFIKASI_PUSH
+model.d_penambahan_anggaran = n2n.D_PENAMBAHAN_ANGGARAN
+model.d_pemakaian_anggaran = n2n.D_PEMAKAIAN_ANGGARAN
+model.d_pengajuan = n2n.D_PENGAJUAN
+model.d_pengajuan_coa = n2n.D_PENGAJUAN_COA
+model.d_pengajuan_dokumen = n2n.D_PENGAJUAN_DOKUMEN
+model.d_penjualan = n2n.D_PENJUALAN
+model.d_status_pengajuan = n2n.D_STATUS_PENGAJUAN
+model.d_status_pengajuan_history = n2n.D_STATUS_PENGAJUAN_HISTORY
+model.m_flow_approval = n2n.M_FLOW_APPROVAL
+model.m_flow_khusus = n2n.M_FLOW_KHUSUS
+model.m_referensi = n2n.M_REFERENSI
+model.m_jenis_pajak = n2n.M_JENIS_PAJAK
+model.m_penandatangan = n2n.M_PENANDATANGAN
+model.m_penandatangan_detail = n2n.M_PENANDATANGAN_DETAIL
+model.m_role_user = n2n.M_ROLE_USER
+model.m_user = n2n.M_USER
+model.m_vendor = n2n.M_VENDOR
+model.m_coa = n2n.M_COA
+model.m_coa_detail = n2n.M_COA_DETAIL
+model.m_direktur_unit = n2n.M_DIREKTUR_UNIT
+model.m_hari_libur = n2n.M_HARI_LIBUR
+model.h_upload_data = n2n.H_UPLOAD_DATA
+
+module.exports = model

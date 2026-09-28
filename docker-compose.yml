@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  n2n-backend:
+    container_name: n2n-backend
+    build: .
+    ports:
+      - "3000:3000" # Change to match the app's port
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm start
+    #depends_on:
+    #  - oracle-db # optional, only if you plan to add Oracle service here
