@@ -10,12 +10,12 @@ const db = new Sequelize(
 		port: process.env.DB_PORT,
 		logging: false,
 		timezone: "+07:00",
-		// dialectOptions: {
-		// 	ssl: {
-		// 		require: true,
-		// 		rejectUnauthorized: false,
-		// 	},
-		// },
+		dialectOptions: {
+			ssl: {
+				require: true,
+				rejectUnauthorized: false,
+			},
+		},
 		pool: {
 			max: 60,
 			min: 10,
