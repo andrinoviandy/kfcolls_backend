@@ -2,7 +2,7 @@
 module.exports = {
     apps: [
         {
-            name: "costrack_backend",
+            name: "kfcolls-backend",
             script: "npm",
             args: "start",
             watch: "true"

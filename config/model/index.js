@@ -1,4 +1,4 @@
-const n2n = require('./costrack/costrack')
+const n2n = require('./kfcolls/kfcolls')
 const model = {}
 
 model.d_anggaran = n2n.D_ANGGARAN

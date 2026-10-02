@@ -29,7 +29,8 @@ const server = createServer(app); // Gunakan HTTP server untuk Socket.IO
 // });
 
 const whitelist = [
-  "https://costrack.kftd.co.id",
+  "https://kfcolls.kftd.co.id",
+  "https://kfcolls-dev.kftd.co.id",
   "http://localhost:8001"
 ];
 
@@ -58,22 +59,32 @@ app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
 
 app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(
+  express.json({
+    limit: "10mb"
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "10mb"
+  })
+);
 app.use(cookieParser());
-app.use('/api/v1/costrack/files', express.static(path.join(__dirname, 'files')));
-app.use('/api/v1/costrack/sharefolder', express.static(path.join(__dirname, 'sharefolder')));
+app.use('/api/v1/kfcolls/files', express.static(path.join(__dirname, 'files')));
+app.use('/api/v1/kfcolls/sharefolder', express.static(path.join(__dirname, 'sharefolder')));
 app.use('/files', express.static(path.join(__dirname, 'files')));
 app.use('/sharefolder', express.static(path.join(__dirname, 'sharefolder')));
 app.use('/img', express.static(path.join(__dirname, 'img')));
-app.use('/api/v1/costrack/download-pdf', (req, res, next) => {
+app.use('/api/v1/kfcolls/download-pdf', (req, res, next) => {
   res.removeHeader('X-Frame-Options');
   res.removeHeader('Content-Security-Policy');
   res.setHeader('Content-Security-Policy', 'frame-ancestors *');
   next();
 });
-app.use('/api/v1/costrack', logging.doLogging, indexRouter);
-app.use('/api/v1/costrack/users', logging.doLogging, usersRouter);
+app.use('/api/v1/kfcolls', logging.doLogging, indexRouter);
+app.use('/api/v1/kfcolls/users', logging.doLogging, usersRouter);
 // app.use('/api/v1/n2n', indexRouter);
 // app.use('/api/v1/n2n/users', usersRouter);
 

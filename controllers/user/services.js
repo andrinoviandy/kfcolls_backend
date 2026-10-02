@@ -24,6 +24,8 @@ exports.getExpiredDate = (addHours = 8) => {
 exports.doLogin = async (payload, host) => {
     const password = await helpers.encodedJwt(payload?.user_password)
     
+    console.log(password, 'password');
+    
     const QUERY = `
     SELECT 
         COUNT(*) OVER() AS data, 
@@ -33,8 +35,7 @@ exports.doLogin = async (payload, host) => {
         m2.ur_ref as cabang, 
         m3.ur_ref as role, 
         m4.ur_ref as unit_kerja,
-        m5.ur_ref as unit,
-        m6.ur_ref as jenis_user 
+        m5.ur_ref as unit 
     FROM 
         m_user a JOIN m_role_user b ON a.user_id = b.user_id 
         left join m_referensi m1 ON b.jabatan_id = m1.kd_ref 
@@ -47,8 +48,6 @@ exports.doLogin = async (payload, host) => {
         and m4.jns_ref = 'unit_kerja_id' 
         left join m_referensi m5 ON b.unit_id = m5.kd_ref 
         and m5.jns_ref = 'unit_id' 
-        left join m_referensi m6 ON b.jenis_user_id = m6.kd_ref 
-        and m6.jns_ref = 'jenis_user_id' 
     WHERE a.username = :username
     AND a.password = :password AND a.flag_aktif = 'Y' AND b.is_aktif = 'Y'
     `;
@@ -88,50 +87,48 @@ exports.doLogin = async (payload, host) => {
         unit: data.unit,
         unit_kerja_id: data.unit_kerja_id,
         unit_kerja: data.unit_kerja,
-        verifikator: data.jenis_user_id === "1" ? "T" : "Y",
-        jenis_user_id: data.jenis_user_id,
-        jenis_user: data.jenis_user
+        verifikator: data.jenis_user_id === "1" ? "T" : "Y"
     };
 
-    const session = await db.query(`
-        SELECT *
-        FROM s_users
-        WHERE username = :username
-            AND is_active = 'Y'
-            AND jwt_expires_at > NOW()
-        ORDER BY created_at DESC
-        LIMIT 1
-    `, {
-        replacements: {
-            username: user.username
-        },
-        type: db.QueryTypes.SELECT,
-        plain: true
-    });
+    // const session = await db.query(`
+    //     SELECT *
+    //     FROM s_users
+    //     WHERE username = :username
+    //         AND is_active = 'Y'
+    //         AND jwt_expires_at > NOW()
+    //     ORDER BY created_at DESC
+    //     LIMIT 1
+    // `, {
+    //     replacements: {
+    //         username: user.username
+    //     },
+    //     type: db.QueryTypes.SELECT,
+    //     plain: true
+    // });
 
-    if (session) {
+    // if (session) {
 
-        return {
-            status: false,
-            message: `Akun Anda Masih Login Di Perangkat Lain.`
-        };
+    //     return {
+    //         status: false,
+    //         message: `Akun Anda Masih Login Di Perangkat Lain.`
+    //     };
 
-    }
+    // }
 
     // ==================================================
     // Bersihkan Session Lama
     // ==================================================
 
-    await db.query(`
-        UPDATE s_users
-        SET is_active = 'T'
-        WHERE username = :username
-    `, {
-        replacements: {
-            username: user.username
-        },
-        type: db.QueryTypes.UPDATE
-    });
+    // await db.query(`
+    //     UPDATE s_users
+    //     SET is_active = 'T'
+    //     WHERE username = :username
+    // `, {
+    //     replacements: {
+    //         username: user.username
+    //     },
+    //     type: db.QueryTypes.UPDATE
+    // });
 
     // ==================================================
     // Generate JWT Baru
@@ -146,29 +143,29 @@ exports.doLogin = async (payload, host) => {
     // Simpan Session Baru
     // ==================================================
 
-    await db.query(`
-        INSERT INTO s_users
-        (
-            username,
-            session_token,
-            jwt_expires_at,
-            is_active
-        )
-        VALUES
-        (
-            :username,
-            :token,
-            :expired,
-            'Y'
-        )
-    `, {
-        replacements: {
-            username: user.username,
-            token,
-            expired: expiresAt
-        },
-        type: db.QueryTypes.INSERT
-    });
+    // await db.query(`
+    //     INSERT INTO s_users
+    //     (
+    //         username,
+    //         session_token,
+    //         jwt_expires_at,
+    //         is_active
+    //     )
+    //     VALUES
+    //     (
+    //         :username,
+    //         :token,
+    //         :expired,
+    //         'Y'
+    //     )
+    // `, {
+    //     replacements: {
+    //         username: user.username,
+    //         token,
+    //         expired: expiresAt
+    //     },
+    //     type: db.QueryTypes.INSERT
+    // });
 
     return {
         status: true,
@@ -241,8 +238,6 @@ exports.doLogout = async (payload) => {
         and m4.jns_ref = 'unit_kerja_id' 
         left join m_referensi m5 ON b.unit_id = m5.kd_ref 
         and m5.jns_ref = 'unit_id' 
-        left join m_referensi m6 ON b.jenis_user_id = m6.kd_ref 
-        and m6.jns_ref = 'jenis_user_id' 
     WHERE a.username = :username
     AND a.password = :password AND a.flag_aktif = 'Y' AND b.is_aktif = 'Y'
     `;
@@ -255,16 +250,7 @@ exports.doLogout = async (payload) => {
         type: db.QueryTypes.SELECT,
         plain: true
     });
-    await db.query(`
-        UPDATE s_users
-        SET is_active = 'T'
-        WHERE username = :username
-    `, {
-        replacements: {
-            username: payload.user_name
-        },
-        type: db.QueryTypes.UPDATE
-    });
+    
     return {
         status: true
     }

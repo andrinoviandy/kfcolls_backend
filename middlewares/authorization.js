@@ -46,33 +46,33 @@ exports.doAuth = async (req, res, next) => {
         // Cek Session di Database
         // ============================
 
-        const session = await db.query(`
-            SELECT *
-            FROM s_users
-            WHERE
-                username = :username
-                AND session_token = :token
-                AND is_active = 'Y'
-                AND jwt_expires_at > NOW()
-            LIMIT 1
-        `, {
-            replacements: {
-                username: decoded.username,
-                token
-            },
-            type: db.QueryTypes.SELECT,
-            plain: true
-        });
+        // const session = await db.query(`
+        //     SELECT *
+        //     FROM s_users
+        //     WHERE
+        //         username = :username
+        //         AND session_token = :token
+        //         AND is_active = 'Y'
+        //         AND jwt_expires_at > NOW()
+        //     LIMIT 1
+        // `, {
+        //     replacements: {
+        //         username: decoded.username,
+        //         token
+        //     },
+        //     type: db.QueryTypes.SELECT,
+        //     plain: true
+        // });
 
-        if (!session) {
+        // if (!session) {
 
-            return res.status(401).json({
-                status: false,
-                code: "SESSION_EXPIRED",
-                message: "Session telah berakhir atau akun sedang digunakan di perangkat lain."
-            });
+        //     return res.status(401).json({
+        //         status: false,
+        //         code: "SESSION_EXPIRED",
+        //         message: "Session telah berakhir atau akun sedang digunakan di perangkat lain."
+        //     });
 
-        }
+        // }
 
         req.user = decoded;
 
