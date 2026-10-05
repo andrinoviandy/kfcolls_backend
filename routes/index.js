@@ -20,14 +20,23 @@ router.get('/getDataPenjualan', authorization.doAuth, controller.main.getDataPen
 router.get('/getDataPiutang', authorization.doAuth, controller.main.getDataPiutang);
 router.get('/getDataPelanggan', authorization.doAuth, controller.main.getDataPelanggan);
 router.get('/getListPrinciple', authorization.doAuth, controller.main.getListPrinciple);
+router.get('/getListUserManagement', authorization.doAuth, controller.main.getListUserManagement)
+router.get('/getListDataCod', authorization.doAuth, controller.main.getListDataCod)
 
 // Insert Data
 router.post('/insertPenjualanArray', authorization.doAuth, controller.main.insertPenjualanArray)
+router.post('/uploadPenjualanExcel', authorization.doAuth, controller.main.uploadPenjualanExcel)
+router.post('/insertDataCod', authorization.doAuth, controller.main.insertDataCod)
+router.post('/insertUser', authorization.doAuth, controller.main.insertUser)
 
 // UPDATE DATA
+router.put('/updateUser', authorization.doAuth, controller.main.updateUser)
+router.put('/editDataCod', authorization.doAuth, controller.main.editDataCod)
 router.post("/gantipassword-user", authorization.doAuth, controller.main.changePassword)
 
 // Delete Data
+router.delete('/deleteDataCod/:cod_id', authorization.doAuth, controller.main.deleteDataCod)
+router.delete('/deleteUser/:user_id', authorization.doAuth, controller.main.deleteUser)
 
 // Download
 // router.post('/downloadPdf', authorization.doAuth, controller.main.downloadPdf)

@@ -72,6 +72,33 @@ exports.insertPenjualanArray = async (req, res) => {
     }
 }
 
+exports.uploadPenjualanExcel = async (req, res) => {
+    let transaction;
+    try {
+        const file = Array.isArray(req?.files?.file)
+            ? req.files.file[0]
+            : req?.files?.file;
+        if (!file) {
+            return res.status(statusCode.bad).json(errorMessage('File Excel wajib diunggah.'));
+        }
+
+        transaction = await db.transaction();
+        const result = await serviceMain.uploadPenjualanExcel(
+            file,
+            req?.user?.nama,
+            transaction
+        );
+        await transaction.commit();
+        res.status(statusCode.success).json(successMessage(result));
+    } catch (error) {
+        if (transaction && !transaction.finished) {
+            await transaction.rollback();
+        }
+        console.error('ERROR UPLOAD PENJUALAN EXCEL:', error);
+        res.status(statusCode.bad).json(errorMessage(error.message));
+    }
+}
+
 exports.getDataPenjualan = async (req, res) => {
     try {
         const params = { ...req.query }
@@ -214,3 +241,119 @@ exports.changePassword = async (req, res) => {
         res.status(statusCode.error).json(errorMessage({}, "Gagal Mengganti Password."));
     }
 };
+
+exports.insertUser = async (req, res) => {
+    let transaction;
+    try {
+        transaction = await db.transaction();
+        const { nip, nama } = req?.user || {};
+        const payload = {
+            ...req.body,
+            user_id: uuidv4(),
+            role_user_id: uuidv4(),
+            created_by: `${nip} - ${nama}`
+        };
+        const result = await serviceMain.insertUser(payload, transaction);
+        await transaction.commit();
+        res.status(statusCode.success).json(successMessage(result));
+    } catch (error) {
+        if (transaction && !transaction.finished) {
+            await transaction.rollback();
+        }
+        console.log(error, "ERROR INSERT USER <<<<<<<<<");
+        res.status(statusCode.bad).json(errorMessage(error.message));
+    }
+};
+
+exports.updateUser = async (req, res) => {
+    let transaction;
+    try {
+        transaction = await db.transaction();
+        const { nip, nama } = req?.user || {};
+        const result = await serviceMain.updateUser({
+            ...req.body,
+            updated_by: `${nip} - ${nama}`
+        }, transaction);
+        await transaction.commit();
+        res.status(statusCode.success).json(successMessage(result));
+    } catch (error) {
+        if (transaction && !transaction.finished) {
+            await transaction.rollback();
+        }
+        console.log(error, "ERROR UPDATE USER <<<<<<<<<");
+        res.status(statusCode.bad).json(errorMessage(error.message));
+    }
+};
+
+exports.deleteUser = async (req, res) => {
+    let transaction;
+    try {
+        transaction = await db.transaction();
+        const result = await serviceMain.deleteUser(req?.params?.user_id, transaction);
+        await transaction.commit();
+        res.status(statusCode.success).json(successMessage(result));
+    } catch (error) {
+        if (transaction && !transaction.finished) {
+            await transaction.rollback();
+        }
+        console.log(error, "ERROR DELETE USER <<<<<<<<<");
+        res.status(statusCode.bad).json(errorMessage(error.message));
+    }
+};
+
+exports.getListUserManagement = async (req, res) => {
+    try {
+        const params = req?.query;
+        const result = await serviceMain.getListUserManagement(params)
+        res.status(statusCode.success).json(successMessage(result?.data))
+    } catch (error) {
+        console.log(error, "ERROR LIST COA <<<<<<<<<")
+        res.status(statusCode.error).json(errorMessage(error))
+    }
+}
+
+exports.getListDataCod = async (req, res) => {
+    try {
+        const result = await serviceMain.getListDataCod(req?.query)
+        res.status(statusCode.success).json(successMessage(result?.data))
+    } catch (error) {
+        console.log(error, "ERROR LIST DATA COD <<<<<<<<<")
+        res.status(statusCode.error).json(errorMessage(error))
+    }
+}
+
+exports.insertDataCod = async (req, res) => {
+    try {
+        const result = await serviceMain.insertDataCod({
+            ...req.body,
+            created_by: req?.user?.nama
+        })
+        res.status(statusCode.success).json(successMessage(result))
+    } catch (error) {
+        console.log(error, "ERROR INSERT DATA COD <<<<<<<<<")
+        res.status(statusCode.error).json(errorMessage(error))
+    }
+}
+
+exports.editDataCod = async (req, res) => {
+    try {
+        const result = await serviceMain.editDataCod({
+            ...req.body,
+            updated_by: req?.user?.nama
+        })
+        res.status(statusCode.success).json(successMessage(result))
+    } catch (error) {
+        console.log(error, "ERROR EDIT DATA COD <<<<<<<<<")
+        res.status(statusCode.error).json(errorMessage(error))
+    }
+}
+
+exports.deleteDataCod = async (req, res) => {
+    try {
+        const result = await serviceMain.deleteDataCod(req?.params?.cod_id)
+        res.status(statusCode.success).json(successMessage(result))
+    } catch (error) {
+        console.log(error, "ERROR DELETE DATA COD <<<<<<<<<")
+        res.status(statusCode.error).json(errorMessage(error))
+    }
+}

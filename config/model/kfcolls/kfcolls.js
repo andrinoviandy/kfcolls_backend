@@ -4409,6 +4409,146 @@ exports.D_PENGAJUAN_DOKUMEN = db.define('d_pengajuan_dokumen',
 }
 )
 
+exports.D_COD = db.define('d_cod',
+    {
+        cod_id: {
+            type: DataTypes.UUID,
+            field: 'cod_id',
+            defaultValue: DataTypes.UUIDV4,
+            primaryKey: true
+        },
+        no_billing: {
+            type: DataTypes.STRING(50),
+            field: 'no_billing',
+            allowNull: false
+        },
+        tanggal_pelunasan: {
+            type: DataTypes.DATEONLY,
+            field: 'tanggal_pelunasan'
+        },
+        nominal_billing: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'nominal_billing',
+            defaultValue: 0
+        },
+        created_by: {
+            type: DataTypes.STRING,
+            field: 'created_by'
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: 'created_at'
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: 'updated_at'
+        },
+        updated_by: {
+            type: DataTypes.STRING,
+            field: 'updated_by'
+        }
+    }, {
+        schema: 'public',
+        freezeTableName: true,
+        timestamps: false
+    }
+)
+
+exports.D_PIUTANG = db.define('d_piutang',
+    {
+        piutang_id: {
+            type: DataTypes.UUID,
+            field: 'piutang_id',
+            defaultValue: DataTypes.UUIDV4,
+            primaryKey: true
+        },
+        no_faktur: {
+            type: DataTypes.STRING,
+            field: 'no_faktur'
+        },
+        no_billing: {
+            type: DataTypes.STRING,
+            field: 'no_billing'
+        },
+        document_type: {
+            type: DataTypes.STRING,
+            field: 'document_type'
+        },
+        customer: {
+            type: DataTypes.STRING,
+            field: 'customer'
+        },
+        sales: {
+            type: DataTypes.STRING,
+            field: 'sales'
+        },
+        nama_sales: {
+            type: DataTypes.STRING,
+            field: 'nama_sales'
+        },
+        cabang: {
+            type: DataTypes.STRING,
+            field: 'cabang'
+        },
+        principle: {
+            type: DataTypes.STRING,
+            field: 'principle'
+        },
+        posting_date: {
+            type: DataTypes.DATEONLY,
+            field: 'posting_date'
+        },
+        jatuh_tempo: {
+            type: DataTypes.DATEONLY,
+            field: 'jatuh_tempo'
+        },
+        dpp: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'dpp'
+        },
+        ppn: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'ppn'
+        },
+        pph: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'pph'
+        },
+        outstanding: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'outstanding'
+        },
+        aging: {
+            type: DataTypes.INTEGER,
+            field: 'aging'
+        },
+        status_piutang: {
+            type: DataTypes.STRING,
+            field: 'status_piutang'
+        },
+        created_by: {
+            type: DataTypes.STRING,
+            field: 'created_by'
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: 'created_at'
+        },
+        updated_by: {
+            type: DataTypes.STRING,
+            field: 'updated_by'
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: 'updated_at'
+        }
+    }, {
+        schema: 'public',
+        freezeTableName: true,
+        timestamps: false
+    }
+)
+
 exports.D_PENJUALAN = db.define(
     'd_penjualan',
     {
@@ -4712,6 +4852,12 @@ exports.D_PENJUALAN = db.define(
         quotation_number: {
             type: DataTypes.STRING,
             field: 'quotation_number'
+        },
+
+        is_upload: {
+            type: DataTypes.INTEGER,
+            field: 'is_upload',
+            defaultValue: 1
         },
 
         created_by: {
@@ -5250,14 +5396,6 @@ exports.M_ROLE_USER = db.define('m_role_user',
             type: DataTypes.STRING,
             field: 'unit_kerja_id'
         },
-        jenis_user_id: {
-            type: DataTypes.STRING,
-            field: 'jenis_user_id'
-        },
-        role_atasan_id: {
-            type: DataTypes.STRING,
-            field: 'role_atasan_id'
-        },
         created_by: {
             type: DataTypes.STRING,
             field: 'created_by'
@@ -5311,6 +5449,10 @@ exports.M_USER = db.define('m_user',
         email: {
             type: DataTypes.STRING,
             field: 'email'
+        },
+        no_telepon: {
+            type: DataTypes.STRING,
+            field: 'no_telepon'
         },
         tipe_user: {
             type: DataTypes.STRING,

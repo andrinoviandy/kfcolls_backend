@@ -16534,6 +16534,7 @@ SELECT
     mu.tgl_lahir,
     mu.tipe_user,
     mu.flag_aktif,
+    CASE WHEN mu.flag_aktif = 'Y' THEN 'Aktif' ELSE 'Nonaktif' END AS status,
     mu.created_at,
     mu.created_by,
     mu.updated_at,
@@ -16543,7 +16544,6 @@ SELECT
     mru.cabang_id,
     mru.jabatan_id,
     mru.unit_kerja_id,
-    mru.jenis_user_id,
     mru.is_aktif,
     mru.tgl_aktif_bekerja,
     mru.created_at AS role_created_at,
@@ -16553,8 +16553,7 @@ SELECT
     m1.ur_ref AS jabatan,
     m2.ur_ref AS cabang,
     m3.ur_ref AS role,
-    m4.ur_ref AS unit_kerja, 
-    m5.ur_ref AS jenis_user 
+    m4.ur_ref AS unit_kerja 
 FROM m_user mu
 LEFT JOIN m_role_user mru
     ON mu.user_id = mru.user_id and mru.is_aktif = 'Y' 
@@ -16566,8 +16565,6 @@ left join m_referensi m3
     on m3.kd_ref = mru.role_id and m3.jns_ref = 'role_id' 
 left join m_referensi m4 
     on m4.kd_ref = mru.unit_kerja_id and m4.jns_ref = 'unit_kerja_id' 
-left join m_referensi m5 
-    on m5.kd_ref = mru.jenis_user_id and m5.jns_ref = 'jenis_user_id'
 where mu.flag_aktif is not null :condition 
 :order 
 OFFSET (:page - 1) * :limit 
@@ -16815,10 +16812,33 @@ left join m_referensi m3
     on m3.kd_ref = mru.role_id and m3.jns_ref = 'role_id' 
 left join m_referensi m4 
     on m4.kd_ref = mru.unit_kerja_id and m4.jns_ref = 'unit_kerja_id' 
-left join m_referensi m5 
-    on m5.kd_ref = mru.jenis_user_id and m5.jns_ref = 'jenis_user_id'
 where mu.flag_aktif is not null :condition;
 `
+
+query.getListDataCod = `
+SELECT
+    cod_id,
+    no_billing,
+    tanggal_pelunasan,
+    nominal_billing,
+    created_by,
+    created_at,
+    updated_at,
+    updated_by
+FROM d_cod
+WHERE 1 = 1 :condition
+ORDER BY created_at DESC NULLS LAST, cod_id
+OFFSET (:page - 1) * :limit
+FETCH NEXT :limit ROWS ONLY;
+`;
+
+query.countListDataCod = `
+SELECT
+    COUNT(*) AS total_data,
+    CEIL(COUNT(*)::numeric / :limit) AS total_halaman
+FROM d_cod
+WHERE 1 = 1 :condition;
+`;
 
 query.countListMasterApproval = `
 SELECT
@@ -18201,136 +18221,176 @@ query.countDataPenjualan = `
 `,
 
 query.getDataPiutang = `
+    WITH payment_totals AS (
+        SELECT
+            payment_rows.no_billing,
+            COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
+        FROM (
+            SELECT no_billing, nominal_bayar AS nominal
+            FROM public.d_pembayaran
+            UNION ALL
+            SELECT no_billing, nominal_billing AS nominal
+            FROM public.d_cod
+        ) payment_rows
+        GROUP BY payment_rows.no_billing
+    ), piutang_data AS (
+        SELECT
+            p.piutang_id,
+            p.no_faktur,
+            p.no_billing,
+            p.document_type,
+            p.customer,
+            p.cabang,
+            p.principle,
+            p.sales,
+            p.nama_sales,
+            p.posting_date,
+            p.jatuh_tempo,
+            p.dpp,
+            p.ppn,
+            p.pph,
+            COALESCE(pay.dibayar, 0) AS dibayar,
+            p.dpp - COALESCE(pay.dibayar, 0) AS outstanding,
+            p.aging,
+            CASE
+                WHEN p.dpp - COALESCE(pay.dibayar, 0) <= 0 THEN 'PAID'
+                WHEN p.jatuh_tempo < CURRENT_DATE THEN 'OVERDUE'
+                WHEN p.jatuh_tempo <= CURRENT_DATE + INTERVAL '7 days' THEN 'DUE_SOON'
+                ELSE 'NOT_DUE'
+            END AS status_piutang,
+            p.created_by,
+            p.created_at,
+            p.updated_by,
+            p.updated_at
+        FROM public.d_piutang p
+        LEFT JOIN payment_totals pay
+            ON pay.no_billing = p.no_billing
+    )
     SELECT
-        x.billing_no,
-        x.sales_office,
-        x.desc_s_office,
-        x.posting_date,
-        x.bill_to_party,
-        x.name_bill_to,
-        x.salesman,
-        x.name_salesman,
-        x.principle,
-        x.name_principle,
-        x.desc_cust_grp4,
-
-        x.total_piutang,
-
-        COALESCE(
-            pb.dibayar,
-            0
-        ) AS dibayar,
-
-        GREATEST(
-            x.total_piutang - COALESCE(pb.dibayar, 0),
-            0
-        ) AS outstanding,
-
-        x.posting_date
-            + INTERVAL '30 days'
-            AS jatuh_tempo,
-
-        CURRENT_DATE - x.posting_date
-            AS aging,
-
-        CASE
-            WHEN x.total_piutang - COALESCE(pb.dibayar, 0) <= 0
-                THEN 'PAID'
-
-            WHEN x.posting_date + INTERVAL '30 days' > CURRENT_DATE
-                THEN 'NOT_DUE'
-
-            WHEN x.posting_date + INTERVAL '30 days'
-                 <= CURRENT_DATE
-                 AND x.posting_date + INTERVAL '30 days'
-                 <= CURRENT_DATE + INTERVAL '7 days'
-                THEN 'DUE_SOON'
-
-            WHEN x.posting_date + INTERVAL '30 days' < CURRENT_DATE
-                THEN 'OVERDUE'
-
-            ELSE 'OUTSTANDING'
-        END AS status_piutang
-
-    FROM (
-        SELECT
-            dp.billing_no,
-
-            dp.sales_office,
-
-            MAX(dp.desc_s_office)
-                AS desc_s_office,
-
-            dp.posting_date,
-
-            dp.bill_to_party,
-
-            MAX(dp.name_bill_to)
-                AS name_bill_to,
-
-            dp.salesman,
-
-            MAX(dp.name_salesman)
-                AS name_salesman,
-
-            dp.principle,
-
-            MAX(dp.name_principle)
-                AS name_principle,
-
-            MAX(dp.desc_cust_grp4)
-                AS desc_cust_grp4,
-
-            COALESCE(
-                SUM(dp.total_penjualan),
-                0
-            ) AS total_piutang
-
-        FROM public.d_penjualan dp
-
-        WHERE 1 = 1
-
-            AND dp.sales_office != '2000'
-
-            :condition
-
-        GROUP BY
-            dp.billing_no,
-            dp.sales_office,
-            dp.posting_date,
-            dp.bill_to_party,
-            dp.salesman,
-            dp.principle
-
-    ) x
-
-    LEFT JOIN (
-        SELECT
-            pd.billing_no,
-
-            COALESCE(
-                SUM(pd.nominal_bayar),
-                0
-            ) AS dibayar
-
-        FROM public.d_pembayaran_detail pd
-
-        GROUP BY
-            pd.billing_no
-
-    ) pb
-        ON pb.billing_no = x.billing_no
+        p.piutang_id,
+        p.no_faktur,
+        p.no_billing,
+        p.document_type,
+        p.customer,
+        p.cabang,
+        p.principle,
+        mc.name AS customer_name,
+        mr_cabang.ur_ref AS name_cabang,
+        mp.nama_principle AS name_principle,
+        p.sales,
+        p.nama_sales,
+        p.posting_date,
+        p.jatuh_tempo,
+        p.dpp,
+        p.ppn,
+        p.pph,
+        p.dibayar,
+        p.outstanding,
+        p.aging,
+        p.status_piutang,
+        p.created_by,
+        p.created_at,
+        p.updated_by,
+        p.updated_at
+    FROM piutang_data p
+    LEFT JOIN public.m_customer mc
+        ON mc.kode_customer = p.customer
+    LEFT JOIN public.m_referensi mr_cabang
+        ON mr_cabang.kd_ref = p.cabang
+        AND mr_cabang.jns_ref = 'cabang_id'
+    LEFT JOIN public.m_principle mp
+        ON mp.principle = p.principle
+    WHERE 1 = 1
+        :condition
 
     ORDER BY
-        x.posting_date DESC NULLS LAST,
-        x.billing_no DESC NULLS LAST
+        p.posting_date DESC NULLS LAST,
+        p.no_billing DESC NULLS LAST,
+        p.piutang_id DESC
 
     LIMIT :limit
     OFFSET :offset
 `;
 
 query.countDataPiutang = `
+    WITH payment_totals AS (
+        SELECT
+            payment_rows.no_billing,
+            COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
+        FROM (
+            SELECT no_billing, nominal_bayar AS nominal
+            FROM public.d_pembayaran
+            UNION ALL
+            SELECT no_billing, nominal_billing AS nominal
+            FROM public.d_cod
+        ) payment_rows
+        GROUP BY payment_rows.no_billing
+    ), piutang_data AS (
+        SELECT
+            p.piutang_id,
+            p.no_faktur,
+            p.no_billing,
+            p.customer,
+            p.cabang,
+            p.principle,
+            p.sales,
+            p.posting_date,
+            p.jatuh_tempo,
+            p.dpp,
+            p.ppn,
+            p.pph,
+            COALESCE(pay.dibayar, 0) AS dibayar,
+            p.dpp - COALESCE(pay.dibayar, 0) AS outstanding,
+            p.aging,
+            CASE
+                WHEN p.dpp - COALESCE(pay.dibayar, 0) <= 0 THEN 'PAID'
+                WHEN p.jatuh_tempo < CURRENT_DATE THEN 'OVERDUE'
+                WHEN p.jatuh_tempo <= CURRENT_DATE + INTERVAL '7 days' THEN 'DUE_SOON'
+                ELSE 'NOT_DUE'
+            END AS status_piutang,
+            p.created_by,
+            p.created_at,
+            p.updated_by,
+            p.updated_at
+        FROM public.d_piutang p
+        LEFT JOIN payment_totals pay
+            ON pay.no_billing = p.no_billing
+    )
     SELECT COUNT(*) AS total
+    FROM piutang_data p
+    WHERE 1 = 1
+        :condition
+`;
+
+query.getUploadedDataPiutang = `
+    SELECT
+        x.billing_no,
+        x.posting_date,
+        x.bill_to_party,
+        x.salesman,
+        x.name_salesman,
+        x.principle,
+        x.sales_office,
+        x.dpp,
+        CASE
+            WHEN LEFT(x.billing_no, 2) = '28' AND x.dpp > 0 THEN 'RV'
+            WHEN LEFT(x.billing_no, 2) = '28' AND x.dpp < 0 THEN 'DK'
+            WHEN LEFT(x.billing_no, 2) = '29' AND x.dpp < 0 THEN 'RV'
+            ELSE '-'
+        END AS document_type,
+        x.ppn,
+        ROUND(x.dpp * 0.015, 2) AS pph,
+        COALESCE(pb.dibayar, 0) AS dibayar,
+        x.dpp - COALESCE(pb.dibayar, 0) AS outstanding,
+        x.posting_date + INTERVAL '30 days' AS jatuh_tempo,
+        CURRENT_DATE - x.posting_date AS aging,
+        CASE
+            WHEN x.dpp - COALESCE(pb.dibayar, 0) <= 0 THEN 'PAID'
+            WHEN x.posting_date + INTERVAL '30 days' > CURRENT_DATE THEN 'NOT_DUE'
+            WHEN x.posting_date + INTERVAL '30 days' < CURRENT_DATE THEN 'OVERDUE'
+            WHEN x.posting_date + INTERVAL '30 days' <= CURRENT_DATE + INTERVAL '7 days' THEN 'DUE_SOON'
+            ELSE 'OUTSTANDING'
+        END AS status_piutang
     FROM (
         SELECT
             dp.billing_no,
@@ -18338,243 +18398,102 @@ query.countDataPiutang = `
             dp.posting_date,
             dp.bill_to_party,
             dp.salesman,
-            dp.principle
-
+            dp.name_salesman,
+            dp.principle,
+            COALESCE(SUM(dp.total_penjualan), 0) AS dpp,
+            COALESCE(SUM(dp.tax_amount), 0) AS ppn
         FROM public.d_penjualan dp
-
-        WHERE 1 = 1
-
+        WHERE dp.is_upload = 1
             AND dp.sales_office != '2000'
-
-            :condition
-
+            AND dp.penjualan_id IN (:penjualan_ids)
         GROUP BY
             dp.billing_no,
             dp.sales_office,
             dp.posting_date,
             dp.bill_to_party,
+            dp.principle,
             dp.salesman,
-            dp.principle
-
+            dp.name_salesman
     ) x
+    LEFT JOIN (
+        SELECT
+            payment_rows.no_billing,
+            COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
+        FROM (
+            SELECT no_billing, nominal_bayar AS nominal
+            FROM public.d_pembayaran
+            UNION ALL
+            SELECT no_billing, nominal_billing AS nominal
+            FROM public.d_cod
+        ) payment_rows
+        GROUP BY payment_rows.no_billing
+    ) pb ON pb.no_billing = x.billing_no
 `;
 
 query.summaryDataPiutang = `
-    SELECT
-
-        COALESCE(
-            SUM(x.total_piutang),
-            0
-        ) AS total_piutang,
-
-        COALESCE(
-            SUM(x.dibayar),
-            0
-        ) AS sudah_dibayar,
-
-        COALESCE(
-            SUM(x.outstanding),
-            0
-        ) AS outstanding,
-
-        /* ============================================
-           BELUM JATUH TEMPO
-           > 7 HARI
-           ============================================ */
-        COALESCE(
-            SUM(
-                CASE
-                    WHEN x.outstanding > 0
-                    AND x.jatuh_tempo >
-                        CURRENT_DATE + INTERVAL '7 days'
-                    THEN x.outstanding
-                    ELSE 0
-                END
-            ),
-            0
-        ) AS not_due_amount,
-
-        /* ============================================
-           SEGERA JATUH TEMPO
-           0 - 7 HARI
-           ============================================ */
-        COALESCE(
-            SUM(
-                CASE
-                    WHEN x.outstanding > 0
-                    AND x.jatuh_tempo >= CURRENT_DATE
-                    AND x.jatuh_tempo <=
-                        CURRENT_DATE + INTERVAL '7 days'
-                    THEN x.outstanding
-                    ELSE 0
-                END
-            ),
-            0
-        ) AS due_soon_amount,
-
-        /* ============================================
-           SUDAH JATUH TEMPO
-
-           Termasuk:
-           - Due Soon
-           - Yang sudah lewat jatuh tempo
-           ============================================ */
-        COALESCE(
-            SUM(
-                CASE
-                    WHEN x.outstanding > 0
-                    AND (
-                        x.jatuh_tempo < CURRENT_DATE
-                        OR
-                        (
-                            x.jatuh_tempo >= CURRENT_DATE
-                            AND x.jatuh_tempo <=
-                                CURRENT_DATE + INTERVAL '7 days'
-                        )
-                    )
-                    THEN x.outstanding
-                    ELSE 0
-                END
-            ),
-            0
-        ) AS overdue_amount,
-
-        /* ============================================
-           COUNT STATUS
-           ============================================ */
-
-        COUNT(
-            CASE
-                WHEN x.status_piutang = 'PAID'
-                THEN 1
-            END
-        ) AS paid,
-
-        COUNT(
-            CASE
-                WHEN x.status_piutang = 'NOT_DUE'
-                THEN 1
-            END
-        ) AS not_due,
-
-        COUNT(
-            CASE
-                WHEN x.status_piutang = 'DUE_SOON'
-                THEN 1
-            END
-        ) AS due_soon,
-
-        COUNT(
-            CASE
-                WHEN x.status_piutang = 'OVERDUE'
-                THEN 1
-            END
-        ) AS overdue
-
-    FROM (
-
+    WITH payment_totals AS (
         SELECT
-
-            x.billing_no,
-
-            x.posting_date,
-
-            x.total_piutang,
-
-            COALESCE(
-                pb.dibayar,
-                0
-            ) AS dibayar,
-
-            GREATEST(
-                x.total_piutang
-                    - COALESCE(pb.dibayar, 0),
-                0
-            ) AS outstanding,
-
-            x.posting_date
-                + INTERVAL '30 days'
-                AS jatuh_tempo,
-
-            CASE
-
-                WHEN x.total_piutang
-                     - COALESCE(pb.dibayar, 0) <= 0
-                    THEN 'PAID'
-
-                WHEN x.posting_date
-                        + INTERVAL '30 days'
-                     > CURRENT_DATE + INTERVAL '7 days'
-                    THEN 'NOT_DUE'
-
-                WHEN x.posting_date
-                        + INTERVAL '30 days'
-                     >= CURRENT_DATE
-                 AND x.posting_date
-                        + INTERVAL '30 days'
-                     <= CURRENT_DATE + INTERVAL '7 days'
-                    THEN 'DUE_SOON'
-
-                WHEN x.posting_date
-                        + INTERVAL '30 days'
-                     < CURRENT_DATE
-                    THEN 'OVERDUE'
-
-                ELSE 'OUTSTANDING'
-
-            END AS status_piutang
-
+            payment_rows.no_billing,
+            COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
         FROM (
-
-            SELECT
-
-                dp.billing_no,
-
-                dp.posting_date,
-
-                COALESCE(
-                    SUM(dp.total_penjualan),
-                    0
-                ) AS total_piutang
-
-            FROM public.d_penjualan dp
-
-            WHERE 1 = 1
-
-                AND dp.sales_office != '2000'
-
-                :condition
-
-            GROUP BY
-                dp.billing_no,
-                dp.posting_date,
-                dp.sales_office,
-                dp.bill_to_party,
-                dp.salesman,
-                dp.principle
-
-        ) x
-
-        LEFT JOIN (
-
-            SELECT
-
-                pd.billing_no,
-
-                COALESCE(
-                    SUM(pd.nominal_bayar),
-                    0
-                ) AS dibayar
-
-            FROM public.d_pembayaran_detail pd
-
-            GROUP BY
-                pd.billing_no
-
-        ) pb
-            ON pb.billing_no = x.billing_no
-
-    ) x
+            SELECT no_billing, nominal_bayar AS nominal
+            FROM public.d_pembayaran
+            UNION ALL
+            SELECT no_billing, nominal_billing AS nominal
+            FROM public.d_cod
+        ) payment_rows
+        GROUP BY payment_rows.no_billing
+    ), piutang_data AS (
+        SELECT
+            p.piutang_id,
+            p.no_faktur,
+            p.no_billing,
+            p.customer,
+            p.cabang,
+            p.principle,
+            p.sales,
+            p.posting_date,
+            p.jatuh_tempo,
+            p.dpp,
+            p.ppn,
+            p.pph,
+            COALESCE(pay.dibayar, 0) AS dibayar,
+            p.dpp - COALESCE(pay.dibayar, 0) AS outstanding,
+            p.aging,
+            CASE
+                WHEN p.dpp - COALESCE(pay.dibayar, 0) <= 0 THEN 'PAID'
+                WHEN p.jatuh_tempo < CURRENT_DATE THEN 'OVERDUE'
+                WHEN p.jatuh_tempo <= CURRENT_DATE + INTERVAL '7 days' THEN 'DUE_SOON'
+                ELSE 'NOT_DUE'
+            END AS status_piutang,
+            p.created_by,
+            p.created_at,
+            p.updated_by,
+            p.updated_at
+        FROM public.d_piutang p
+        LEFT JOIN payment_totals pay
+            ON pay.no_billing = p.no_billing
+    )
+    SELECT
+        COALESCE(SUM(p.dpp), 0) AS total_piutang,
+        COALESCE(SUM(p.dibayar), 0) AS sudah_dibayar,
+        COALESCE(SUM(p.outstanding), 0) AS outstanding,
+        COALESCE(SUM(p.outstanding) FILTER (
+            WHERE p.outstanding > 0 AND p.status_piutang = 'NOT_DUE'
+        ), 0) AS not_due_amount,
+        COALESCE(SUM(p.outstanding) FILTER (
+            WHERE p.outstanding > 0 AND p.status_piutang = 'DUE_SOON'
+        ), 0) AS due_soon_amount,
+        COALESCE(SUM(p.outstanding) FILTER (
+            WHERE p.outstanding > 0 AND p.status_piutang IN ('DUE_SOON', 'OVERDUE')
+        ), 0) AS overdue_amount,
+        COUNT(*) FILTER (WHERE p.status_piutang = 'PAID') AS paid,
+        COUNT(*) FILTER (WHERE p.status_piutang = 'NOT_DUE') AS not_due,
+        COUNT(*) FILTER (WHERE p.status_piutang = 'DUE_SOON') AS due_soon,
+        COUNT(*) FILTER (WHERE p.status_piutang = 'OVERDUE') AS overdue
+    FROM piutang_data p
+    WHERE 1 = 1
+        :condition
 `;
 
 // =====================================================
