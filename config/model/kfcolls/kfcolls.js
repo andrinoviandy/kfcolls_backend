@@ -4514,10 +4514,10 @@ exports.D_PIUTANG = db.define('d_piutang',
             type: DataTypes.DECIMAL(20, 2),
             field: 'pph'
         },
-        outstanding: {
-            type: DataTypes.DECIMAL(20, 2),
-            field: 'outstanding'
-        },
+        // outstanding: {
+        //     type: DataTypes.DECIMAL(20, 2),
+        //     field: 'outstanding'
+        // },
         aging: {
             type: DataTypes.INTEGER,
             field: 'aging'
@@ -5663,3 +5663,212 @@ exports.H_UPLOAD_DATA = db.define('h_upload_data',
     timestamps: false
 }
 );
+
+exports.D_FAKTUR_PETUGAS = db.define('d_faktur_petugas',
+    {
+        faktur_petugas_id: {
+            type: DataTypes.UUID,
+            field: 'faktur_petugas_id',
+            defaultValue: DataTypes.UUIDV4,
+            primaryKey: true
+        },
+        piutang_id: {
+            type: DataTypes.UUID,
+            field: 'piutang_id'
+        },
+        nip: {
+            type: DataTypes.STRING,
+            field: 'nip'
+        },
+        kd_status: {
+            type: DataTypes.STRING,
+            field: 'kd_status'
+        },
+        kegiatan: {
+            type: DataTypes.STRING(30),
+            field: 'kegiatan'
+        },
+        is_active: {
+            type: DataTypes.CHAR(1),
+            field: 'is_active'
+        },
+        assigned_at: {
+            type: DataTypes.DATE,
+            field: 'assigned_at'
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: 'created_at'
+        },
+        created_by: {
+            type: DataTypes.STRING,
+            field: 'created_by'
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: 'updated_at'
+        },
+        updated_by: {
+            type: DataTypes.STRING,
+            field: 'updated_by'
+        }
+    }, {
+        schema: 'public',
+        freezeTableName: true,
+        timestamps: false
+    }
+)
+
+exports.D_TUKAR_FAKTUR = db.define('d_tukar_faktur',
+    {
+        tukar_faktur_id: {
+            type: DataTypes.UUID,
+            field: 'tukar_faktur_id',
+            defaultValue: DataTypes.UUIDV4,
+            primaryKey: true
+        },
+        faktur_petugas_id: {
+            type: DataTypes.UUID,
+            field: 'faktur_petugas_id'
+        },
+        piutang_id: {
+            type: DataTypes.UUID,
+            field: 'piutang_id'
+        },
+        files: {
+            type: DataTypes.TEXT,
+            field: 'files'
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: 'created_at'
+        },
+        created_by: {
+            type: DataTypes.STRING,
+            field: 'created_by'
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: 'updated_at'
+        },
+        updated_by: {
+            type: DataTypes.STRING,
+            field: 'updated_by'
+        },
+        flag_aktif: {
+            type: DataTypes.STRING,
+            field: 'flag_aktif'
+        }
+    }, {
+        schema: 'public',
+        freezeTableName: true,
+        timestamps: false
+    }
+)
+
+exports.D_STATUS = db.define('d_status', {
+    status_id: {
+        type: DataTypes.UUID,
+        field: 'status_id',
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+    foreign_id: {
+        type: DataTypes.UUID,
+        field: 'foreign_id'
+    },
+    kegiatan: {
+        type: DataTypes.STRING,
+        field: 'kegiatan'
+    },
+    kd_status: {
+        type: DataTypes.STRING,
+        field: 'kd_status'
+    },
+    keterangan: {
+        type: DataTypes.STRING,
+        field: 'keterangan'
+    },
+    created_by: {
+        type: DataTypes.STRING,
+        field: 'created_by'
+    },
+    created_at: {
+        type: DataTypes.DATE,
+        field: 'created_at'
+    },
+    updated_by: {
+        type: DataTypes.STRING,
+        field: 'updated_by'
+    },
+    updated_at: {
+        type: DataTypes.DATE,
+        field: 'updated_at'
+    }
+}, {
+    schema: 'public',
+    freezeTableName: true,
+    timestamps: false
+})
+
+exports.D_PEMBAYARAN = db.define('d_pembayaran',
+    {
+        pembayaran_id: {
+            type: DataTypes.UUID,
+            field: 'pembayaran_id',
+            primaryKey: true,
+        },
+        bill_to_party: {
+            type: DataTypes.STRING,
+            field: 'bill_to_party'
+        },
+        no_billing: {
+            type: DataTypes.STRING,
+            field: 'no_billing'
+        },
+        total_bayar: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'total_bayar'
+        },
+        nominal_bayar: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'nominal_bayar'
+        },
+        tanggal_pembayaran: {
+            type: DataTypes.DATEONLY,
+            field: 'tanggal_pembayaran'
+        },
+        metode_pembayaran: {
+            type: DataTypes.STRING,
+            field: 'metode_pembayaran'
+        },
+        created_by: {
+            type: DataTypes.STRING,
+            field: 'created_by'
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: 'created_at'
+        },
+        updated_by: {
+            type: DataTypes.STRING,
+            field: 'updated_by'
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: 'updated_at'
+        },
+        files: {
+            type: DataTypes.TEXT,
+            field: 'files'
+        },
+        keterangan: {
+            type: DataTypes.STRING,
+            field: 'keterangan'
+        },
+    }, {
+    schema: 'public',
+    freezeTableName: true,
+    timestamps: false
+}
+)

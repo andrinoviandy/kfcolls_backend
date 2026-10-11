@@ -28,5 +28,9 @@ model.m_coa_detail = n2n.M_COA_DETAIL
 model.m_direktur_unit = n2n.M_DIREKTUR_UNIT
 model.m_hari_libur = n2n.M_HARI_LIBUR
 model.h_upload_data = n2n.H_UPLOAD_DATA
+model.d_faktur_petugas = n2n.D_FAKTUR_PETUGAS
+model.d_tukar_faktur = n2n.D_TUKAR_FAKTUR
+model.d_status = n2n.D_STATUS
+model.d_pembayaran = n2n.D_PEMBAYARAN
 
 module.exports = model

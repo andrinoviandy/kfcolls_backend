@@ -68,7 +68,10 @@ exports.insertPenjualanArray = async (req, res) => {
 
     } catch (error) {
         console.log(error, "Error Insert Anggaran Baru")
-        res.status(statusCode.bad).json(errorMessage(error.message))
+        if (transaction && !transaction.finished) {
+            await transaction.rollback();
+        }
+        res.status(statusCode.bad).json(errorMessage({}, error.message))
     }
 }
 
@@ -357,3 +360,554 @@ exports.deleteDataCod = async (req, res) => {
         res.status(statusCode.error).json(errorMessage(error))
     }
 }
+
+exports.getDataPiutang = async (req, res) => {
+    try {
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataPiutang'
+        );
+
+        const result =
+            await serviceMain.getDataPiutang(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET DATA PIUTANG <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+
+exports.getDataFakturPetugas = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataFakturPetugas'
+        );
+
+        const result =
+            await serviceMain.getDataFakturPetugas(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET DATA FAKTUR PETUGAS <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+
+exports.insertFakturPetugas = async (req, res) => {
+    let transaction
+    try {
+        transaction = await db.transaction()
+
+        const payload = {
+            ...req.body
+        };
+
+        console.log(
+            payload,
+            'payload insertFakturPetugas'
+        );
+
+        const result =
+            await serviceMain.insertFakturPetugas(
+                payload
+            );
+        await transaction.commit()
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR INSERT FAKTUR PETUGAS <<<<<<<<<'
+        );
+        if (transaction && !transaction.finished) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage({}, error?.message)
+        );
+    }
+};
+
+
+exports.updateFakturPetugas = async (req, res) => {
+    try {
+
+        const payload = {
+            ...req.body
+        };
+
+        console.log(
+            payload,
+            'payload updateFakturPetugas'
+        );
+
+        const result =
+            await serviceMain.updateFakturPetugas(
+                payload
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR UPDATE FAKTUR PETUGAS <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.getDataTukarFaktur = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataTukarFaktur'
+        );
+
+        const result =
+            await serviceMain.getDataTukarFaktur(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET DATA TUKAR FAKTUR <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.getDataVerifikasiTukarFaktur = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataVerifikasiTukarFaktur'
+        );
+
+        const result =
+            await serviceMain.getDataVerifikasiTukarFaktur(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET DATA VERIFIKASI TUKAR FAKTUR <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.getDataVerifikasiPembayaran = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataVerifikasiPembayaran'
+        );
+
+        const result =
+            await serviceMain.getDataVerifikasiPembayaran(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET DATA VERIFIKASI PEMBAYARAN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.getDataBayarFaktur = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataBayarFaktur'
+        );
+
+        const result =
+            await serviceMain.getDataBayarFaktur(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET DATA BAYAR FAKTUR <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.insertTukarFaktur = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const payload = JSON.parse(req.body.payload || '{}');
+        const { nip, nama, role_user_id } = req.user;
+
+        const files = req?.files?.lampiran
+            ? (Array.isArray(req.files.lampiran)
+                ? req.files.lampiran
+                : [req.files.lampiran])
+            : [];
+
+        Object.assign(payload, {
+            created_by: `${nip} - ${nama}`,
+            role_pembuat_id: role_user_id,
+            dataUser: req.user
+        });
+
+        const result = await serviceMain.insertTukarFaktur(
+            payload,
+            files,
+            transaction
+        );
+
+        await transaction.commit();
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR INSERT TUKAR FAKTUR <<<<<<<<<'
+        );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
+
+exports.insertBayarFaktur = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const payload = JSON.parse(
+            req.body.payload || '{}'
+        );
+
+        const {
+            nip,
+            nama,
+            role_user_id
+        } = req.user;
+
+        const files = req?.files?.lampiran
+            ? (
+                Array.isArray(req.files.lampiran)
+                    ? req.files.lampiran
+                    : [req.files.lampiran]
+            )
+            : [];
+
+        Object.assign(
+            payload,
+            {
+                created_by: `${nip} - ${nama}`,
+                role_pembuat_id: role_user_id,
+                dataUser: req.user
+            }
+        );
+
+        const result =
+            await serviceMain.insertBayarFaktur(
+                payload,
+                files,
+                transaction
+            );
+
+        await transaction.commit();
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR INSERT BAYAR FAKTUR'
+        );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
+
+exports.verifikasiTukarFaktur = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const payload = req.body || {};
+        const { nip, nama, role_user_id } = req.user;
+
+        Object.assign(payload, {
+            created_by: `${nip} - ${nama}`,
+            role_pembuat_id: role_user_id,
+            dataUser: req.user
+        });
+
+        const result = await serviceMain.verifikasiTukarFaktur(
+            payload,
+            transaction
+        );
+
+        await transaction.commit();
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR VERIFIKASI TUKAR FAKTUR <<<<<<<<<'
+        );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
+
+exports.verifikasiBayarFaktur = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const payload = req.body || {};
+        const { nip, nama, role_user_id } = req.user;
+
+        Object.assign(payload, {
+            created_by: `${nip} - ${nama}`,
+            role_pembuat_id: role_user_id,
+            dataUser: req.user
+        });
+
+        const result = await serviceMain.verifikasiBayarFaktur(
+            payload,
+            transaction
+        );
+
+        await transaction.commit();
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR VERIFIKASI BAYAR FAKTUR <<<<<<<<<'
+        );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
