@@ -797,65 +797,113 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
     };
 };
 
+
 exports.getDataPenjualan = async (params) => {
     try {
+        // =====================================================
+        // HELPER NORMALIZE FILTER
+        // Mendukung nilai tunggal maupun array
+        // =====================================================
         const normalizeFilterValues = (value) => {
-            const values = Array.isArray(value) ? value : [value];
+            const values = Array.isArray(value)
+                ? value
+                : [value];
+
             return values
-                .filter((item) => item !== undefined && item !== null)
+                .filter(
+                    (item) =>
+                        item !== undefined &&
+                        item !== null
+                )
                 .map((item) => String(item).trim())
                 .filter(Boolean);
         };
 
-        // =========================
-        // PARAMETER
-        // =========================
-        const page = Number(params?.page) || 1
-        const limit = Number(params?.limit) || 10
+        // =====================================================
+        // PARAMETER PAGINATION
+        // =====================================================
+        const page = Math.max(
+            Number(params?.page) || 1,
+            1
+        );
 
-        const offset = (page - 1) * limit
+        const limit = Math.max(
+            Number(params?.limit) || 10,
+            1
+        );
+
+        const offset = (page - 1) * limit;
 
         const keyword = String(
             params?.keyword || ''
-        ).trim()
+        ).trim();
 
+        // =====================================================
+        // SALES OFFICE
+        // =====================================================
         const salesOffices = normalizeFilterValues(
-            params?.sales_office ?? params?.['sales_office[]']
+            params?.sales_office ??
+            params?.['sales_office[]']
         );
 
-        const postingStatus = String(
-            params?.posting_status || 'ALL'
-        ).trim()
+        // =====================================================
+        // CUSTOMER
+        // Nilai dari frontend adalah kode_customer
+        // Dicocokkan dengan dp.bill_to_party
+        // =====================================================
+        const customers = normalizeFilterValues(
+            params?.customer ??
+            params?.['customer[]']
+        );
 
+        // =====================================================
+        // POSTING STATUS
+        // =====================================================
+        const postingStatuses = normalizeFilterValues(
+            params?.posting_status ??
+            params?.['posting_status[]']
+        );
+
+        // =====================================================
+        // CUSTOMER GROUP
+        // =====================================================
         const customerGroups = normalizeFilterValues(
-            params?.customer_group ?? params?.['customer_group[]']
+            params?.customer_group ??
+            params?.['customer_group[]']
         );
 
+        // =====================================================
+        // PRINCIPLE
+        // =====================================================
         const principles = normalizeFilterValues(
-            params?.principle ?? params?.['principle[]']
+            params?.principle ??
+            params?.['principle[]']
         );
 
+        // =====================================================
+        // DATE FILTER
+        // =====================================================
         const startDate = String(
             params?.start_date || ''
-        ).trim()
+        ).trim();
 
         const endDate = String(
             params?.end_date || ''
-        ).trim()
+        ).trim();
 
-        // =========================
-        // CONDITION
-        // =========================
-        let condition = ``
+        // =====================================================
+        // CONDITION DAN REPLACEMENTS
+        // =====================================================
+        let condition = '';
 
-        const bind = {
+        const replacements = {
             limit,
             offset
-        }
+        };
 
-        // =========================
-        // KEYWORD
-        // =========================
+        // =====================================================
+        // KEYWORD SEARCH
+        // =====================================================
         if (keyword) {
             condition += `
                 AND (
@@ -873,120 +921,171 @@ exports.getDataPenjualan = async (params) => {
                     OR dp.po_number ILIKE :keyword
                     OR dp.quotation_number ILIKE :keyword
                 )
-            `
+            `;
 
-            bind.keyword = `%${keyword}%`
+            replacements.keyword = `%${keyword}%`;
         }
 
-        // =========================
-        // SALES OFFICE
-        // =========================
-        if (salesOffices.length && !salesOffices.some((item) => item.toUpperCase() === 'ALL')) {
-            condition += `
-                AND dp.sales_office IN (:sales_offices)
-            `
-
-            bind.sales_offices = salesOffices
-        }
-
-        // =========================
-        // POSTING STATUS
-        // =========================
+        // =====================================================
+        // FILTER SALES OFFICE
+        // Mempertahankan kolom filter sebelumnya
+        // =====================================================
         if (
-            postingStatus &&
-            postingStatus.toUpperCase() !== 'ALL'
+            salesOffices.length &&
+            !salesOffices.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
         ) {
             condition += `
-                AND dp.posting_status = :posting_status
-            `
+                AND dp.sales_office IN (:sales_offices)
+            `;
 
-            bind.posting_status = postingStatus
+            replacements.sales_offices = salesOffices;
         }
 
-        // =========================
-        // CUSTOMER GROUP
-        // =========================
-        if (customerGroups.length && !customerGroups.some((item) => item.toUpperCase() === 'ALL')) {
+        // =====================================================
+        // FILTER CUSTOMER
+        // kode_customer -> dp.bill_to_party
+        // =====================================================
+        if (
+            customers.length &&
+            !customers.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND dp.bill_to_party IN (:customers)
+            `;
+
+            replacements.customers = customers;
+        }
+
+        // =====================================================
+        // FILTER POSTING STATUS
+        // =====================================================
+        if (
+            postingStatuses.length &&
+            !postingStatuses.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND dp.posting_status IN (:posting_statuses)
+            `;
+
+            replacements.posting_statuses = postingStatuses;
+        }
+
+        // =====================================================
+        // FILTER CUSTOMER GROUP
+        // =====================================================
+        if (
+            customerGroups.length &&
+            !customerGroups.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
             condition += `
                 AND dp.desc_cust_grp4 IN (:customer_groups)
-            `
+            `;
 
-            bind.customer_groups = customerGroups
+            replacements.customer_groups = customerGroups;
         }
 
-        // =========================
-        // PRINCIPLE
-        // =========================
-        if (principles.length && !principles.some((item) => item.toUpperCase() === 'ALL')) {
+        // =====================================================
+        // FILTER PRINCIPLE
+        // =====================================================
+        if (
+            principles.length &&
+            !principles.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
             condition += `
-                AND dp.principle IN (:principles)
-            `
+                AND dp.name_principle IN (:principles)
+            `;
 
-            bind.principles = principles
+            replacements.principles = principles;
         }
 
-        // =========================
-        // START DATE
-        // =========================
+        // =====================================================
+        // FILTER START DATE
+        // =====================================================
         if (startDate) {
             condition += `
                 AND dp.posting_date >= :start_date
-            `
+            `;
 
-            bind.start_date = startDate
+            replacements.start_date = startDate;
         }
 
-        // =========================
-        // END DATE
-        // =========================
+        // =====================================================
+        // FILTER END DATE
+        // =====================================================
         if (endDate) {
             condition += `
                 AND dp.posting_date <= :end_date
-            `
+            `;
 
-            bind.end_date = endDate
+            replacements.end_date = endDate;
         }
 
         // =====================================================
         // 1. GET LIST DATA
         // =====================================================
-        const LIST_QUERY = query.getDataPenjualan
-            .replace(/:condition/g, condition)
+        const listQuery = query.getDataPenjualan.replace(
+            ':condition',
+            condition
+        );
 
-        const listData = await db.query(LIST_QUERY, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        })
+        const listData = await db.query(
+            listQuery,
+            {
+                replacements,
+                type: db.QueryTypes.SELECT
+            }
+        );
 
         // =====================================================
         // 2. GET TOTAL DATA
         // =====================================================
-        const COUNT_QUERY = query.countDataPenjualan
-            .replace(/:condition/g, condition)
+        const countQuery = query.countDataPenjualan.replace(
+            ':condition',
+            condition
+        );
 
-        const countData = await db.query(COUNT_QUERY, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        })
+        const countData = await db.query(
+            countQuery,
+            {
+                replacements,
+                type: db.QueryTypes.SELECT
+            }
+        );
 
         const totalData = Number(
             countData?.[0]?.total || 0
-        )
+        );
 
         const totalHalaman = Math.ceil(
             totalData / limit
-        )
+        );
 
         // =====================================================
-        // 3. GET SUMMARY
+        // 3. GET SUMMARY DATA
         // =====================================================
-        const SUMMARY_QUERY = query.summaryDataPenjualan
-            .replace(/:condition/g, condition)
+        const summaryQuery =
+            query.summaryDataPenjualan.replace(
+                ':condition',
+                condition
+            );
 
-        const summaryResult = await db.query(SUMMARY_QUERY, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        })
+        const summaryResult = await db.query(
+            summaryQuery,
+            {
+                replacements,
+                type: db.QueryTypes.SELECT
+            }
+        );
 
         const summary = summaryResult?.[0] || {
             total_transaksi: 0,
@@ -998,7 +1097,7 @@ exports.getDataPenjualan = async (params) => {
             total_cogs: 0,
             total_discount: 0,
             total_margin: 0
-        }
+        };
 
         // =====================================================
         // RETURN
@@ -1010,523 +1109,231 @@ exports.getDataPenjualan = async (params) => {
             page,
             list_data: listData,
             summary
-        }
+        };
 
     } catch (error) {
         console.error(
             'ERROR SERVICE GET DATA PENJUALAN:',
             error
-        )
+        );
 
-        throw error
+        throw error;
     }
-}
+};
 
 exports.getDataPiutang = async (params) => {
     try {
-
-        // =====================================================
-        // HELPER NORMALIZE FILTER
-        // Bisa menerima:
-        // "2244"
-        // ["2244", "2238"]
-        // params["sales_office[]"]
-        // =====================================================
-
         const normalizeFilterValues = (value) => {
-            const values = Array.isArray(value)
-                ? value
-                : [value];
-
+            const values = Array.isArray(value) ? value : [value];
             return values
-                .filter(
-                    (item) =>
-                        item !== undefined &&
-                        item !== null
-                )
-                .map((item) =>
-                    String(item).trim()
-                )
+                .filter((item) => item !== undefined && item !== null)
+                .map((item) => String(item).trim())
                 .filter(Boolean);
         };
-
-
-        // =====================================================
-        // PARAMETER
-        // =====================================================
-
-        const page =
-            Number(params?.page) || 1;
-
-        const limit =
-            Number(params?.limit) || 10;
-
-        const offset =
-            (page - 1) * limit;
-
-
-        const keyword = String(
-            params?.keyword || ''
-        ).trim();
-
-
-        // =====================================================
+        const page = Number(params?.page) || 1;
+        const limit = Number(params?.limit) || 10;
+        const offset = (page - 1) * limit;
+        const keyword = String(params?.keyword || '').trim();
         // SALES OFFICE
-        //
-        // Support:
-        // sales_office
-        // sales_office[]
-        // =====================================================
-
-        const salesOffices =
-            normalizeFilterValues(
-                params?.sales_office ??
-                params?.['sales_office[]']
-            );
-
-
-        // =====================================================
+        const salesOffices = normalizeFilterValues(
+            params?.sales_office ?? params?.['sales_office[]']
+        );
+        // CUSTOMER
+        // Mendukung customer dan customer[]
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.['customer[]']
+        );
         // STATUS
-        // =====================================================
-
-        const status = String(
-            params?.status || 'ALL'
-        ).trim();
-
-
-        // =====================================================
+        const status = String(params?.status || 'ALL').trim();
         // POSTING STATUS
-        // =====================================================
-
-        const postingStatus = String(
-            params?.posting_status || 'ALL'
-        ).trim();
-
-
-        // =====================================================
+        const postingStatus = String(params?.posting_status || 'ALL').trim();
         // CUSTOMER GROUP
-        // =====================================================
-
-        const customerGroups =
-            normalizeFilterValues(
-                params?.customer_group ??
-                params?.['customer_group[]']
-            );
-
-
-        // =====================================================
+        const customerGroups = normalizeFilterValues(
+            params?.customer_group ?? params?.['customer_group[]']
+        );
         // PRINCIPLE
-        //
-        // Support:
-        // principle
-        // principle[]
-        // =====================================================
-
-        const principles =
-            normalizeFilterValues(
-                params?.principle ??
-                params?.['principle[]']
-            );
-
-
-        // =====================================================
+        const principles = normalizeFilterValues(
+            params?.principle ?? params?.['principle[]']
+        );
         // START DATE
-        // =====================================================
-
-        const startDate = String(
-            params?.start_date || ''
-        ).trim();
-
-
-        // =====================================================
+        const startDate = String(params?.start_date || '').trim();
         // END DATE
-        // =====================================================
-
-        const endDate = String(
-            params?.end_date || ''
-        ).trim();
-
-
-        // =====================================================
-        // CONDITION
-        // =====================================================
-
-        let condition = ``;
-
-
-        // =====================================================
-        // BIND
-        // =====================================================
-
+        const endDate = String(params?.end_date || '').trim();
+        let condition = '';
         const bind = {
             limit,
             offset
         };
-
-
-        // =====================================================
         // KEYWORD
-        // =====================================================
-
         if (keyword) {
-
             condition += `
                 AND (
                     p.no_faktur ILIKE :keyword
-
                     OR p.no_billing ILIKE :keyword
-
                     OR p.customer ILIKE :keyword
-
                     OR p.sales ILIKE :keyword
-
                     OR p.cabang ILIKE :keyword
-
                     OR p.principle ILIKE :keyword
-
                     OR p.posting_date::text ILIKE :keyword
-
                     OR p.jatuh_tempo::text ILIKE :keyword
-
                     OR p.dpp::text ILIKE :keyword
-
                     OR p.ppn::text ILIKE :keyword
-
                     OR p.pph::text ILIKE :keyword
-
                     OR p.dibayar::text ILIKE :keyword
-
                     OR p.outstanding::text ILIKE :keyword
-
                     OR p.aging::text ILIKE :keyword
-
                     OR p.status_piutang ILIKE :keyword
-
                     OR p.created_by ILIKE :keyword
-
                     OR p.created_at::text ILIKE :keyword
-
                     OR p.updated_by ILIKE :keyword
-
                     OR p.updated_at::text ILIKE :keyword
-
-
-                    -- CUSTOMER NAME
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_customer mc_keyword
                         WHERE mc_keyword.kode_customer = p.customer
-                          AND mc_keyword.name ILIKE :keyword
+                        AND mc_keyword.name ILIKE :keyword
                     )
-
-
-                    -- CABANG NAME
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_referensi mr_keyword
                         WHERE mr_keyword.kd_ref = p.cabang
-                          AND mr_keyword.jns_ref = 'cabang_id'
-                          AND mr_keyword.ur_ref ILIKE :keyword
+                        AND mr_keyword.jns_ref = 'cabang_id'
+                        AND mr_keyword.ur_ref ILIKE :keyword
                     )
-
-
-                    -- PRINCIPLE NAME
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_principle mp_keyword
                         WHERE mp_keyword.principle = p.principle
-                          AND mp_keyword.nama_principle ILIKE :keyword
+                        AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
-
-            bind.keyword =
-                `%${keyword}%`;
+            bind.keyword = `%${keyword}%`;
         }
-
-
-        // =====================================================
-        // SALES OFFICE
-        //
-        // Payload:
-        // sales_office[] = 2244
-        // sales_office[] = 2238
-        //
-        // Karena struktur d_piutang yang Anda lampirkan
-        // menggunakan field "cabang", filter sales office
-        // diarahkan ke p.cabang.
-        // =====================================================
-
+        // FILTER SALES OFFICE
         if (
             salesOffices.length &&
-            !salesOffices.some(
-                (item) =>
-                    item.toUpperCase() === 'ALL'
-            )
+            !salesOffices.some((item) => item.toUpperCase() === 'ALL')
         ) {
-
             condition += `
                 AND p.cabang IN (:sales_offices)
             `;
-
-            bind.sales_offices =
-                salesOffices;
+            bind.sales_offices = salesOffices;
         }
-
-
-        // =====================================================
-        // STATUS PIUTANG
-        //
-        // Payload:
-        // status = OUTSTANDING
-        // status = BELUM_LUNAS
-        // status = LUNAS
-        // =====================================================
-
+        // FILTER CUSTOMER
+        // Filter menggunakan kolom customer dari d_piutang.
+        // Alias p harus sesuai dengan alias pada query.getDataPiutang,
+        // query.countDataPiutang, dan query.summaryDataPiutang.
         if (
-            status &&
-            status.toUpperCase() !== 'ALL'
+            customers.length &&
+            !customers.some((item) => item.toUpperCase() === 'ALL')
         ) {
-
             condition += `
-                AND UPPER(p.status_piutang)
-                    = UPPER(:status)
+                AND p.customer IN (:customers)
             `;
-
-            bind.status =
-                status;
+            bind.customers = customers;
         }
-
-
-        // =====================================================
-        // POSTING STATUS
-        //
-        // Catatan:
-        // pada struktur d_piutang yang Anda lampirkan,
-        // field yang tersedia adalah status_piutang,
-        // bukan posting_status.
-        //
-        // Jadi hanya aktif jika query getDataPiutang
-        // memang mempunyai field posting_status.
-        // =====================================================
-
-        if (
-            postingStatus &&
-            postingStatus.toUpperCase() !== 'ALL'
-        ) {
-
+        // FILTER STATUS PIUTANG
+        if (status && status.toUpperCase() !== 'ALL') {
+            condition += `
+                AND UPPER(p.status_piutang) = UPPER(:status)
+            `;
+            bind.status = status;
+        }
+        // FILTER POSTING STATUS
+        if (postingStatus && postingStatus.toUpperCase() !== 'ALL') {
             condition += `
                 AND p.posting_status = :posting_status
             `;
-
-            bind.posting_status =
-                postingStatus;
+            bind.posting_status = postingStatus;
         }
-
-
-        // =====================================================
-        // CUSTOMER GROUP
-        // =====================================================
-
+        // FILTER CUSTOMER GROUP
         if (
             customerGroups.length &&
-            !customerGroups.some(
-                (item) =>
-                    item.toUpperCase() === 'ALL'
-            )
+            !customerGroups.some((item) => item.toUpperCase() === 'ALL')
         ) {
-
             condition += `
                 AND p.customer IN (:customer_groups)
             `;
-
-            bind.customer_groups =
-                customerGroups;
+            bind.customer_groups = customerGroups;
         }
-
-
-        // =====================================================
-        // PRINCIPLE
-        //
-        // Payload:
-        // principle[] = 7000000004
-        // principle[] = 7000000005
-        // =====================================================
-
+        // FILTER PRINCIPLE
         if (
             principles.length &&
-            !principles.some(
-                (item) =>
-                    item.toUpperCase() === 'ALL'
-            )
+            !principles.some((item) => item.toUpperCase() === 'ALL')
         ) {
-
             condition += `
                 AND p.principle IN (:principles)
             `;
-
-            bind.principles =
-                principles;
+            bind.principles = principles;
         }
-
-
-        // =====================================================
-        // START DATE
-        // =====================================================
-
+        // FILTER START DATE
         if (startDate) {
-
             condition += `
                 AND p.posting_date >= :start_date
             `;
-
-            bind.start_date =
-                startDate;
+            bind.start_date = startDate;
         }
-
-
-        // =====================================================
-        // END DATE
-        // =====================================================
-
+        // FILTER END DATE
         if (endDate) {
-
             condition += `
                 AND p.posting_date <= :end_date
             `;
-
-            bind.end_date =
-                endDate;
+            bind.end_date = endDate;
         }
-
-
-        // =====================================================
         // 1. GET LIST DATA
-        // =====================================================
-
-        const LIST_QUERY =
-            query.getDataPiutang
-                .replace(
-                    /:condition/g,
-                    condition
-                );
-
-
-        const listData =
-            await db.query(
-                LIST_QUERY,
-                {
-                    replacements: bind,
-                    type: db.QueryTypes.SELECT
-                }
-            );
-
-
-        // =====================================================
+        const LIST_QUERY = query.getDataPiutang.replace(
+            /:condition/g,
+            condition
+        );
+        const listData = await db.query(LIST_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
         // 2. GET TOTAL DATA
-        // =====================================================
-
-        const COUNT_QUERY =
-            query.countDataPiutang
-                .replace(
-                    /:condition/g,
-                    condition
-                );
-
-
-        const countData =
-            await db.query(
-                COUNT_QUERY,
-                {
-                    replacements: bind,
-                    type: db.QueryTypes.SELECT
-                }
-            );
-
-
-        const totalData =
-            Number(
-                countData?.[0]?.total || 0
-            );
-
-
-        const totalHalaman =
-            Math.ceil(
-                totalData / limit
-            );
-
-
-        // =====================================================
+        const COUNT_QUERY = query.countDataPiutang.replace(
+            /:condition/g,
+            condition
+        );
+        const countData = await db.query(COUNT_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
         // 3. GET SUMMARY
-        // =====================================================
-
-        const SUMMARY_QUERY =
-            query.summaryDataPiutang
-                .replace(
-                    /:condition/g,
-                    condition
-                );
-
-
-        const summaryResult =
-            await db.query(
-                SUMMARY_QUERY,
-                {
-                    replacements: bind,
-                    type: db.QueryTypes.SELECT
-                }
-            );
-
-
-        const summary =
-            summaryResult?.[0] || {
-                total_piutang: 0,
-                sudah_dibayar: 0,
-                outstanding: 0,
-
-                outstanding_count: 0,
-
-                belum_lunas_count: 0,
-
-                lunas_count: 0,
-
-                akan_jatuh_tempo_amount: 0,
-                akan_jatuh_tempo_count: 0,
-
-                sudah_jatuh_tempo_amount: 0,
-                sudah_jatuh_tempo_count: 0,
-
-                total_data: 0
-            };
-
-
-        // =====================================================
+        const SUMMARY_QUERY = query.summaryDataPiutang.replace(
+            /:condition/g,
+            condition
+        );
+        const summaryResult = await db.query(SUMMARY_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+        const summary = summaryResult?.[0] || {
+            total_piutang: 0,
+            sudah_dibayar: 0,
+            outstanding: 0,
+            outstanding_count: 0,
+            belum_lunas_count: 0,
+            lunas_count: 0,
+            akan_jatuh_tempo_amount: 0,
+            akan_jatuh_tempo_count: 0,
+            sudah_jatuh_tempo_amount: 0,
+            sudah_jatuh_tempo_count: 0,
+            total_data: 0
+        };
         // RETURN
-        // =====================================================
-
         return {
             total_data: totalData,
-
-            total_halaman:
-                totalHalaman,
-
+            total_halaman: totalHalaman,
             limit,
-
             page,
-
-            list_data:
-                listData,
-
+            list_data: listData,
             summary
         };
-
     } catch (error) {
-
-        console.error(
-            'ERROR SERVICE GET DATA PIUTANG:',
-            error
-        );
-
+        console.error('ERROR SERVICE GET DATA PIUTANG:', error);
         throw error;
     }
 };
@@ -1625,45 +1432,33 @@ exports.getDataPelanggan = async (params) => {
         // =========================
         // PARAMETER
         // =========================
-        const page = Number(
-            params?.page
-        ) || 1
-
-        const limit = Number(
-            params?.limit
-        ) || 10
-
-        const offset =
-            (page - 1) * limit
-
-        const keyword = String(
-            params?.keyword || ''
-        ).trim()
-
-        const status = String(
-            params?.status || ''
-        ).trim()
-
-        const salesOffice = String(
-            params?.sales_office || ''
-        ).trim()
-
-        const sortBy = String(
-            params?.sortBy || ''
-        ).trim()
-
-
+        const page = Number(params?.page) || 1
+        const limit = Number(params?.limit) || 10
+        const offset = (page - 1) * limit
+        const keyword = String(params?.keyword || '').trim()
+        const status = String(params?.status || '').trim()
+        const salesOffice = String(params?.sales_office || '').trim()
+        // Filter cabang dari frontend (multi-select)
+        const cabangId = Array.isArray(params?.cabang_id)
+            ? params.cabang_id.filter(
+                (item) => item !== null &&
+                    item !== undefined &&
+                    String(item).trim() !== ''
+            )
+            : params?.cabang_id !== null &&
+                params?.cabang_id !== undefined &&
+                String(params.cabang_id).trim() !== ''
+                ? [params.cabang_id]
+                : []
+        const sortBy = String(params?.sortBy || '').trim()
         // =========================
         // CONDITION
         // =========================
         let condition = ``
-
         const bind = {
             limit,
             offset
         }
-
-
         // =========================
         // KEYWORD
         // =========================
@@ -1690,44 +1485,39 @@ exports.getDataPelanggan = async (params) => {
                     OR mc.ket_payer ILIKE :keyword
                 )
             `
-
-            bind.keyword =
-                `%${keyword}%`
+            bind.keyword = `%${keyword}%`
         }
-
-
         // =========================
         // FILTER STATUS
         // =========================
         if (status) {
-            condition += `
-                AND UPPER(
-                    TRIM(
-                        COALESCE(
-                            mc.status_outlet,
-                            ''
-                        )
-                    )
-                ) = UPPER(:status)
-            `
-
+            // condition += `
+            //     AND UPPER(
+            //         TRIM(
+            //             COALESCE(mc.status_outlet, '')
+            //         )
+            //     ) = UPPER(:status)
+            // `
             bind.status = status
         }
-
-
         // =========================
         // FILTER SALES OFFICE
         // =========================
-        if (salesOffice) {
+        if (salesOffice && cabangId.length === 0) {
             condition += `
                 AND mc.sales_office = :sales_office
             `
-
-            bind.sales_office =
-                salesOffice
+            bind.sales_office = salesOffice
         }
-
-
+        // =========================
+        // FILTER CABANG ID (MULTI-SELECT)
+        // =========================
+        if (cabangId.length > 0) {
+            condition += `
+                AND mc.sales_office IN (:cabang_id)
+            `
+            bind.cabang_id = cabangId
+        }
         // =========================
         // SORTING
         // =========================
@@ -1735,156 +1525,55 @@ exports.getDataPelanggan = async (params) => {
             mc.created_at DESC NULLS LAST,
             mc.name ASC NULLS LAST
         `
-
-
         /*
          * Whitelist sorting.
-         *
          * Jangan langsung masukkan sortBy
          * dari frontend ke raw query.
          */
-
         const sortMapping = {
-            customer_id:
-                'mc.customer_id',
-
-            sales_office:
-                'mc.sales_office',
-
-            sales_office_description:
-                'mc.sales_office_description',
-
-            kode_customer:
-                'mc.kode_customer',
-
-            name:
-                'mc.name',
-
-            status_outlet:
-                'mc.status_outlet',
-
-            address:
-                'mc.address',
-
-            city:
-                'mc.city',
-
-            customer_groups_1_description:
-                'mc.customer_groups_1_description',
-
-            customer_groups_2_description:
-                'mc.customer_groups_2_description',
-
-            customer_groups_3_description:
-                'mc.customer_groups_3_description',
-
-            customer_groups_4_description:
-                'mc.customer_groups_4_description',
-
-            top:
-                'mc.top',
-
-            no_npwp:
-                'mc.no_npwp',
-
-            tgl_registrasi:
-                'mc.tgl_registrasi',
-
-            division:
-                'mc.division',
-
-            created_at:
-                'mc.created_at',
-
-            updated_at:
-                'mc.updated_at'
+            customer_id: 'mc.customer_id',
+            sales_office: 'mc.sales_office',
+            sales_office_description: 'mc.sales_office_description',
+            kode_customer: 'mc.kode_customer',
+            name: 'mc.name',
+            status_outlet: 'mc.status_outlet',
+            address: 'mc.address',
+            city: 'mc.city',
+            customer_groups_1_description: 'mc.customer_groups_1_description',
+            customer_groups_2_description: 'mc.customer_groups_2_description',
+            customer_groups_3_description: 'mc.customer_groups_3_description',
+            customer_groups_4_description: 'mc.customer_groups_4_description',
+            top: 'mc.top',
+            no_npwp: 'mc.no_npwp',
+            tgl_registrasi: 'mc.tgl_registrasi',
+            division: 'mc.division',
+            created_at: 'mc.created_at',
+            updated_at: 'mc.updated_at'
         }
-
-
         if (sortBy) {
             let sortColumn = sortBy
             let sortDirection = 'ASC'
-
-
-            // =========================
-            // FORMAT:
-            // name:asc
-            // name:desc
-            // =========================
-            if (
-                sortBy.includes(':')
-            ) {
-                const parts =
-                    sortBy.split(':')
-
-                sortColumn =
-                    parts[0]
-
-                sortDirection =
-                    String(
-                        parts[1] || 'ASC'
-                    ).toUpperCase()
+            // Format: name:asc atau name:desc
+            if (sortBy.includes(':')) {
+                const parts = sortBy.split(':')
+                sortColumn = parts[0]
+                sortDirection = String(parts[1] || 'ASC').toUpperCase()
             }
-
-
-            // =========================
-            // FORMAT:
-            // name asc
-            // name desc
-            // =========================
-            else if (
-                /\s+DESC$/i.test(
-                    sortBy
-                )
-            ) {
-                sortColumn =
-                    sortBy
-                        .replace(
-                            /\s+DESC$/i,
-                            ''
-                        )
-                        .trim()
-
+            // Format: name desc
+            else if (/\s+DESC$/i.test(sortBy)) {
+                sortColumn = sortBy.replace(/\s+DESC$/i, '').trim()
                 sortDirection = 'DESC'
             }
-
-            else if (
-                /\s+ASC$/i.test(
-                    sortBy
-                )
-            ) {
-                sortColumn =
-                    sortBy
-                        .replace(
-                            /\s+ASC$/i,
-                            ''
-                        )
-                        .trim()
-
+            // Format: name asc
+            else if (/\s+ASC$/i.test(sortBy)) {
+                sortColumn = sortBy.replace(/\s+ASC$/i, '').trim()
                 sortDirection = 'ASC'
             }
-
-
-            // =========================
-            // VALIDASI
-            // =========================
-            if (
-                sortMapping[
-                sortColumn
-                ]
-            ) {
-                if (
-                    ![
-                        'ASC',
-                        'DESC'
-                    ].includes(
-                        sortDirection
-                    )
-                ) {
-                    sortDirection =
-                        'ASC'
+            // Validasi kolom dan arah sorting
+            if (sortMapping[sortColumn]) {
+                if (!['ASC', 'DESC'].includes(sortDirection)) {
+                    sortDirection = 'ASC'
                 }
-
                 orderBy = `
                     ${sortMapping[sortColumn]}
                     ${sortDirection}
@@ -1892,145 +1581,65 @@ exports.getDataPelanggan = async (params) => {
                 `
             }
         }
-
-
         // =====================================================
         // 1. GET LIST DATA
         // =====================================================
-        const LIST_QUERY =
-            query.getDataPelanggan
-                .replace(
-                    /:condition/g,
-                    condition
-                )
-                .replace(
-                    /:sortBy/g,
-                    orderBy
-                )
-
-
-        const listData =
-            await db.query(
-                LIST_QUERY,
-                {
-                    replacements: bind,
-                    type:
-                        db.QueryTypes.SELECT
-                }
-            )
-
-
+        const LIST_QUERY = query.getDataPelanggan
+            .replace(/:condition/g, condition)
+            .replace(/:sortBy/g, orderBy)
+        const listData = await db.query(
+            LIST_QUERY,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+                logging: console.log
+            }
+        )
         // =====================================================
         // 2. GET TOTAL DATA
         // =====================================================
-        const COUNT_QUERY =
-            query.countDataPelanggan
-                .replace(
-                    /:condition/g,
-                    condition
-                )
-
-
-        const countData =
-            await db.query(
-                COUNT_QUERY,
-                {
-                    replacements: bind,
-                    type:
-                        db.QueryTypes.SELECT
-                }
-            )
-
-
-        const totalData =
-            Number(
-                countData?.[0]?.total ||
-                0
-            )
-
-
-        const totalHalaman =
-            Math.ceil(
-                totalData / limit
-            )
-
-
+        const COUNT_QUERY = query.countDataPelanggan
+            .replace(/:condition/g, condition)
+        const countData = await db.query(
+            COUNT_QUERY,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }
+        )
+        const totalData = Number(countData?.[0]?.total || 0)
+        const totalHalaman = Math.ceil(totalData / limit)
         // =====================================================
         // 3. GET SUMMARY
         // =====================================================
-        const SUMMARY_QUERY =
-            query.summaryDataPelanggan
-                .replace(
-                    /:condition/g,
-                    condition
-                )
-
-
-        const summaryData =
-            await db.query(
-                SUMMARY_QUERY,
-                {
-                    replacements: bind,
-                    type:
-                        db.QueryTypes.SELECT
-                }
-            )
-
-
-        const summary =
-            summaryData?.[0] || {}
-
-
+        const SUMMARY_QUERY = query.summaryDataPelanggan
+            .replace(/:condition/g, condition)
+        const summaryData = await db.query(
+            SUMMARY_QUERY,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }
+        )
+        const summary = summaryData?.[0] || {}
         // =====================================================
         // RETURN
         // =====================================================
         return {
-            total_data:
-                totalData,
-
-            total_halaman:
-                totalHalaman,
-
+            total_data: totalData,
+            total_halaman: totalHalaman,
             limit,
-
             page,
-
-            list_data:
-                listData,
-
+            list_data: listData,
             summary: {
-                total:
-                    Number(
-                        summary?.total_pelanggan ||
-                        0
-                    ),
-
-                aktif:
-                    Number(
-                        summary?.total_aktif ||
-                        0
-                    ),
-
-                nonaktif:
-                    Number(
-                        summary?.total_nonaktif ||
-                        0
-                    ),
-
-                cabang:
-                    Number(
-                        summary?.total_cabang ||
-                        0
-                    )
+                total: Number(summary?.total_pelanggan || 0),
+                aktif: Number(summary?.total_aktif || 0),
+                nonaktif: Number(summary?.total_nonaktif || 0),
+                cabang: Number(summary?.total_cabang || 0)
             }
         }
-
     } catch (error) {
-        console.error(
-            'ERROR SERVICE GET DATA PELANGGAN:',
-            error
-        )
-
+        console.error('ERROR SERVICE GET DATA PELANGGAN:', error)
         throw error
     }
 }
