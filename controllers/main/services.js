@@ -349,14 +349,16 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
     const workbook = file.tempFilePath
         ? XLSX.readFile(file.tempFilePath, { cellDates: true })
         : XLSX.read(file.data, { type: 'buffer', cellDates: true });
+
     const firstSheetName = workbook.SheetNames[0];
+
     if (!firstSheetName) {
         throw new Error('File Excel tidak memiliki sheet.');
     }
 
     const worksheet = workbook.Sheets[firstSheetName];
-    const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: true });
-    if (!rows.length) {
+
+    if (!worksheet || !worksheet['!ref']) {
         throw new Error('File Excel tidak memiliki data.');
     }
 
@@ -427,139 +429,338 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
         po_number: 'PO Number',
         quotation_number: 'Quotation Number'
     };
-    const headers = Object.keys(rows[0]);
-    const normalizedHeaders = new Map(headers.map((header) => [normalizeHeader(header), header]));
+
+    // Ambil header saja, bukan seluruh isi Excel.
+    const headerRows = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        range: 0,
+        defval: '',
+        raw: true
+    });
+
+    const headers = Array.isArray(headerRows[0])
+        ? headerRows[0]
+        : [];
+
+    if (!headers.length) {
+        throw new Error('File Excel tidak memiliki header.');
+    }
+
+    const normalizedHeaders = new Map(
+        headers.map((header) => [
+            normalizeHeader(header),
+            header
+        ])
+    );
+
     const missingHeaders = Object.values(columnMap).filter(
         (header) => !normalizedHeaders.has(normalizeHeader(header))
     );
-    if (missingHeaders.length) {
-        throw new Error(`Format Excel tidak sesuai. Kolom yang belum tersedia: ${missingHeaders.join(', ')}`);
-    }
 
+    if (missingHeaders.length) {
+        throw new Error(
+            `Format Excel tidak sesuai. Kolom yang belum tersedia: ${missingHeaders.join(', ')}`
+        );
+    }
     const numericFields = new Set([
-        'quantity', 'unit_price_penjualan', 'dis_pct_zd01', 'dis_amt_zd01',
-        'dis_pct_zd02', 'dis_amt_zd02', 'dis_pct_zd03', 'dis_amt_zd03',
-        'dis_pct_zd04', 'dis_amt_zd04', 'dis_pct_zd05', 'dis_amt_zd05',
-        'dis_pct_zd06', 'dis_amt_zd06', 'disc_upfront_pct_zd07',
-        'disc_upfront_amt_zd07', 'disc_beban_kftd_upf_pct_zd08',
-        'disc_beban_kftd_upf_amt_zd08', 'disc_beban_principle_upf_pct_zd09',
-        'disc_beban_principle_upf_amt_zd09', 'disc_pengembalian_upf_pct_zd10',
-        'disc_pengembalian_upf_amt_zd10', 'dis_pct_zd12', 'dis_amt_zd12',
-        'dis_pct_zd14', 'dis_amt_zd14', 'dis_pct_zd15', 'dis_amt_zd15',
-        'total_discount', 'total_penjualan', 'tax_amount', 'total_cogs',
-        'unit_price_pembelian', 'bill_qty_in_sku'
+        'quantity',
+        'unit_price_penjualan',
+        'dis_pct_zd01',
+        'dis_amt_zd01',
+        'dis_pct_zd02',
+        'dis_amt_zd02',
+        'dis_pct_zd03',
+        'dis_amt_zd03',
+        'dis_pct_zd04',
+        'dis_amt_zd04',
+        'dis_pct_zd05',
+        'dis_amt_zd05',
+        'dis_pct_zd06',
+        'dis_amt_zd06',
+        'disc_upfront_pct_zd07',
+        'disc_upfront_amt_zd07',
+        'disc_beban_kftd_upf_pct_zd08',
+        'disc_beban_kftd_upf_amt_zd08',
+        'disc_beban_principle_upf_pct_zd09',
+        'disc_beban_principle_upf_amt_zd09',
+        'disc_pengembalian_upf_pct_zd10',
+        'disc_pengembalian_upf_amt_zd10',
+        'dis_pct_zd12',
+        'dis_amt_zd12',
+        'dis_pct_zd14',
+        'dis_amt_zd14',
+        'dis_pct_zd15',
+        'dis_amt_zd15',
+        'total_discount',
+        'total_penjualan',
+        'tax_amount',
+        'total_cogs',
+        'unit_price_pembelian',
+        'bill_qty_in_sku'
     ]);
+
     const requiredFields = [
-        'sales_office', 'posting_date', 'billing_no', 'material', 'quantity',
-        'sales_unit', 'unit_price_penjualan', 'total_penjualan'
+        'sales_office',
+        'posting_date',
+        'billing_no',
+        'material',
+        'quantity',
+        'sales_unit',
+        'unit_price_penjualan',
+        'total_penjualan'
     ];
+
     const parseNumeric = (value) => {
-        if (value === null || value === undefined || value === '') return null;
-        if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-        let cleaned = String(value).trim().replace(/\s/g, '').replace(/[^0-9,.\-]/g, '');
-        if (!cleaned) return null;
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+
+        let cleaned = String(value)
+            .trim()
+            .replace(/\s/g, '')
+            .replace(/[^0-9,.\-]/g, '');
+
+        if (!cleaned) {
+            return null;
+        }
+
         if (cleaned.includes(',') && cleaned.includes('.')) {
             cleaned = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
                 ? cleaned.replace(/\./g, '').replace(',', '.')
                 : cleaned.replace(/,/g, '');
         } else if (cleaned.includes(',')) {
             const parts = cleaned.split(',');
+
             cleaned = parts.length === 2 && parts[1].length !== 3
                 ? cleaned.replace(',', '.')
                 : cleaned.replace(/,/g, '');
         } else if (cleaned.includes('.')) {
             const parts = cleaned.split('.');
-            if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3)) {
+
+            if (
+                parts.length > 2 ||
+                (
+                    parts.length === 2 &&
+                    parts[1].length === 3 &&
+                    parts[0].length <= 3
+                )
+            ) {
                 cleaned = cleaned.replace(/\./g, '');
             }
         }
+
         const parsed = Number(cleaned);
+
         return Number.isFinite(parsed) ? parsed : null;
     };
+
     const parseDate = (value) => {
         if (value instanceof Date && !Number.isNaN(value.getTime())) {
             return value.toISOString().slice(0, 10);
         }
+
         if (typeof value === 'number') {
             const parts = XLSX.SSF.parse_date_code(value);
+
             if (parts) {
                 return `${parts.y}-${String(parts.m).padStart(2, '0')}-${String(parts.d).padStart(2, '0')}`;
             }
         }
-        const text = String(value ?? '').trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-        const dmy = text.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
-        if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-        const date = new Date(text);
-        return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
-    };
 
+        const text = String(value ?? '').trim();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+            return text;
+        }
+
+        const dmy = text.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+
+        if (dmy) {
+            return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+        }
+
+        const date = new Date(text);
+
+        return Number.isNaN(date.getTime())
+            ? null
+            : date.toISOString().slice(0, 10);
+    };
     const batchSize = 500;
+    const maxErrorPreview = 100;
+    const maxDataPreview = 100;
+
     const result = {
         total_data: 0,
         total_success: 0,
         total_error: 0,
-        data_error: []
+        data_error: [],
+        preview: []
     };
+
     const uploadedPenjualanIds = [];
 
-    for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
-        const batchRows = rows.slice(batchStart, batchStart + batchSize);
-        const payload = [];
+    let batchPayload = [];
 
-        for (let rowIndex = 0; rowIndex < batchRows.length; rowIndex += 1) {
-            const row = batchRows[rowIndex];
-            if (!Object.values(row).some((value) => String(value ?? '').trim() !== '')) {
-                continue;
-            }
+    const flushBatch = async () => {
+        if (!batchPayload.length) {
+            return;
+        }
 
+        const payload = batchPayload;
+        batchPayload = [];
+
+        const batchResult = await exports.insertPenjualanArray(
+            payload,
+            transaction
+        );
+
+        result.total_data += batchResult.total_data || payload.length;
+        result.total_success += batchResult.total_success || 0;
+        result.total_error += batchResult.total_error || 0;
+
+        if (
+            Array.isArray(batchResult.data_error) &&
+            batchResult.data_error.length
+        ) {
+            const remainingErrors = Math.max(
+                0,
+                maxErrorPreview - result.data_error.length
+            );
+
+            result.data_error.push(
+                ...batchResult.data_error.slice(0, remainingErrors)
+            );
+        }
+    };
+
+    /*
+     * Penting:
+     * XLSX.stream.to_json harus tersedia pada versi SheetJS
+     * yang dipakai oleh project.
+     *
+     * Workbook tetap berada di memory, tetapi tidak dibuat
+     * array rows berisi seluruh data Excel.
+     */
+    const rowStream = XLSX.stream.to_json(worksheet, {
+        defval: '',
+        raw: true
+    });
+
+    let excelRow = 1;
+
+    for await (const row of rowStream) {
+        excelRow += 1;
+
+        if (
+            !row ||
+            !Object.values(row).some(
+                (value) => String(value ?? '').trim() !== ''
+            )
+        ) {
+            continue;
+        }
+        try {
             const item = {};
+
             for (const [field, header] of Object.entries(columnMap)) {
-                const sourceHeader = normalizedHeaders.get(normalizeHeader(header));
+                const sourceHeader = normalizedHeaders.get(
+                    normalizeHeader(header)
+                );
+
                 const value = row[sourceHeader];
+
                 if (field === 'posting_date') {
                     item[field] = parseDate(value);
                 } else if (numericFields.has(field)) {
                     item[field] = parseNumeric(value);
                 } else {
-                    item[field] = value === null || value === undefined ? '' : String(value).trim();
+                    item[field] =
+                        value === null || value === undefined
+                            ? ''
+                            : String(value).trim();
                 }
             }
 
-            const excelRow = batchStart + rowIndex + 2;
             const missingData = requiredFields.filter((field) => {
                 const value = item[field];
-                return value === null || value === undefined || String(value).trim() === '';
+
+                return (
+                    value === null ||
+                    value === undefined ||
+                    String(value).trim() === ''
+                );
             });
+
             if (missingData.length) {
-                throw new Error(`Data pada baris ${excelRow} belum lengkap: ${missingData.join(', ')}`);
+                result.total_error += 1;
+
+                if (result.data_error.length < maxErrorPreview) {
+                    result.data_error.push({
+                        row: excelRow,
+                        message: `Data pada baris ${excelRow} belum lengkap: ${missingData.join(', ')}`
+                    });
+                }
+
+                continue;
             }
+
             if (!item.posting_date) {
-                throw new Error(`Posting Date pada baris ${excelRow} tidak valid.`);
+                result.total_error += 1;
+
+                if (result.data_error.length < maxErrorPreview) {
+                    result.data_error.push({
+                        row: excelRow,
+                        message: `Posting Date pada baris ${excelRow} tidak valid.`
+                    });
+                }
+
+                continue;
             }
 
             item.penjualan_id = uuidv4();
             item.is_upload = 1;
             item.created_by = createdBy || null;
+
             uploadedPenjualanIds.push(item.penjualan_id);
-            payload.push(item);
-        }
+            batchPayload.push(item);
 
-        if (payload.length === 0) {
-            continue;
-        }
+            if (result.preview.length < maxDataPreview) {
+                result.preview.push({
+                    ...item,
+                    _excel_row: excelRow
+                });
+            }
 
-        const batchResult = await exports.insertPenjualanArray(payload, transaction);
-        result.total_data += batchResult.total_data;
-        result.total_success += batchResult.total_success;
-        result.total_error += batchResult.total_error;
-        result.data_error.push(...batchResult.data_error);
+            if (batchPayload.length >= batchSize) {
+                await flushBatch();
+            }
+        } catch (error) {
+            result.total_error += 1;
+
+            if (result.data_error.length < maxErrorPreview) {
+                result.data_error.push({
+                    row: excelRow,
+                    message: error.message ||
+                        `Gagal memproses baris ${excelRow}.`
+                });
+            }
+        }
     }
 
-    if (result.total_data === 0) {
-        throw new Error('Tidak ada data penjualan yang dapat diproses.');
-    }
+    // Proses sisa row yang belum mencapai 500.
+    await flushBatch();
 
+    if (result.total_success === 0) {
+        throw new Error(
+            result.total_error > 0
+                ? `Tidak ada data yang berhasil diproses. Total error: ${result.total_error}.`
+                : 'Tidak ada data penjualan yang dapat diproses.'
+        );
+    }
     const piutangResult = await exports.insertDataPiutang(
         uploadedPenjualanIds,
         createdBy,
@@ -567,16 +768,32 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
     );
 
     await model.d_penjualan.update(
-        { is_upload: 0 },
         {
-            where: { penjualan_id: uploadedPenjualanIds },
+            is_upload: 0
+        },
+        {
+            where: {
+                penjualan_id: uploadedPenjualanIds
+            },
             transaction
         }
     );
 
     return {
         ...result,
-        total_piutang: piutangResult.total_success
+
+        // Field untuk frontend.
+        total: result.total_data,
+        success: result.total_success,
+        failed: result.total_error,
+
+        // Preview maksimal 100 row.
+        preview: result.preview.slice(0, maxDataPreview),
+
+        // Error maksimal 100 item.
+        errors: result.data_error.slice(0, maxErrorPreview),
+
+        total_piutang: piutangResult.total_success || 0
     };
 };
 
