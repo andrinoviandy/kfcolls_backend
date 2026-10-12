@@ -18369,7 +18369,7 @@ query.getUploadedDataPiutang = `
         x.bill_to_party,
         x.salesman,
         x.name_salesman,
-        x.principle,
+        -- x.principle,
         x.sales_office,
         x.dpp,
         CASE
@@ -18399,7 +18399,7 @@ query.getUploadedDataPiutang = `
             dp.bill_to_party,
             dp.salesman,
             dp.name_salesman,
-            dp.principle,
+            -- dp.principle,
             COALESCE(SUM(dp.total_penjualan), 0) AS dpp,
             COALESCE(SUM(dp.tax_amount), 0) AS ppn
         FROM public.d_penjualan dp
@@ -18411,7 +18411,7 @@ query.getUploadedDataPiutang = `
             dp.sales_office,
             dp.posting_date,
             dp.bill_to_party,
-            dp.principle,
+            -- dp.principle,
             dp.salesman,
             dp.name_salesman
     ) x

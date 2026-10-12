@@ -4490,10 +4490,10 @@ exports.D_PIUTANG = db.define('d_piutang',
             type: DataTypes.STRING,
             field: 'cabang'
         },
-        principle: {
-            type: DataTypes.STRING,
-            field: 'principle'
-        },
+        // principle: {
+        //     type: DataTypes.STRING,
+        //     field: 'principle'
+        // },
         posting_date: {
             type: DataTypes.DATEONLY,
             field: 'posting_date'

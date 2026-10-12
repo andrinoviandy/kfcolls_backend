@@ -315,7 +315,7 @@ exports.insertDataPiutang = async (penjualanIds, createdBy, transaction) => {
         sales: item.salesman,
         nama_sales: item.name_salesman,
         cabang: item.sales_office,
-        principle: item.principle,
+        // principle: item.principle,
         posting_date: item.posting_date,
         jatuh_tempo: item.jatuh_tempo,
         dpp: item.dpp,
