@@ -169,16 +169,17 @@ exports.getReferensiByJenisGroup = async (keyword) => {
 }
 
 exports.insertPenjualanArray = async (payload, transaction) => {
-
     const result = {
         total_data: payload.length,
         total_success: 0,
         total_error: 0,
         data_error: []
     };
-
+    if (!payload.length) {
+        return result;
+    }
     try {
-
+        const createdAt = new Date();
         const dataInsert = payload.map((item) => ({
             penjualan_id: item?.penjualan_id,
             sales_office: item?.sales_office,
@@ -197,55 +198,32 @@ exports.insertPenjualanArray = async (payload, transaction) => {
             quantity: item?.quantity,
             sales_unit: item?.sales_unit,
             unit_price_penjualan: item?.unit_price_penjualan,
-
             dis_pct_zd01: item?.dis_pct_zd01,
             dis_amt_zd01: item?.dis_amt_zd01,
-
             dis_pct_zd02: item?.dis_pct_zd02,
             dis_amt_zd02: item?.dis_amt_zd02,
-
             dis_pct_zd03: item?.dis_pct_zd03,
             dis_amt_zd03: item?.dis_amt_zd03,
-
             dis_pct_zd04: item?.dis_pct_zd04,
             dis_amt_zd04: item?.dis_amt_zd04,
-
             dis_pct_zd05: item?.dis_pct_zd05,
             dis_amt_zd05: item?.dis_amt_zd05,
-
             dis_pct_zd06: item?.dis_pct_zd06,
             dis_amt_zd06: item?.dis_amt_zd06,
-
             disc_upfront_pct_zd07: item?.disc_upfront_pct_zd07,
             disc_upfront_amt_zd07: item?.disc_upfront_amt_zd07,
-
-            disc_beban_kftd_upf_pct_zd08:
-                item?.disc_beban_kftd_upf_pct_zd08,
-
-            disc_beban_kftd_upf_amt_zd08:
-                item?.disc_beban_kftd_upf_amt_zd08,
-
-            disc_beban_principle_upf_pct_zd09:
-                item?.disc_beban_principle_upf_pct_zd09,
-
-            disc_beban_principle_upf_amt_zd09:
-                item?.disc_beban_principle_upf_amt_zd09,
-
-            disc_pengembalian_upf_pct_zd10:
-                item?.disc_pengembalian_upf_pct_zd10,
-
-            disc_pengembalian_upf_amt_zd10:
-                item?.disc_pengembalian_upf_amt_zd10,
-
+            disc_beban_kftd_upf_pct_zd08: item?.disc_beban_kftd_upf_pct_zd08,
+            disc_beban_kftd_upf_amt_zd08: item?.disc_beban_kftd_upf_amt_zd08,
+            disc_beban_principle_upf_pct_zd09: item?.disc_beban_principle_upf_pct_zd09,
+            disc_beban_principle_upf_amt_zd09: item?.disc_beban_principle_upf_amt_zd09,
+            disc_pengembalian_upf_pct_zd10: item?.disc_pengembalian_upf_pct_zd10,
+            disc_pengembalian_upf_amt_zd10: item?.disc_pengembalian_upf_amt_zd10,
             dis_pct_zd12: item?.dis_pct_zd12,
             dis_amt_zd12: item?.dis_amt_zd12,
-
             dis_pct_zd14: item?.dis_pct_zd14,
             dis_amt_zd14: item?.dis_amt_zd14,
-
             dis_pct_zd15: item?.dis_pct_zd15,
             dis_amt_zd15: item?.dis_amt_zd15,
-
             total_discount: item?.total_discount,
             total_penjualan: item?.total_penjualan,
             tax_amount: item?.tax_amount,
@@ -263,81 +241,85 @@ exports.insertPenjualanArray = async (payload, transaction) => {
             name_salesman: item?.name_salesman,
             po_number: item?.po_number,
             quotation_number: item?.quotation_number,
-
             is_upload: item?.is_upload ?? 1,
             created_by: item?.created_by || null,
-            created_at: new Date()
+            created_at: createdAt
         }));
-
-        await model.d_penjualan.bulkCreate(
-            dataInsert,
-            {
-                transaction,
-                validate: false,
-                returning: false
-            }
-        );
-
+        await model.d_penjualan.bulkCreate(dataInsert, {
+            transaction,
+            validate: false,
+            returning: false
+        });
         result.total_success = dataInsert.length;
-
         return result;
-
     } catch (error) {
-
-        console.error(
-            "ERROR BULK INSERT D_PENJUALAN:",
-            error
-        );
-
+        console.error('ERROR BULK INSERT D_PENJUALAN:', error);
         throw error;
     }
 };
 
-exports.insertDataPiutang = async (penjualanIds, createdBy, transaction) => {
+exports.insertDataPiutang = async (
+    penjualanIds,
+    createdBy,
+    transaction
+) => {
     if (!penjualanIds?.length) {
-        return { total_data: 0, total_success: 0 };
+        return {
+            total_data: 0,
+            total_success: 0
+        };
     }
-
-    // DISINI masih salah
-    const piutangRows = await db.query(query.getUploadedDataPiutang, {
-        replacements: { penjualan_ids: penjualanIds },
-        type: db.QueryTypes.SELECT,
-        transaction
-    });
-
+    const piutangRows = await db.query(
+        query.getUploadedDataPiutang,
+        {
+            replacements: {
+                penjualan_ids: penjualanIds
+            },
+            type: db.QueryTypes.SELECT,
+            transaction
+        }
+    );
     const createdAt = new Date();
-    const dataInsert = piutangRows.map((item) => ({
-        piutang_id: uuidv4(),
-        no_faktur: item.billing_no,
-        no_billing: item.billing_no,
-        document_type: item.document_type,
-        customer: item.bill_to_party,
-        sales: item.salesman,
-        nama_sales: item.name_salesman,
-        cabang: item.sales_office,
-        // principle: item.principle,
-        posting_date: item.posting_date,
-        jatuh_tempo: item.jatuh_tempo,
-        dpp: item.dpp,
-        ppn: item.ppn,
-        pph: item.pph,
-        aging: item.aging,
-        status_piutang: item.status_piutang,
-        created_by: createdBy || null,
-        created_at: createdAt
-    }));
-
     const batchSize = 500;
-    for (let batchStart = 0; batchStart < dataInsert.length; batchStart += batchSize) {
-        await model.d_piutang.bulkCreate(
-            dataInsert.slice(batchStart, batchStart + batchSize),
-            { transaction, validate: false, returning: false }
+    let totalSuccess = 0;
+    for (
+        let batchStart = 0;
+        batchStart < piutangRows.length;
+        batchStart += batchSize
+    ) {
+        const batchRows = piutangRows.slice(
+            batchStart,
+            batchStart + batchSize
         );
+        const dataInsert = batchRows.map((item) => ({
+            piutang_id: uuidv4(),
+            no_faktur: item.billing_no,
+            no_billing: item.billing_no,
+            document_type: item.document_type,
+            customer: item.bill_to_party,
+            sales: item.salesman,
+            nama_sales: item.name_salesman,
+            cabang: item.sales_office,
+            posting_date: item.posting_date,
+            jatuh_tempo: item.jatuh_tempo,
+            dpp: item.dpp,
+            ppn: item.ppn,
+            pph: item.pph,
+            aging: item.aging,
+            status_piutang: item.status_piutang,
+            created_by: createdBy || null,
+            created_at: createdAt
+        }));
+        await model.d_piutang.bulkCreate(dataInsert, {
+            transaction,
+            validate: false,
+            returning: false
+        });
+        totalSuccess += dataInsert.length;
     }
-
     return {
-        total_data: dataInsert.length,
-        total_success: dataInsert.length
+        total_data: piutangRows.length,
+        total_success: totalSuccess
     };
 };
 
@@ -753,7 +735,6 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
 
     // Proses sisa row yang belum mencapai 500.
     await flushBatch();
-
     if (result.total_success === 0) {
         throw new Error(
             result.total_error > 0
@@ -761,39 +742,41 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
                 : 'Tidak ada data penjualan yang dapat diproses.'
         );
     }
+    // Buat data piutang setelah seluruh batch penjualan berhasil diproses.
     const piutangResult = await exports.insertDataPiutang(
         uploadedPenjualanIds,
         createdBy,
         transaction
     );
-
-    await model.d_penjualan.update(
+    // Ubah status semua penjualan yang masih is_upload = 1.
+    // PENTING: ini memengaruhi seluruh baris is_upload = 1 dalam tabel.
+    const updateResult = await model.d_penjualan.update(
         {
             is_upload: 0
         },
         {
             where: {
-                penjualan_id: uploadedPenjualanIds
+                is_upload: 1
             },
             transaction
         }
     );
-
+    console.log('UPLOAD PENJUALAN SELESAI:', {
+        total_data: result.total_data,
+        total_success: result.total_success,
+        total_error: result.total_error,
+        total_piutang: piutangResult.total_success || 0,
+        total_updated: updateResult?.[0] || 0
+    });
     return {
         ...result,
-
-        // Field untuk frontend.
         total: result.total_data,
         success: result.total_success,
         failed: result.total_error,
-
-        // Preview maksimal 100 row.
         preview: result.preview.slice(0, maxDataPreview),
-
-        // Error maksimal 100 item.
         errors: result.data_error.slice(0, maxErrorPreview),
-
-        total_piutang: piutangResult.total_success || 0
+        total_piutang: piutangResult.total_success || 0,
+        total_updated: updateResult?.[0] || 0
     };
 };
 

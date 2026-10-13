@@ -82,9 +82,10 @@ exports.uploadPenjualanExcel = async (req, res) => {
             ? req.files.file[0]
             : req?.files?.file;
         if (!file) {
-            return res.status(statusCode.bad).json(errorMessage('File Excel wajib diunggah.'));
+            return res.status(statusCode.bad).json(
+                errorMessage('File Excel wajib diunggah.')
+            );
         }
-
         transaction = await db.transaction();
         const result = await serviceMain.uploadPenjualanExcel(
             file,
@@ -92,15 +93,26 @@ exports.uploadPenjualanExcel = async (req, res) => {
             transaction
         );
         await transaction.commit();
-        res.status(statusCode.success).json(successMessage(result));
+        return res.status(statusCode.success).json(
+            successMessage(result)
+        );
     } catch (error) {
         if (transaction && !transaction.finished) {
-            await transaction.rollback();
+            try {
+                await transaction.rollback();
+            } catch (rollbackError) {
+                console.error(
+                    'ERROR ROLLBACK UPLOAD PENJUALAN:',
+                    rollbackError
+                );
+            }
         }
         console.error('ERROR UPLOAD PENJUALAN EXCEL:', error);
-        res.status(statusCode.bad).json(errorMessage(error.message));
+        return res.status(statusCode.bad).json(
+            errorMessage(error.message)
+        );
     }
-}
+};
 
 exports.getDataPenjualan = async (req, res) => {
     try {
