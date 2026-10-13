@@ -37,8 +37,19 @@ async function main() {
         console.log('[EXCEL WORKER] Mulai membaca Excel');
 
         // Parsing dilakukan di thread terpisah dari Express.
+        console.log('[EXCEL WORKER] Mulai membaca Excel', {
+            filePath: workerData.filePath,
+            waktu: new Date().toISOString(),
+        });
+
         const workbook = XLSX.readFile(workerData.filePath, {
             cellDates: true,
+        });
+
+        console.log('[EXCEL WORKER] Workbook berhasil dibaca', {
+            jumlahSheet: workbook.SheetNames.length,
+            sheetPertama: workbook.SheetNames[0],
+            waktu: new Date().toISOString(),
         });
 
         const sheetName = workbook.SheetNames[0];
