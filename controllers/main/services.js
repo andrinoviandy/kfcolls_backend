@@ -711,7 +711,7 @@ worker.on('exit', (code) => {
             const currentPayload = payload;
             payload = [];
 
-            const batchResult = await exports.insertPenjualanArray(
+            const batchResult = await exports.insertPenjualanArray2(
                 currentPayload,
                 transaction
             );
