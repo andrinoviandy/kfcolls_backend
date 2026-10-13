@@ -39,8 +39,21 @@ async function main() {
         // Parsing dilakukan di thread terpisah dari Express.
         console.time('[EXCEL WORKER] XLSX.readFile');
 
+console.log('[EXCEL WORKER] Sebelum XLSX.readFile', {
+  waktu: new Date().toISOString(),
+  memory: process.memoryUsage(),
+});
+
+const start = Date.now();
+
 const workbook = XLSX.readFile(workerData.filePath, {
-    cellDates: true,
+  cellDates: true,
+});
+
+console.log('[EXCEL WORKER] Sesudah XLSX.readFile', {
+  durasiMs: Date.now() - start,
+  waktu: new Date().toISOString(),
+  memory: process.memoryUsage(),
 });
 
 console.timeEnd('[EXCEL WORKER] XLSX.readFile');
