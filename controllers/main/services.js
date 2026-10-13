@@ -545,6 +545,14 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
     let workerFinished = false;
     let workerError = null;
 
+    console.log('[UPLOAD PENJUALAN] File sementara:', {
+        path: file.tempFilePath,
+        exists: fs.existsSync(file.tempFilePath),
+        size: fs.existsSync(file.tempFilePath)
+            ? fs.statSync(file.tempFilePath).size
+            : null,
+    });
+
     const worker = new Worker(
         path.join(__dirname, '../workers/penjualanExcel.worker.js'),
         {
@@ -553,6 +561,18 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
             },
         }
     );
+
+    worker.on('online', () => {
+    console.log('[EXCEL WORKER] Thread online');
+});
+
+worker.on('error', (error) => {
+    console.error('[EXCEL WORKER] ERROR:', error);
+});
+
+worker.on('exit', (code) => {
+    console.log('[EXCEL WORKER] EXIT:', code);
+});
 
     const addError = (row, message) => {
         result.total_error += 1;
@@ -790,7 +810,7 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
             total_updated: updateResult?.[0] || 0,
         };
     } catch (error) {
-        await worker.terminate().catch(() => {});
+        await worker.terminate().catch(() => { });
         throw error;
     }
 };
