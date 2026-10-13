@@ -169,7 +169,127 @@ exports.getReferensiByJenisGroup = async (keyword) => {
     return result
 }
 
+
 exports.insertPenjualanArray = async (payload, transaction) => {
+    const result = {
+        total_data: payload.length,
+        total_success: 0,
+        total_error: 0,
+        data_error: [],
+    };
+
+    if (!payload.length) return result;
+
+    const uploadedPenjualanIds = [];
+    const maxErrorPreview = 100;
+
+    /*
+     * Pertahankan mapping dataInsert yang sudah ada.
+     * Untuk setiap item, mapping menghasilkan satu object
+     * dengan seluruh kolom d_penjualan.
+     */
+    const createdAt = new Date();
+
+    const dataInsert = payload.map((item, index) => ({
+        penjualan_id: item?.penjualan_id || uuidv4(),
+
+        // Pertahankan seluruh mapping kolom Anda di sini.
+        // Contoh:
+        sales_office: item?.sales_office,
+        desc_s_office: item?.desc_s_office,
+        posting_date: item?.posting_date,
+        billing_no: item?.billing_no,
+
+        // ... kolom lain tetap sama seperti mapping lama ...
+
+        is_upload: item?.is_upload ?? 1,
+        created_by: item?.created_by || null,
+        created_at: createdAt,
+
+        // Untuk menghubungkan error dengan data input.
+        _source_index: index,
+    }));
+
+    for (const item of dataInsert) {
+        const { _source_index, ...data } = item;
+        const savepoint = `sp_penjualan_${_source_index}`;
+
+        try {
+            /*
+             * Savepoint memungkinkan satu insert gagal
+             * tanpa membatalkan transaksi batch seluruhnya.
+             */
+            await db.query(`SAVEPOINT ${savepoint}`, {
+                transaction,
+            });
+
+            await model.d_penjualan.create(data, {
+                transaction,
+                validate: true,
+            });
+
+            await db.query(`RELEASE SAVEPOINT ${savepoint}`, {
+                transaction,
+            });
+
+            result.total_success += 1;
+            uploadedPenjualanIds.push(data.penjualan_id);
+        } catch (error) {
+            await db.query(`ROLLBACK TO SAVEPOINT ${savepoint}`, {
+                transaction,
+            });
+
+            await db.query(`RELEASE SAVEPOINT ${savepoint}`, {
+                transaction,
+            });
+
+            result.total_error += 1;
+
+            if (result.data_error.length < maxErrorPreview) {
+                result.data_error.push({
+                    id: _source_index,
+                    row: _source_index + 2,
+                    message:
+                        error?.parent?.detail ||
+                        error?.message ||
+                        "Gagal menyimpan data penjualan.",
+                    code: error?.parent?.code || null,
+                    data: data,
+                });
+            }
+        }
+    }
+
+    /*
+     * Proses piutang dan update is_upload hanya untuk
+     * data penjualan yang berhasil disimpan.
+     */
+    if (uploadedPenjualanIds.length > 0) {
+        const createdBy =
+            dataInsert.find((item) => item.created_by)?.created_by || null;
+
+        await exports.insertDataPiutang(
+            uploadedPenjualanIds,
+            createdBy,
+            transaction
+        );
+
+        await model.d_penjualan.update(
+            { is_upload: 0 },
+            {
+                where: {
+                    penjualan_id: uploadedPenjualanIds,
+                },
+                transaction,
+            }
+        );
+    }
+
+    return result;
+};
+
+
+exports.insertPenjualanArray2 = async (payload, transaction) => {
     const result = {
         total_data: payload.length,
         total_success: 0,

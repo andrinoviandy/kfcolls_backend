@@ -51,29 +51,134 @@ exports.getSubReferensiByJenis = async (req, res) => {
     }
 }
 
+// exports.insertPenjualanArray = async (req, res) => {
+//     let transaction
+//     try {
+//         transaction = await db.transaction()
+//         const payload = req.body
+//         const { nip, nama } = req.user
+//         const data = payload.map(item => ({
+//             ...item,
+//             penjualan_id: uuidv4(),
+//             created_by: nama
+//         }));
+//         const result = await serviceMain.insertPenjualanArray(data, transaction)
+//         await transaction.commit()
+//         res.status(statusCode.success).json(successMessage(result))
+
+//     } catch (error) {
+//         console.log(error, "Error Insert Anggaran Baru")
+//         if (transaction && !transaction.finished) {
+//             await transaction.rollback();
+//         }
+//         res.status(statusCode.bad).json(errorMessage({}, error.message))
+//     }
+// }
 exports.insertPenjualanArray = async (req, res) => {
-    let transaction
+    let transaction;
+
     try {
-        transaction = await db.transaction()
-        const payload = req.body
-        const { nip, nama } = req.user
-        const data = payload.map(item => ({
+        const payload = req.body;
+        const { nama } = req.user || {};
+
+        // Validasi payload
+        if (!Array.isArray(payload)) {
+            return res.status(statusCode.bad).json(
+                errorMessage({}, "Payload harus berupa array data penjualan.")
+            );
+        }
+
+        if (payload.length === 0) {
+            return res.status(statusCode.bad).json(
+                errorMessage({}, "Data penjualan tidak boleh kosong.")
+            );
+        }
+
+        // Maksimal 1.000 data per request
+        if (payload.length > 1000) {
+            return res.status(statusCode.bad).json(
+                errorMessage(
+                    {},
+                    "Maksimal 1.000 data penjualan per request."
+                )
+            );
+        }
+
+        console.log(
+            `[INSERT PENJUALAN] Mulai memproses ${payload.length} data`
+        );
+
+        const startTime = Date.now();
+
+        transaction = await db.transaction();
+
+        // Generate ID dan informasi pembuat untuk setiap data
+        const data = payload.map((item) => ({
             ...item,
             penjualan_id: uuidv4(),
-            created_by: nama
+            created_by: nama || item?.created_by || null,
         }));
-        const result = await serviceMain.insertPenjualanArray(data, transaction)
-        await transaction.commit()
-        res.status(statusCode.success).json(successMessage(result))
+
+        const result = await serviceMain.insertPenjualanArray(
+            data,
+            transaction
+        );
+
+        await transaction.commit();
+
+        console.log("[INSERT PENJUALAN] Selesai", {
+            total_data: result.total_data,
+            total_success: result.total_success,
+            total_error: result.total_error,
+            duration_ms: Date.now() - startTime,
+        });
+
+        return res.status(statusCode.success).json(
+            successMessage(result)
+        );
 
     } catch (error) {
-        console.log(error, "Error Insert Anggaran Baru")
         if (transaction && !transaction.finished) {
-            await transaction.rollback();
+            try {
+                await transaction.rollback();
+            } catch (rollbackError) {
+                console.error(
+                    "[INSERT PENJUALAN] Gagal rollback:",
+                    rollbackError
+                );
+            }
         }
-        res.status(statusCode.bad).json(errorMessage({}, error.message))
+
+        console.error("[INSERT PENJUALAN] ERROR:", {
+            message: error.message,
+            name: error.name,
+            detail: error.parent?.detail,
+            code: error.parent?.code,
+        });
+
+        return res.status(statusCode.bad).json(
+            errorMessage(
+                {
+                    total_data: Array.isArray(req.body)
+                        ? req.body.length
+                        : 0,
+                    total_success: 0,
+                    total_error: Array.isArray(req.body)
+                        ? req.body.length
+                        : 0,
+                    data_error: [
+                        {
+                            message: error.message,
+                            detail: error.parent?.detail || null,
+                            code: error.parent?.code || null,
+                        },
+                    ],
+                },
+                error.message || "Gagal menyimpan data penjualan."
+            )
+        );
     }
-}
+};
 
 exports.uploadPenjualanExcel = async (req, res) => {
     let transaction;
