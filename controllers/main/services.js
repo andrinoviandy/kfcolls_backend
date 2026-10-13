@@ -24,6 +24,7 @@ const { Op, fn, col, where, Sequelize } = require("sequelize");
 const { PDFDocument } = require('pdf-lib');
 const { title } = require('process');
 const XLSX = require('xlsx');
+const { Worker } = require('worker_threads');
 // const LINK_QRCODE = process.env.URL_QRCODE
 const LINK_QRCODE = 'https://kfcolls.kftd.co.id/validasi-approval'
 
@@ -323,320 +324,277 @@ exports.insertDataPiutang = async (
     };
 };
 
-
 exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
-    const importStart = Date.now();
-    const logImport = (stage, data = {}) => {
-        console.log(`[IMPORT PENJUALAN] ${stage}`, {
-            elapsedSeconds: Number(((Date.now() - importStart) / 1000).toFixed(2)),
-            time: new Date().toISOString(),
-            ...data
-        });
+    if (!file || !file.name) {
+        throw new Error('File Excel wajib diunggah.');
+    }
+
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+        throw new Error('Format file harus .xlsx atau .xls.');
+    }
+
+    if (!file.tempFilePath) {
+        throw new Error(
+            'File sementara tidak ditemukan. Pastikan express-fileupload menggunakan useTempFiles: true.'
+        );
+    }
+
+    const columnMap = {
+        sales_office: 'Sales Office',
+        desc_s_office: 'Desc. S.Office',
+        posting_date: 'Posting Date',
+        billing_no: 'Billing No',
+        posting_status: 'Posting Status',
+        bill_cancel: 'Bill.Cancel',
+        bill_to_party: 'Bill to party',
+        name_bill_to: 'Name Bill to',
+        address: 'Address',
+        material: 'Material',
+        material_group_1: 'Material Group 1',
+        desc_material_group_1: 'Desc Material Group 1',
+        text_material: 'Text Material',
+        quantity: 'Quantity',
+        sales_unit: 'Sales Unit',
+        unit_price_penjualan: 'Unit Price Penjualan',
+        dis_pct_zd01: 'Dis% (ZD01)',
+        dis_amt_zd01: 'DisAmt (ZD01)',
+        dis_pct_zd02: 'Dis% (ZD02)',
+        dis_amt_zd02: 'DisAmt (ZD02)',
+        dis_pct_zd03: 'Dis% (ZD03)',
+        dis_amt_zd03: 'DisAmt (ZD03)',
+        dis_pct_zd04: 'Dis% (ZD04)',
+        dis_amt_zd04: 'DisAmt (ZD04)',
+        dis_pct_zd05: 'Dis% (ZD05)',
+        dis_amt_zd05: 'DisAmt (ZD05)',
+        dis_pct_zd06: 'Dis% (ZD06)',
+        dis_amt_zd06: 'DisAmt (ZD06)',
+        disc_upfront_pct_zd07: 'Disc. Upfront % (ZD07)',
+        disc_upfront_amt_zd07: 'Disc. Upfront Amt (ZD07)',
+        disc_beban_kftd_upf_pct_zd08: 'Disc. Beban KFTD Upf % (ZD08)',
+        disc_beban_kftd_upf_amt_zd08: 'Disc. Beban KFTD Upf Amt (ZD08)',
+        disc_beban_principle_upf_pct_zd09: 'Disc. Beban Principle Upf % (ZD09)',
+        disc_beban_principle_upf_amt_zd09: 'Disc. Beban Principle Upf Amt (ZD09)',
+        disc_pengembalian_upf_pct_zd10: 'Disc. Pengembalian Upf % (ZD10)',
+        disc_pengembalian_upf_amt_zd10: 'Disc. Pengembalian Upf Amt (ZD10)',
+        dis_pct_zd12: 'Dis% (ZD12)',
+        dis_amt_zd12: 'DisAmt (ZD12)',
+        dis_pct_zd14: 'Dis% (ZD14)',
+        dis_amt_zd14: 'DisAmt (ZD14)',
+        dis_pct_zd15: 'Dis% (ZD15)',
+        dis_amt_zd15: 'DisAmt (ZD15)',
+        total_discount: 'Total Discount',
+        total_penjualan: 'Total Penjualan',
+        tax_amount: 'Tax Amount',
+        total_cogs: 'Total COGS',
+        unit_price_pembelian: 'Unit Price Pembelian',
+        bill_qty_in_sku: 'Bill Qty in SKU',
+        uom_sku: 'UoM SKU',
+        code_pelayanan: 'Code Pelayanan',
+        dec_pelayanan: 'Dec. Pelayanan',
+        prod_hierarchy3: 'Prod. Hierarchy3',
+        principle: 'Principle',
+        name_principle: 'Name Principle',
+        desc_cust_grp4: 'Desc. Cust. Grp4',
+        salesman: 'Salesman',
+        name_salesman: 'Name Salesman',
+        po_number: 'PO Number',
+        quotation_number: 'Quotation Number',
     };
-    try {
-        if (!/\.(xlsx|xls)$/i.test(file?.name || '')) {
-            throw new Error('Format file harus .xlsx atau .xls.');
-        }
-        logImport('Mulai membaca workbook', {
-            file: file.name,
-            sizeMB: Number((file.size / (1024 * 1024)).toFixed(2)),
-            tempFilePath: file.tempFilePath || null,
-            memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-        });
-        const readStart = Date.now();
-        const workbook = file.tempFilePath
-            ? XLSX.readFile(file.tempFilePath, { cellDates: true })
-            : XLSX.read(file.data, { type: 'buffer', cellDates: true });
-        logImport('Workbook selesai dibaca', {
-            readSeconds: Number(((Date.now() - readStart) / 1000).toFixed(2)),
-            sheets: workbook.SheetNames,
-            memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-        });
-        const firstSheetName = workbook.SheetNames[0];
-        if (!firstSheetName) {
-            throw new Error('File Excel tidak memiliki sheet.');
-        }
-        const worksheet = workbook.Sheets[firstSheetName];
-        if (!worksheet || !worksheet['!ref']) {
-            throw new Error('File Excel tidak memiliki data.');
-        }
-        logImport('Worksheet siap', {
-            sheet: firstSheetName,
-            range: worksheet['!ref'],
-            memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-        });
-        const normalizeHeader = (value) => String(value ?? '')
+
+    const normalizeHeader = (value) =>
+        String(value ?? '')
             .trim()
             .toLowerCase()
             .replace(/\s+/g, '_')
             .replace(/[^a-z0-9_]/g, '');
-        const columnMap = {
-            sales_office: 'Sales Office',
-            desc_s_office: 'Desc. S.Office',
-            posting_date: 'Posting Date',
-            billing_no: 'Billing No',
-            posting_status: 'Posting Status',
-            bill_cancel: 'Bill.Cancel',
-            bill_to_party: 'Bill to party',
-            name_bill_to: 'Name Bill to',
-            address: 'Address',
-            material: 'Material',
-            material_group_1: 'Material Group 1',
-            desc_material_group_1: 'Desc Material Group 1',
-            text_material: 'Text Material',
-            quantity: 'Quantity',
-            sales_unit: 'Sales Unit',
-            unit_price_penjualan: 'Unit Price Penjualan',
-            dis_pct_zd01: 'Dis% (ZD01)',
-            dis_amt_zd01: 'DisAmt (ZD01)',
-            dis_pct_zd02: 'Dis% (ZD02)',
-            dis_amt_zd02: 'DisAmt (ZD02)',
-            dis_pct_zd03: 'Dis% (ZD03)',
-            dis_amt_zd03: 'DisAmt (ZD03)',
-            dis_pct_zd04: 'Dis% (ZD04)',
-            dis_amt_zd04: 'DisAmt (ZD04)',
-            dis_pct_zd05: 'Dis% (ZD05)',
-            dis_amt_zd05: 'DisAmt (ZD05)',
-            dis_pct_zd06: 'Dis% (ZD06)',
-            dis_amt_zd06: 'DisAmt (ZD06)',
-            disc_upfront_pct_zd07: 'Disc. Upfront % (ZD07)',
-            disc_upfront_amt_zd07: 'Disc. Upfront Amt (ZD07)',
-            disc_beban_kftd_upf_pct_zd08: 'Disc. Beban KFTD Upf % (ZD08)',
-            disc_beban_kftd_upf_amt_zd08: 'Disc. Beban KFTD Upf Amt (ZD08)',
-            disc_beban_principle_upf_pct_zd09: 'Disc. Beban Principle Upf % (ZD09)',
-            disc_beban_principle_upf_amt_zd09: 'Disc. Beban Principle Upf Amt (ZD09)',
-            disc_pengembalian_upf_pct_zd10: 'Disc. Pengembalian Upf % (ZD10)',
-            disc_pengembalian_upf_amt_zd10: 'Disc. Pengembalian Upf Amt (ZD10)',
-            dis_pct_zd12: 'Dis% (ZD12)',
-            dis_amt_zd12: 'DisAmt (ZD12)',
-            dis_pct_zd14: 'Dis% (ZD14)',
-            dis_amt_zd14: 'DisAmt (ZD14)',
-            dis_pct_zd15: 'Dis% (ZD15)',
-            dis_amt_zd15: 'DisAmt (ZD15)',
-            total_discount: 'Total Discount',
-            total_penjualan: 'Total Penjualan',
-            tax_amount: 'Tax Amount',
-            total_cogs: 'Total COGS',
-            unit_price_pembelian: 'Unit Price Pembelian',
-            bill_qty_in_sku: 'Bill Qty in SKU',
-            uom_sku: 'UoM SKU',
-            code_pelayanan: 'Code Pelayanan',
-            dec_pelayanan: 'Dec. Pelayanan',
-            prod_hierarchy3: 'Prod. Hierarchy3',
-            principle: 'Principle',
-            name_principle: 'Name Principle',
-            desc_cust_grp4: 'Desc. Cust. Grp4',
-            salesman: 'Salesman',
-            name_salesman: 'Name Salesman',
-            po_number: 'PO Number',
-            quotation_number: 'Quotation Number'
-        };
-        logImport('Mulai membaca header');
-        const headerRows = XLSX.utils.sheet_to_json(worksheet, {
-            header: 1,
-            range: 0,
-            defval: '',
-            raw: true
-        });
-        const headers = Array.isArray(headerRows[0]) ? headerRows[0] : [];
-        if (!headers.length) {
-            throw new Error('File Excel tidak memiliki header.');
+
+    const numericFields = new Set([
+        'quantity',
+        'unit_price_penjualan',
+        'dis_pct_zd01', 'dis_amt_zd01',
+        'dis_pct_zd02', 'dis_amt_zd02',
+        'dis_pct_zd03', 'dis_amt_zd03',
+        'dis_pct_zd04', 'dis_amt_zd04',
+        'dis_pct_zd05', 'dis_amt_zd05',
+        'dis_pct_zd06', 'dis_amt_zd06',
+        'disc_upfront_pct_zd07',
+        'disc_upfront_amt_zd07',
+        'disc_beban_kftd_upf_pct_zd08',
+        'disc_beban_kftd_upf_amt_zd08',
+        'disc_beban_principle_upf_pct_zd09',
+        'disc_beban_principle_upf_amt_zd09',
+        'disc_pengembalian_upf_pct_zd10',
+        'disc_pengembalian_upf_amt_zd10',
+        'dis_pct_zd12', 'dis_amt_zd12',
+        'dis_pct_zd14', 'dis_amt_zd14',
+        'dis_pct_zd15', 'dis_amt_zd15',
+        'total_discount',
+        'total_penjualan',
+        'tax_amount',
+        'total_cogs',
+        'unit_price_pembelian',
+        'bill_qty_in_sku',
+    ]);
+
+    const requiredFields = [
+        'sales_office',
+        'posting_date',
+        'billing_no',
+        'material',
+        'quantity',
+        'sales_unit',
+        'unit_price_penjualan',
+        'total_penjualan',
+    ];
+
+    const parseNumeric = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return null;
         }
-        const normalizedHeaders = new Map(
-            headers.map((header) => [
-                normalizeHeader(header),
-                header
-            ])
-        );
-        const missingHeaders = Object.values(columnMap).filter(
-            (header) => !normalizedHeaders.has(normalizeHeader(header))
-        );
-        if (missingHeaders.length) {
-            throw new Error(
-                `Format Excel tidak sesuai. Kolom yang belum tersedia: ${missingHeaders.join(', ')}`
-            );
+
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
         }
-        logImport('Validasi header berhasil', {
-            totalKolom: headers.length,
-            totalField: Object.keys(columnMap).length
-        });
-        const numericFields = new Set([
-            'quantity',
-            'unit_price_penjualan',
-            'dis_pct_zd01',
-            'dis_amt_zd01',
-            'dis_pct_zd02',
-            'dis_amt_zd02',
-            'dis_pct_zd03',
-            'dis_amt_zd03',
-            'dis_pct_zd04',
-            'dis_amt_zd04',
-            'dis_pct_zd05',
-            'dis_amt_zd05',
-            'dis_pct_zd06',
-            'dis_amt_zd06',
-            'disc_upfront_pct_zd07',
-            'disc_upfront_amt_zd07',
-            'disc_beban_kftd_upf_pct_zd08',
-            'disc_beban_kftd_upf_amt_zd08',
-            'disc_beban_principle_upf_pct_zd09',
-            'disc_beban_principle_upf_amt_zd09',
-            'disc_pengembalian_upf_pct_zd10',
-            'disc_pengembalian_upf_amt_zd10',
-            'dis_pct_zd12',
-            'dis_amt_zd12',
-            'dis_pct_zd14',
-            'dis_amt_zd14',
-            'dis_pct_zd15',
-            'dis_amt_zd15',
-            'total_discount',
-            'total_penjualan',
-            'tax_amount',
-            'total_cogs',
-            'unit_price_pembelian',
-            'bill_qty_in_sku'
-        ]);
-        const requiredFields = [
-            'sales_office',
-            'posting_date',
-            'billing_no',
-            'material',
-            'quantity',
-            'sales_unit',
-            'unit_price_penjualan',
-            'total_penjualan'
-        ];
-        const parseNumeric = (value) => {
-            if (value === null || value === undefined || value === '') {
-                return null;
-            }
-            if (typeof value === 'number') {
-                return Number.isFinite(value) ? value : null;
-            }
-            let cleaned = String(value)
-                .trim()
-                .replace(/\s/g, '')
-                .replace(/[^0-9,.-]/g, '');
-            if (!cleaned) {
-                return null;
-            }
-            if (cleaned.includes(',') && cleaned.includes('.')) {
-                cleaned = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+
+        let cleaned = String(value)
+            .trim()
+            .replace(/\s/g, '')
+            .replace(/[^0-9,.\-]/g, '');
+
+        if (!cleaned) return null;
+
+        if (cleaned.includes(',') && cleaned.includes('.')) {
+            cleaned =
+                cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
                     ? cleaned.replace(/\./g, '').replace(',', '.')
                     : cleaned.replace(/,/g, '');
-            } else if (cleaned.includes(',')) {
-                const parts = cleaned.split(',');
-                cleaned = parts.length === 2 && parts[1].length !== 3
+        } else if (cleaned.includes(',')) {
+            const parts = cleaned.split(',');
+
+            cleaned =
+                parts.length === 2 && parts[1].length !== 3
                     ? cleaned.replace(',', '.')
                     : cleaned.replace(/,/g, '');
-            } else if (cleaned.includes('.')) {
-                const parts = cleaned.split('.');
-                if (
-                    parts.length > 2 ||
-                    (
-                        parts.length === 2 &&
-                        parts[1].length === 3 &&
-                        parts[0].length <= 3
-                    )
-                ) {
-                    cleaned = cleaned.replace(/\./g, '');
-                }
+        } else if (cleaned.includes('.')) {
+            const parts = cleaned.split('.');
+
+            if (
+                parts.length > 2 ||
+                (parts.length === 2 &&
+                    parts[1].length === 3 &&
+                    parts[0].length <= 3)
+            ) {
+                cleaned = cleaned.replace(/\./g, '');
             }
-            const parsed = Number(cleaned);
-            return Number.isFinite(parsed) ? parsed : null;
-        };
-        const parseDate = (value) => {
-            if (value instanceof Date && !Number.isNaN(value.getTime())) {
-                return value.toISOString().slice(0, 10);
+        }
+
+        const parsed = Number(cleaned);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const parseDate = (value) => {
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+            return value.toISOString().slice(0, 10);
+        }
+
+        if (typeof value === 'number') {
+            // Worker mengirim nilai cell mentah.
+            // Untuk serial Excel, gunakan konversi tanggal yang sesuai.
+            const XLSX = require('xlsx');
+            const parts = XLSX.SSF.parse_date_code(value);
+
+            if (parts) {
+                return `${parts.y}-${String(parts.m).padStart(2, '0')}-${String(parts.d).padStart(2, '0')}`;
             }
-            if (typeof value === 'number') {
-                const parts = XLSX.SSF.parse_date_code(value);
-                if (parts) {
-                    return `${parts.y}-${String(parts.m).padStart(2, '0')}-${String(parts.d).padStart(2, '0')}`;
-                }
-            }
-            const text = String(value ?? '').trim();
-            if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-                return text;
-            }
-            const dmy = text.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
-            if (dmy) {
-                return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-            }
-            const date = new Date(text);
-            return Number.isNaN(date.getTime())
-                ? null
-                : date.toISOString().slice(0, 10);
-        };
-        const batchSize = 500;
-        const maxErrorPreview = 100;
-        const maxDataPreview = 100;
-        const result = {
-            total_data: 0,
-            total_success: 0,
-            total_error: 0,
-            data_error: [],
-            preview: []
-        };
-        const uploadedPenjualanIds = [];
-        let batchPayload = [];
+        }
+
+        const text = String(value ?? '').trim();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+            return text;
+        }
+
+        const dmy = text.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+
+        if (dmy) {
+            return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+        }
+
+        const date = new Date(text);
+
+        return Number.isNaN(date.getTime())
+            ? null
+            : date.toISOString().slice(0, 10);
+    };
+
+    const { v4: uuidv4 } = require('uuid');
+
+    const result = {
+        total_data: 0,
+        total_success: 0,
+        total_error: 0,
+        data_error: [],
+        preview: [],
+    };
+
+    const maxErrorPreview = 100;
+    const maxDataPreview = 100;
+    const uploadedPenjualanIds = [];
+
+    let headersValidated = false;
+    let workerFinished = false;
+    let workerError = null;
+
+    const worker = new Worker(
+        path.join(__dirname, '../workers/penjualanExcel.worker.js'),
+        {
+            workerData: {
+                filePath: file.tempFilePath,
+            },
+        }
+    );
+
+    const addError = (row, message) => {
+        result.total_error += 1;
+
+        if (result.data_error.length < maxErrorPreview) {
+            result.data_error.push({ row, message });
+        }
+    };
+
+    const processBatch = async (rows) => {
+        let payload = [];
+
         const flushBatch = async () => {
-            if (!batchPayload.length) {
-                return;
-            }
-            const payload = batchPayload;
-            batchPayload = [];
-            const batchStart = Date.now();
-            logImport('Batch mulai', {
-                rows: payload.length,
-                processed: result.total_success,
-                memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-            });
+            if (!payload.length) return;
+
+            const currentPayload = payload;
+            payload = [];
+
             const batchResult = await exports.insertPenjualanArray(
-                payload,
+                currentPayload,
                 transaction
             );
-            logImport('Batch selesai', {
-                rows: payload.length,
-                durationSeconds: Number(((Date.now() - batchStart) / 1000).toFixed(2)),
-                totalSuccessBatch: batchResult.total_success,
-                totalErrorBatch: batchResult.total_error
-            });
-            result.total_data += batchResult.total_data || payload.length;
-            result.total_success += batchResult.total_success || 0;
-            result.total_error += batchResult.total_error || 0;
-            if (
-                Array.isArray(batchResult.data_error) &&
-                batchResult.data_error.length
-            ) {
-                const remainingErrors = Math.max(
-                    0,
-                    maxErrorPreview - result.data_error.length
-                );
-                result.data_error.push(
-                    ...batchResult.data_error.slice(0, remainingErrors)
-                );
+
+            result.total_data += batchResult.total_data ?? currentPayload.length;
+            result.total_success += batchResult.total_success ?? 0;
+            result.total_error += batchResult.total_error ?? 0;
+
+            if (Array.isArray(batchResult.data_error)) {
+                const remaining = maxErrorPreview - result.data_error.length;
+
+                if (remaining > 0) {
+                    result.data_error.push(
+                        ...batchResult.data_error.slice(0, remaining)
+                    );
+                }
             }
         };
-        logImport('Mulai membuat row stream', {
-            range: worksheet['!ref']
-        });
-        const rowStream = XLSX.stream.to_json(worksheet, {
-            defval: '',
-            raw: true
-        });
-        let excelRow = 1;
-        for await (const row of rowStream) {
-            excelRow += 1;
-            if (excelRow % 5000 === 0) {
-                logImport('Progress parsing', {
-                    excelRow,
-                    totalSuccess: result.total_success,
-                    totalError: result.total_error,
-                    batchSize: batchPayload.length,
-                    memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-                });
-            }
+
+        for (const entry of rows) {
+            const row = entry.row;
+            const excelRow = entry.excelRow;
+
             if (
                 !row ||
                 !Object.values(row).some(
@@ -645,13 +603,20 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
             ) {
                 continue;
             }
+
             try {
+                const normalizedRow = new Map(
+                    Object.entries(row).map(([key, value]) => [
+                        normalizeHeader(key),
+                        value,
+                    ])
+                );
+
                 const item = {};
+
                 for (const [field, header] of Object.entries(columnMap)) {
-                    const sourceHeader = normalizedHeaders.get(
-                        normalizeHeader(header)
-                    );
-                    const value = row[sourceHeader];
+                    const value = normalizedRow.get(normalizeHeader(header));
+
                     if (field === 'posting_date') {
                         item[field] = parseDate(value);
                     } else if (numericFields.has(field)) {
@@ -663,65 +628,132 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
                                 : String(value).trim();
                     }
                 }
-                const missingData = requiredFields.filter((field) => {
+
+                const missing = requiredFields.filter((field) => {
                     const value = item[field];
+
                     return (
                         value === null ||
                         value === undefined ||
                         String(value).trim() === ''
                     );
                 });
-                if (missingData.length) {
-                    result.total_error += 1;
-                    if (result.data_error.length < maxErrorPreview) {
-                        result.data_error.push({
-                            row: excelRow,
-                            message: `Data pada baris ${excelRow} belum lengkap: ${missingData.join(', ')}`
-                        });
-                    }
+
+                if (missing.length) {
+                    addError(
+                        excelRow,
+                        `Data pada baris ${excelRow} belum lengkap: ${missing.join(', ')}`
+                    );
                     continue;
                 }
+
                 if (!item.posting_date) {
-                    result.total_error += 1;
-                    if (result.data_error.length < maxErrorPreview) {
-                        result.data_error.push({
-                            row: excelRow,
-                            message: `Posting Date pada baris ${excelRow} tidak valid.`
-                        });
-                    }
+                    addError(
+                        excelRow,
+                        `Posting Date pada baris ${excelRow} tidak valid.`
+                    );
                     continue;
                 }
+
                 item.penjualan_id = uuidv4();
                 item.is_upload = 1;
                 item.created_by = createdBy || null;
+
                 uploadedPenjualanIds.push(item.penjualan_id);
-                batchPayload.push(item);
+
                 if (result.preview.length < maxDataPreview) {
                     result.preview.push({
                         ...item,
-                        _excel_row: excelRow
+                        _excel_row: excelRow,
                     });
                 }
-                if (batchPayload.length >= batchSize) {
+
+                payload.push(item);
+
+                if (payload.length >= 500) {
                     await flushBatch();
                 }
             } catch (error) {
-                result.total_error += 1;
-                if (result.data_error.length < maxErrorPreview) {
-                    result.data_error.push({
-                        row: excelRow,
-                        message: error.message || `Gagal memproses baris ${excelRow}.`
-                    });
-                }
+                addError(
+                    excelRow,
+                    error.message || `Gagal memproses baris ${excelRow}.`
+                );
             }
         }
-        logImport('Parsing selesai', {
-            excelRow,
-            totalSuccess: result.total_success,
-            totalError: result.total_error,
-            totalIds: uploadedPenjualanIds.length
-        });
+
         await flushBatch();
+    };
+
+    try {
+        await new Promise((resolve, reject) => {
+            worker.on('message', async (message) => {
+                try {
+                    if (message.type === 'HEADERS') {
+                        const normalized = new Set(
+                            message.headers.map(normalizeHeader)
+                        );
+
+                        const missingHeaders = Object.values(columnMap).filter(
+                            (header) => !normalized.has(normalizeHeader(header))
+                        );
+
+                        if (missingHeaders.length) {
+                            worker.postMessage({ type: 'CANCEL' });
+
+                            reject(
+                                new Error(
+                                    `Format Excel tidak sesuai. Kolom yang belum tersedia: ${missingHeaders.join(', ')}`
+                                )
+                            );
+                            return;
+                        }
+
+                        headersValidated = true;
+                        worker.postMessage({ type: 'ACK' });
+                        return;
+                    }
+
+                    if (message.type === 'BATCH') {
+                        if (!headersValidated) {
+                            throw new Error('Header Excel belum divalidasi.');
+                        }
+
+                        await processBatch(message.rows || []);
+                        worker.postMessage({ type: 'ACK' });
+                        return;
+                    }
+
+                    if (message.type === 'DONE') {
+                        workerFinished = true;
+                        resolve();
+                        return;
+                    }
+
+                    if (message.type === 'ERROR') {
+                        workerError = new Error(message.message);
+                        reject(workerError);
+                    }
+                } catch (error) {
+                    worker.postMessage({ type: 'CANCEL' });
+                    reject(error);
+                }
+            });
+
+            worker.once('error', reject);
+
+            worker.once('exit', (code) => {
+                if (code !== 0 && !workerFinished) {
+                    reject(
+                        new Error(`Worker Excel berhenti dengan kode ${code}.`)
+                    );
+                }
+            });
+        });
+
+        if (!headersValidated) {
+            throw new Error('Header Excel tidak berhasil divalidasi.');
+        }
+
         if (result.total_success === 0) {
             throw new Error(
                 result.total_error > 0
@@ -729,46 +761,24 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
                     : 'Tidak ada data penjualan yang dapat diproses.'
             );
         }
-        logImport('Mulai insert data piutang', {
-            totalPenjualanIds: uploadedPenjualanIds.length,
-            memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-        });
-        const piutangStart = Date.now();
+
         const piutangResult = await exports.insertDataPiutang(
             uploadedPenjualanIds,
             createdBy,
             transaction
         );
-        logImport('Insert data piutang selesai', {
-            durationSeconds: Number(((Date.now() - piutangStart) / 1000).toFixed(2)),
-            totalPiutang: piutangResult.total_success || 0,
-            memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-        });
-        logImport('Mulai update is_upload');
-        const updateStart = Date.now();
+
         const updateResult = await model.d_penjualan.update(
-            {
-                is_upload: 0
-            },
+            { is_upload: 0 },
             {
                 where: {
-                    is_upload: 1
+                    penjualan_id: uploadedPenjualanIds,
+                    is_upload: 1,
                 },
-                transaction
+                transaction,
             }
         );
-        logImport('Update is_upload selesai', {
-            durationSeconds: Number(((Date.now() - updateStart) / 1000).toFixed(2)),
-            totalUpdated: updateResult?.[0] || 0
-        });
-        logImport('Service upload selesai', {
-            totalData: result.total_data,
-            totalSuccess: result.total_success,
-            totalError: result.total_error,
-            totalPiutang: piutangResult.total_success || 0,
-            totalUpdated: updateResult?.[0] || 0,
-            memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-        });
+
         return {
             ...result,
             total: result.total_data,
@@ -777,14 +787,10 @@ exports.uploadPenjualanExcel = async (file, createdBy, transaction) => {
             preview: result.preview.slice(0, maxDataPreview),
             errors: result.data_error.slice(0, maxErrorPreview),
             total_piutang: piutangResult.total_success || 0,
-            total_updated: updateResult?.[0] || 0
+            total_updated: updateResult?.[0] || 0,
         };
     } catch (error) {
-        logImport('ERROR', {
-            message: error.message,
-            stack: error.stack,
-            memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-        });
+        await worker.terminate().catch(() => {});
         throw error;
     }
 };
