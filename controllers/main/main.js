@@ -77,6 +77,8 @@ exports.insertPenjualanArray = async (req, res) => {
 
 exports.uploadPenjualanExcel = async (req, res) => {
     let transaction;
+    const startTime = Date.now();
+    console.log(`[UPLOAD PENJUALAN] Mulai: ${new Date().toISOString()}`);
     try {
         const file = Array.isArray(req?.files?.file)
             ? req.files.file[0]
@@ -86,31 +88,42 @@ exports.uploadPenjualanExcel = async (req, res) => {
                 errorMessage('File Excel wajib diunggah.')
             );
         }
+        console.log('[UPLOAD PENJUALAN] File:', {
+            name: file.name,
+            sizeMB: (file.size / (1024 * 1024)).toFixed(2)
+        });
         transaction = await db.transaction();
+        console.log('[UPLOAD PENJUALAN] Transaksi database dibuat');
         const result = await serviceMain.uploadPenjualanExcel(
             file,
             req?.user?.nama,
             transaction
         );
+        console.log('[UPLOAD PENJUALAN] Service selesai:', {
+            durationSeconds: ((Date.now() - startTime) / 1000).toFixed(2),
+            total: result.total,
+            success: result.success,
+            failed: result.failed,
+            totalPiutang: result.total_piutang
+        });
         await transaction.commit();
-        return res.status(statusCode.success).json(
-            successMessage(result)
-        );
+        console.log('[UPLOAD PENJUALAN] Commit berhasil');
+        return res.status(statusCode.success).json(successMessage(result));
     } catch (error) {
         if (transaction && !transaction.finished) {
             try {
                 await transaction.rollback();
+                console.log('[UPLOAD PENJUALAN] Rollback berhasil');
             } catch (rollbackError) {
-                console.error(
-                    'ERROR ROLLBACK UPLOAD PENJUALAN:',
-                    rollbackError
-                );
+                console.error('[UPLOAD PENJUALAN] Rollback gagal:', rollbackError);
             }
         }
-        console.error('ERROR UPLOAD PENJUALAN EXCEL:', error);
-        return res.status(statusCode.bad).json(
-            errorMessage(error.message)
-        );
+        console.error('[UPLOAD PENJUALAN] Gagal:', {
+            durationSeconds: ((Date.now() - startTime) / 1000).toFixed(2),
+            message: error.message,
+            stack: error.stack
+        });
+        return res.status(statusCode.bad).json(errorMessage(error.message));
     }
 };
 
