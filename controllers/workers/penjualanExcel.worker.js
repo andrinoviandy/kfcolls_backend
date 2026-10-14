@@ -1,11 +1,12 @@
 const { parentPort, workerData } = require('worker_threads');
 const XLSX = require('xlsx');
 
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 1000;
 
 /**
- * Mengirim pesan ke service utama dan menunggu ACK.
- * Tujuannya agar batch tidak menumpuk di memory.
+ * Kirim pesan ke service utama dan tunggu ACK.
+ * Dengan mekanisme ini, Worker tidak mengirim batch berikutnya
+ * sebelum batch sebelumnya selesai diproses.
  */
 function sendAndWait(message) {
     return new Promise((resolve, reject) => {
@@ -15,7 +16,9 @@ function sendAndWait(message) {
                 resolve();
             } else if (response?.type === 'CANCEL') {
                 cleanup();
-                reject(new Error('Proses Excel dibatalkan.'));
+                reject(
+                    new Error('Proses Excel dibatalkan.')
+                );
             }
         };
 
@@ -31,56 +34,68 @@ function sendAndWait(message) {
 async function main() {
     try {
         if (!workerData?.filePath) {
-            throw new Error('Path file Excel tidak ditemukan.');
+            throw new Error(
+                'Path file Excel tidak ditemukan.'
+            );
         }
 
-        console.log('[EXCEL WORKER] Mulai membaca Excel');
+        console.log(
+            '[EXCEL WORKER] Mulai membaca Excel',
+            {
+                filePath: workerData.filePath,
+                waktu: new Date().toISOString(),
+                memory: process.memoryUsage(),
+            }
+        );
 
-        // Parsing dilakukan di thread terpisah dari Express.
-        console.time('[EXCEL WORKER] XLSX.readFile');
+        const start = Date.now();
 
-console.log('[EXCEL WORKER] Sebelum XLSX.readFile', {
-  waktu: new Date().toISOString(),
-  memory: process.memoryUsage(),
-});
+        const workbook = XLSX.readFile(
+            workerData.filePath,
+            {
+                cellDates: true,
+                dense: false,
+            }
+        );
 
-const start = Date.now();
-
-const workbook = XLSX.readFile(workerData.filePath, {
-  cellDates: true,
-});
-
-console.log('[EXCEL WORKER] Sesudah XLSX.readFile', {
-  durasiMs: Date.now() - start,
-  waktu: new Date().toISOString(),
-  memory: process.memoryUsage(),
-});
-
-console.timeEnd('[EXCEL WORKER] XLSX.readFile');
-
-console.log('[EXCEL WORKER] Workbook berhasil dibaca', {
-    jumlahSheet: workbook.SheetNames.length,
-    sheetPertama: workbook.SheetNames[0],
-});
+        console.log(
+            '[EXCEL WORKER] Workbook berhasil dibaca',
+            {
+                durasiMs: Date.now() - start,
+                jumlahSheet: workbook.SheetNames.length,
+                sheetPertama: workbook.SheetNames[0],
+                memory: process.memoryUsage(),
+            }
+        );
 
         const sheetName = workbook.SheetNames[0];
 
         if (!sheetName) {
-            throw new Error('File Excel tidak memiliki sheet.');
+            throw new Error(
+                'File Excel tidak memiliki sheet.'
+            );
         }
 
         const worksheet = workbook.Sheets[sheetName];
 
         if (!worksheet || !worksheet['!ref']) {
-            throw new Error('File Excel tidak memiliki data.');
+            throw new Error(
+                'File Excel tidak memiliki data.'
+            );
         }
 
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        const range = XLSX.utils.decode_range(
+            worksheet['!ref']
+        );
 
-        // Ambil header dari baris pertama sheet.
+        // Ambil header dari baris pertama worksheet.
         const headers = [];
 
-        for (let col = range.s.c; col <= range.e.c; col++) {
+        for (
+            let col = range.s.c;
+            col <= range.e.c;
+            col++
+        ) {
             const address = XLSX.utils.encode_cell({
                 r: range.s.r,
                 c: col,
@@ -91,11 +106,23 @@ console.log('[EXCEL WORKER] Workbook berhasil dibaca', {
             headers.push(cell?.v ?? '');
         }
 
-        if (!headers.some((header) => String(header).trim() !== '')) {
-            throw new Error('File Excel tidak memiliki header.');
+        if (
+            !headers.some(
+                (header) =>
+                    String(header).trim() !== ''
+            )
+        ) {
+            throw new Error(
+                'File Excel tidak memiliki header.'
+            );
         }
 
-        // Minta service utama memvalidasi header.
+        console.log(
+            '[EXCEL WORKER] Header Excel:',
+            headers
+        );
+
+        // Minta service utama memvalidasi seluruh header.
         await sendAndWait({
             type: 'HEADERS',
             headers,
@@ -110,8 +137,13 @@ console.log('[EXCEL WORKER] Workbook berhasil dibaca', {
         ) {
             const row = {};
 
-            for (let col = range.s.c; col <= range.e.c; col++) {
-                const header = headers[col - range.s.c];
+            for (
+                let col = range.s.c;
+                col <= range.e.c;
+                col++
+            ) {
+                const header =
+                    headers[col - range.s.c];
 
                 if (
                     header === null ||
@@ -133,6 +165,7 @@ console.log('[EXCEL WORKER] Workbook berhasil dibaca', {
 
             batch.push({
                 row,
+
                 // Nomor baris Excel dimulai dari 1.
                 excelRow: rowIndex + 1,
             });
@@ -147,7 +180,7 @@ console.log('[EXCEL WORKER] Workbook berhasil dibaca', {
             }
         }
 
-        // Kirim batch terakhir jika belum mencapai 500 baris.
+        // Kirim batch terakhir jika belum mencapai 1.000 baris.
         if (batch.length > 0) {
             await sendAndWait({
                 type: 'BATCH',
@@ -155,15 +188,24 @@ console.log('[EXCEL WORKER] Workbook berhasil dibaca', {
             });
         }
 
-        console.log('[EXCEL WORKER] Parsing selesai');
+        console.log(
+            '[EXCEL WORKER] Parsing selesai'
+        );
 
         parentPort.postMessage({
             type: 'DONE',
         });
     } catch (error) {
+        console.error(
+            '[EXCEL WORKER] Error:',
+            error
+        );
+
         parentPort.postMessage({
             type: 'ERROR',
-            message: error.message || 'Gagal membaca file Excel.',
+            message:
+                error.message ||
+                'Gagal membaca file Excel.',
             stack: error.stack,
         });
     }
