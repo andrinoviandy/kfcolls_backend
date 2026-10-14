@@ -763,7 +763,7 @@ exports.uploadPenjualanExcel = async (
     });
 
     const worker = new Worker(
-        path.join(__dirname, '../workers/penjualanExcelWorkers.js'),
+        path.join(__dirname, '../workers/penjualanExcel.worker.js'),
         {
             workerData: {
                 filePath: file.tempFilePath,
