@@ -5918,44 +5918,71 @@ exports.getDetailPencairan = async (params) => {
   }
 };
 
+const normalizeFilterValues = (value) => {
+    if (value === undefined || value === null || value === '') {
+        return [];
+    }
+
+    const values = Array.isArray(value) ? value : [value];
+
+    return values
+        .flatMap((item) => {
+            if (item === undefined || item === null) {
+                return [];
+            }
+
+            return String(item)
+                .split(',')
+                .map((val) => val.trim())
+                .filter(Boolean);
+        });
+};
 
 exports.getDataKonfirmasiPiutang = async (params) => {
     try {
-        const page = Number(params?.page) || 1;
+        const page = Math.max(
+            1,
+            Number(params?.page) || 1
+        );
+
         const limit = Math.min(
             1000,
             Math.max(1, Number(params?.limit) || 10)
         );
+
         const offset = (page - 1) * limit;
 
+        // =====================================================
+        // FILTER DASAR
+        // =====================================================
         const keyword = String(
-            params?.keyword || ''
+            params?.keyword ?? ''
         ).trim();
 
-        // STATUS KONFIRMASI
         const status = String(
-            params?.status || 'ALL'
+            params?.status ?? 'ALL'
         ).trim();
 
-        // TANGGAL MULAI
         const startDate = String(
-            params?.start_date || ''
+            params?.start_date ?? ''
         ).trim();
 
-        // TANGGAL AKHIR
         const endDate = String(
-            params?.end_date || ''
+            params?.end_date ?? ''
         ).trim();
 
-        let condition = '';
-
+        // =====================================================
+        // BIND
+        // =====================================================
         const bind = {
             limit,
             offset,
         };
 
+        let condition = '';
+
         // =====================================================
-        // KEYWORD
+        // FILTER KEYWORD
         // =====================================================
         if (keyword) {
             condition += `
@@ -6026,11 +6053,9 @@ exports.getDataKonfirmasiPiutang = async (params) => {
 
         // =====================================================
         // FILTER STATUS KONFIRMASI
+        // Status dari d_status kegiatan KONFIRMASI_PIUTANG
         // =====================================================
-        if (
-            status &&
-            status.toUpperCase() !== 'ALL'
-        ) {
+        if (status && status.toUpperCase() !== 'ALL') {
             condition += `
                 AND UPPER(
                     COALESCE(ds.kd_status::TEXT, '')
@@ -6042,7 +6067,6 @@ exports.getDataKonfirmasiPiutang = async (params) => {
 
         // =====================================================
         // FILTER TANGGAL MULAI
-        // Berdasarkan tanggal kirim konfirmasi
         // =====================================================
         if (startDate) {
             condition += `
@@ -6055,7 +6079,7 @@ exports.getDataKonfirmasiPiutang = async (params) => {
 
         // =====================================================
         // FILTER TANGGAL AKHIR
-        // Termasuk seluruh waktu pada tanggal akhir
+        // Inklusif sampai seluruh waktu pada tanggal akhir
         // =====================================================
         if (endDate) {
             condition += `
@@ -6070,7 +6094,7 @@ exports.getDataKonfirmasiPiutang = async (params) => {
         }
 
         // =====================================================
-        // 1. GET LIST DATA
+        // 1. QUERY LIST DATA
         // =====================================================
         const LIST_QUERY =
             query.getDataKonfirmasiPiutang.replace(
@@ -6087,7 +6111,7 @@ exports.getDataKonfirmasiPiutang = async (params) => {
         );
 
         // =====================================================
-        // 2. GET TOTAL DATA
+        // 2. QUERY COUNT DATA
         // =====================================================
         const COUNT_QUERY =
             query.countDataKonfirmasiPiutang.replace(
@@ -6112,7 +6136,7 @@ exports.getDataKonfirmasiPiutang = async (params) => {
         );
 
         // =====================================================
-        // 3. GET SUMMARY
+        // 3. QUERY SUMMARY
         // =====================================================
         const SUMMARY_QUERY =
             query.summaryDataKonfirmasiPiutang.replace(
@@ -6128,12 +6152,13 @@ exports.getDataKonfirmasiPiutang = async (params) => {
             }
         );
 
-        const summary = summaryResult?.[0] || {
+        const summary = {
             total: 0,
             menunggu: 0,
             disetujui: 0,
             ditolak: 0,
             otomatis: 0,
+            ...(summaryResult?.[0] || {}),
         };
 
         // =====================================================

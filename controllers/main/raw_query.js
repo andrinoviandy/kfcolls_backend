@@ -21395,88 +21395,304 @@ query.getDetailPencairan = `
 // =====================================================
 // GET DATA KONFIRMASI PIUTANG
 // =====================================================
+
 query.getDataKonfirmasiPiutang = `
     SELECT
+        p.*,
+
+        -- Data master
+        mc.name AS nama_customer,
+        mr.ur_ref AS nama_cabang,
+        mp.nama_principle,
+
+        -- Nominal piutang dari DPP
+        COALESCE(p.dpp, 0) AS nominal_piutang,
+
+        -- Data penagih
+        fp.faktur_petugas_id,
+        fp.nip AS petugas_nip,
+        mu.nama AS nama_penagih,
+        fp.kd_status AS kd_status_petugas,
+
+        -- Data pengiriman konfirmasi
         kp.k_piutang_id,
-        kp.piutang_id,
         kp.tgl_kirim_konfirmasi,
-        kp.created_by,
-        kp.created_at,
-        p.no_faktur,
-        p.no_billing,
-        p.customer,
-        p.nama_customer,
-        p.nama_penagih,
-        p.nominal_tagihan,
-        p.posting_date,
-        p.sales,
-        ds.kd_status AS status
-    FROM public.k_piutang kp
-    INNER JOIN public.d_piutang p
-        ON p.piutang_id = kp.piutang_id
+        kp.created_by AS konfirmasi_created_by,
+        kp.created_at AS konfirmasi_created_at,
+
+        CASE
+            WHEN kp.k_piutang_id IS NULL
+                THEN 'BELUM_DIKIRIM'
+            ELSE 'SUDAH_DIKIRIM'
+        END AS status_pengiriman_konfirmasi,
+
+        -- Status asli
+        ds.kd_status AS status_konfirmasi,
+
+        -- Kode singkat dibuat langsung menggunakan CASE WHEN
+        CASE
+            WHEN ds.kd_status = 'OTO' THEN 'OTO'
+            WHEN ds.kd_status = 'STJ' THEN 'STJ'
+            WHEN ds.kd_status = 'TLK' THEN 'TLK'
+            WHEN ds.kd_status = 'MK'  THEN 'MK'
+            ELSE COALESCE(ds.kd_status::TEXT, '-')
+        END AS kode_singkat_status
+
+    FROM public.d_piutang p
+
+    -- Ambil data konfirmasi terakhir
     LEFT JOIN LATERAL (
         SELECT
-            d.kd_status
-        FROM public.d_status d
-        WHERE d.foreign_id = kp.k_piutang_id
-          AND d.kegiatan = 'KONFIRMASI_PIUTANG'
-        ORDER BY d.created_at DESC
+            k.k_piutang_id,
+            k.piutang_id,
+            k.tgl_kirim_konfirmasi,
+            k.created_by,
+            k.created_at
+        FROM public.k_piutang k
+        WHERE k.piutang_id = p.piutang_id
+        ORDER BY
+            k.created_at DESC NULLS LAST,
+            k.k_piutang_id DESC
+        LIMIT 1
+    ) kp ON TRUE
+
+    -- Ambil status konfirmasi terakhir
+    LEFT JOIN LATERAL (
+        SELECT
+            s.kd_status,
+            s.created_at
+        FROM public.d_status s
+        WHERE s.kegiatan = 'KONFIRMASI_PIUTANG'
+          AND s.foreign_id = kp.k_piutang_id
+        ORDER BY
+            s.created_at DESC NULLS LAST
         LIMIT 1
     ) ds ON TRUE
+
+    -- Ambil petugas penagihan aktif
+    LEFT JOIN LATERAL (
+        SELECT
+            f.faktur_petugas_id,
+            f.nip,
+            f.kd_status
+        FROM public.d_faktur_petugas f
+        WHERE f.piutang_id = p.piutang_id
+          AND f.kegiatan = 'PENAGIHAN'
+          AND f.is_active = 'Y'
+        ORDER BY f.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp ON TRUE
+
+    LEFT JOIN public.m_user mu
+        ON mu.nip = fp.nip
+
+    LEFT JOIN public.m_customer mc
+        ON mc.kode_customer = p.customer
+
+    LEFT JOIN public.m_referensi mr
+        ON mr.kd_ref = p.cabang
+       AND mr.jns_ref = 'cabang_id'
+
+    LEFT JOIN public.m_principle mp
+        ON mp.principle = p.principle
+
     WHERE 1 = 1
         :condition
+
     ORDER BY
-        kp.created_at DESC,
-        kp.k_piutang_id DESC
+        p.posting_date DESC NULLS LAST,
+        p.no_faktur DESC NULLS LAST,
+        p.piutang_id DESC
+
     LIMIT :limit
     OFFSET :offset
 `;
 
+
+// =====================================================
+// COUNT DATA KONFIRMASI PIUTANG
+// =====================================================
+
 query.countDataKonfirmasiPiutang = `
-    SELECT COUNT(*)::INTEGER AS total
-    FROM public.k_piutang kp
-    INNER JOIN public.d_piutang p
-        ON p.piutang_id = kp.piutang_id
+    SELECT
+        COUNT(*)::INTEGER AS total
+
+    FROM public.d_piutang p
+
     LEFT JOIN LATERAL (
         SELECT
-            d.kd_status
-        FROM public.d_status d
-        WHERE d.foreign_id = kp.k_piutang_id
-          AND d.kegiatan = 'KONFIRMASI_PIUTANG'
-        ORDER BY d.created_at DESC
+            k.k_piutang_id,
+            k.piutang_id,
+            k.tgl_kirim_konfirmasi,
+            k.created_by,
+            k.created_at
+        FROM public.k_piutang k
+        WHERE k.piutang_id = p.piutang_id
+        ORDER BY
+            k.created_at DESC NULLS LAST,
+            k.k_piutang_id DESC
+        LIMIT 1
+    ) kp ON TRUE
+
+    LEFT JOIN LATERAL (
+        SELECT
+            s.kd_status,
+            s.created_at
+        FROM public.d_status s
+        WHERE s.kegiatan = 'KONFIRMASI_PIUTANG'
+          AND s.foreign_id = kp.k_piutang_id
+        ORDER BY
+            s.created_at DESC NULLS LAST
         LIMIT 1
     ) ds ON TRUE
+
+    LEFT JOIN LATERAL (
+        SELECT
+            f.faktur_petugas_id,
+            f.nip,
+            f.kd_status
+        FROM public.d_faktur_petugas f
+        WHERE f.piutang_id = p.piutang_id
+          AND f.kegiatan = 'PENAGIHAN'
+          AND f.is_active = 'Y'
+        ORDER BY f.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp ON TRUE
+
+    LEFT JOIN public.m_user mu
+        ON mu.nip = fp.nip
+
+    LEFT JOIN public.m_customer mc
+        ON mc.kode_customer = p.customer
+
+    LEFT JOIN public.m_referensi mr
+        ON mr.kd_ref = p.cabang
+       AND mr.jns_ref = 'cabang_id'
+
+    LEFT JOIN public.m_principle mp
+        ON mp.principle = p.principle
+
     WHERE 1 = 1
         :condition
 `;
 
+
+// =====================================================
+// SUMMARY DATA KONFIRMASI PIUTANG
+// =====================================================
+
 query.summaryDataKonfirmasiPiutang = `
     SELECT
         COUNT(*)::INTEGER AS total,
+
+        -- Belum dikirim
         COUNT(*) FILTER (
-            WHERE UPPER(COALESCE(ds.kd_status, '')) = 'MENUNGGU_KONFIRMASI'
+            WHERE kp.k_piutang_id IS NULL
+        )::INTEGER AS belum_dikirim,
+
+        -- Menunggu konfirmasi
+        COUNT(*) FILTER (
+            WHERE
+                CASE
+                    WHEN ds.kd_status = 'OTO' THEN 'OTO'
+                    WHEN ds.kd_status = 'STJ' THEN 'STJ'
+                    WHEN ds.kd_status = 'TLK' THEN 'TLK'
+                    WHEN ds.kd_status = 'MK'  THEN 'MK'
+                    ELSE COALESCE(ds.kd_status::TEXT, '-')
+                END = 'MK'
         )::INTEGER AS menunggu,
+
+        -- Disetujui customer
         COUNT(*) FILTER (
-            WHERE UPPER(COALESCE(ds.kd_status, '')) = 'DISETUJUI_CUSTOMER'
+            WHERE
+                CASE
+                    WHEN ds.kd_status = 'OTO' THEN 'OTO'
+                    WHEN ds.kd_status = 'STJ' THEN 'STJ'
+                    WHEN ds.kd_status = 'TLK' THEN 'TLK'
+                    WHEN ds.kd_status = 'MK'  THEN 'MK'
+                    ELSE COALESCE(ds.kd_status::TEXT, '-')
+                END = 'STJ'
         )::INTEGER AS disetujui,
+
+        -- Ditolak customer
         COUNT(*) FILTER (
-            WHERE UPPER(COALESCE(ds.kd_status, '')) = 'DITOLAK_CUSTOMER'
+            WHERE
+                CASE
+                    WHEN ds.kd_status = 'OTO' THEN 'OTO'
+                    WHEN ds.kd_status = 'STJ' THEN 'STJ'
+                    WHEN ds.kd_status = 'TLK' THEN 'TLK'
+                    WHEN ds.kd_status = 'MK'  THEN 'MK'
+                    ELSE COALESCE(ds.kd_status::TEXT, '-')
+                END = 'TLK'
         )::INTEGER AS ditolak,
+
+        -- Disetujui otomatis
         COUNT(*) FILTER (
-            WHERE UPPER(COALESCE(ds.kd_status, '')) = 'DISETUJUI_OTOMATIS'
+            WHERE
+                CASE
+                    WHEN ds.kd_status = 'OTO' THEN 'OTO'
+                    WHEN ds.kd_status = 'STJ' THEN 'STJ'
+                    WHEN ds.kd_status = 'TLK' THEN 'TLK'
+                    WHEN ds.kd_status = 'MK'  THEN 'MK'
+                    ELSE COALESCE(ds.kd_status::TEXT, '-')
+                END = 'OTO'
         )::INTEGER AS otomatis
-    FROM public.k_piutang kp
-    INNER JOIN public.d_piutang p
-        ON p.piutang_id = kp.piutang_id
+
+    FROM public.d_piutang p
+
     LEFT JOIN LATERAL (
         SELECT
-            d.kd_status
-        FROM public.d_status d
-        WHERE d.foreign_id = kp.k_piutang_id
-          AND d.kegiatan = 'KONFIRMASI_PIUTANG'
-        ORDER BY d.created_at DESC
+            k.k_piutang_id,
+            k.piutang_id,
+            k.tgl_kirim_konfirmasi,
+            k.created_by,
+            k.created_at
+        FROM public.k_piutang k
+        WHERE k.piutang_id = p.piutang_id
+        ORDER BY
+            k.created_at DESC NULLS LAST,
+            k.k_piutang_id DESC
+        LIMIT 1
+    ) kp ON TRUE
+
+    LEFT JOIN LATERAL (
+        SELECT
+            s.kd_status,
+            s.created_at
+        FROM public.d_status s
+        WHERE s.kegiatan = 'KONFIRMASI_PIUTANG'
+          AND s.foreign_id = kp.k_piutang_id
+        ORDER BY
+            s.created_at DESC NULLS LAST
         LIMIT 1
     ) ds ON TRUE
+
+    LEFT JOIN LATERAL (
+        SELECT
+            f.faktur_petugas_id,
+            f.nip,
+            f.kd_status
+        FROM public.d_faktur_petugas f
+        WHERE f.piutang_id = p.piutang_id
+          AND f.kegiatan = 'PENAGIHAN'
+          AND f.is_active = 'Y'
+        ORDER BY f.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp ON TRUE
+
+    LEFT JOIN public.m_user mu
+        ON mu.nip = fp.nip
+
+    LEFT JOIN public.m_customer mc
+        ON mc.kode_customer = p.customer
+
+    LEFT JOIN public.m_referensi mr
+        ON mr.kd_ref = p.cabang
+       AND mr.jns_ref = 'cabang_id'
+
+    LEFT JOIN public.m_principle mp
+        ON mp.principle = p.principle
+
     WHERE 1 = 1
         :condition
 `;
