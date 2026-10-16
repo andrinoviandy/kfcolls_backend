@@ -18,6 +18,7 @@ router.get('/getReferensiByJenisGroup', authorization.doAuth, controller.main.ge
 // Get List Data
 router.get('/getDataPenjualan', authorization.doAuth, controller.main.getDataPenjualan);
 router.get('/getDataPiutang', authorization.doAuth, controller.main.getDataPiutang);
+router.get('/getDataReportSales', authorization.doAuth, controller.main.getDataReportSales);
 router.get('/getDataPelanggan', authorization.doAuth, controller.main.getDataPelanggan);
 router.get('/getListPrinciple', authorization.doAuth, controller.main.getListPrinciple);
 router.get('/getListUserManagement', authorization.doAuth, controller.main.getListUserManagement)
@@ -27,6 +28,10 @@ router.get('/getDataTukarFaktur', authorization.doAuth, controller.main.getDataT
 router.get('/getDataVerifikasiTukarFaktur', authorization.doAuth, controller.main.getDataVerifikasiTukarFaktur)
 router.get('/getDataVerifikasiPembayaran', authorization.doAuth, controller.main.getDataVerifikasiPembayaran)
 router.get('/getDataBayarFaktur', authorization.doAuth, controller.main.getDataBayarFaktur)
+router.get('/getMonitoringPenugasan', authorization.doAuth, controller.main.getMonitoringPenugasan)
+router.get('/getDetailPenjualan', authorization.doAuth, controller.main.getDetailPenjualan)
+router.get('/getDetailPencairan', authorization.doAuth, controller.main.getDetailPencairan)
+router.get('/getDataKonfirmasiPiutang', authorization.doAuth, controller.main.getDataKonfirmasiPiutang)
 
 // Insert Data
 router.post('/insertPenjualanArray', authorization.doAuth, controller.main.insertPenjualanArray)

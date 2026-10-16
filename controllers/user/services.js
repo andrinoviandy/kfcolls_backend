@@ -24,8 +24,6 @@ exports.getExpiredDate = (addHours = 8) => {
 exports.doLogin = async (payload, host) => {
     const password = await helpers.encodedJwt(payload?.user_password)
     
-    console.log(password, 'password');
-    
     const QUERY = `
     SELECT 
         COUNT(*) OVER() AS data, 

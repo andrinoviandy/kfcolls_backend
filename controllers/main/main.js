@@ -291,6 +291,42 @@ exports.getDataPiutang = async (req, res) => {
     }
 }
 
+exports.getDataReportSales = async (req, res) => {
+    try {
+        const params = {
+            ...req.query
+        }
+
+        console.log(
+            params,
+            'params getDataReportSales'
+        )
+
+        const result =
+            await serviceMain.getDataReportSales(
+                params
+            )
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        )
+
+    } catch (error) {
+        console.log(
+            error,
+            "ERROR GET DATA REPORT SALES <<<<<<<<<"
+        )
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        )
+    }
+}
+
 exports.getListPrinciple = async (req, res) => {
     try {
         const params = { ...req.query }
@@ -1038,6 +1074,158 @@ exports.verifikasiBayarFaktur = async (req, res) => {
                 {},
                 error?.message
             )
+        );
+    }
+};
+
+exports.getMonitoringPenugasan = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getMonitoringPenugasan'
+        );
+
+        const result =
+            await serviceMain.getMonitoringPenugasan(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET MONITORING PENUGASAN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.getDetailPenjualan = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDetailPenjualan'
+        );
+
+        const result =
+            await serviceMain.getDetailPenjualan(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET DETAIL PENJUALAN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.getDetailPencairan = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDetailPencairan'
+        );
+
+        const result =
+            await serviceMain.getDetailPencairan(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET DETAIL PENCAIRAN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.getDataKonfirmasiPiutang = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataKonfirmasiPiutang'
+        );
+
+        const result =
+            await serviceMain.getDataKonfirmasiPiutang(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET MONITORING PENUGASAN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
         );
     }
 };

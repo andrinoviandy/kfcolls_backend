@@ -5348,3 +5348,811 @@ exports.verifikasiBayarFaktur = async (
         throw error;
     }
 };
+
+exports.getMonitoringPenugasan = async (params = {}) => {
+    try {
+        const normalizeFilterValues = (value) => {
+            const values = Array.isArray(value) ? value : [value];
+
+            return values
+                .filter((item) => item !== undefined && item !== null)
+                .flatMap((item) =>
+                    typeof item === "string" && item.includes(",")
+                        ? item.split(",")
+                        : [item]
+                )
+                .map((item) => String(item).trim())
+                .filter(Boolean);
+        };
+
+        const page = Math.max(1, Number(params?.page) || 1);
+        const limit = Math.min(
+            100,
+            Math.max(1, Number(params?.limit) || 10)
+        );
+        const offset = (page - 1) * limit;
+
+        const keyword = String(params?.keyword || "").trim();
+
+        const salesOffices = normalizeFilterValues(
+            params?.sales_office ?? params?.["sales_office[]"]
+        );
+
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.["customer[]"]
+        );
+
+        const statusTukar = String(
+            params?.status_tukar_faktur ??
+            params?.status ??
+            "ALL"
+        ).trim().toUpperCase();
+
+        const statusPembayaran = String(
+            params?.status_pembayaran || "ALL"
+        ).trim().toUpperCase();
+
+        const startDate = String(params?.start_date || "").trim();
+        const endDate = String(params?.end_date || "").trim();
+
+        let condition = "";
+        let summaryCondition = "";
+
+        const bind = {
+            limit,
+            offset,
+        };
+
+        const summaryBind = {};
+
+        /*
+         * SEARCH
+         */
+        if (keyword) {
+            const searchCondition = `
+                AND (
+                    p.no_faktur ILIKE :keyword
+                    OR p.no_billing ILIKE :keyword
+                    OR p.customer ILIKE :keyword
+                    OR mc.name ILIKE :keyword
+                    OR p.sales ILIKE :keyword
+                    OR p.nama_sales ILIKE :keyword
+                    OR p.cabang ILIKE :keyword
+                    OR mr.ur_ref ILIKE :keyword
+                    OR p.principle ILIKE :keyword
+                    OR mp.nama_principle ILIKE :keyword
+                    OR COALESCE(fp_tagih.petugas, '') ILIKE :keyword
+                )
+            `;
+
+            condition += searchCondition;
+            summaryCondition += searchCondition;
+
+            bind.keyword = `%${keyword}%`;
+            summaryBind.keyword = `%${keyword}%`;
+        }
+
+        /*
+         * FILTER CABANG
+         */
+        if (
+            salesOffices.length &&
+            !salesOffices.some(
+                (item) => item.toUpperCase() === "ALL"
+            )
+        ) {
+            const cabangCondition = `
+                AND p.cabang IN (:sales_offices)
+            `;
+
+            condition += cabangCondition;
+            summaryCondition += cabangCondition;
+
+            bind.sales_offices = salesOffices;
+            summaryBind.sales_offices = salesOffices;
+        }
+
+        /*
+         * FILTER CUSTOMER
+         */
+        if (
+            customers.length &&
+            !customers.some(
+                (item) => item.toUpperCase() === "ALL"
+            )
+        ) {
+            const customerCondition = `
+                AND p.customer IN (:customers)
+            `;
+
+            condition += customerCondition;
+            summaryCondition += customerCondition;
+
+            bind.customers = customers;
+            summaryBind.customers = customers;
+        }
+
+        /*
+         * FILTER STATUS TUKAR FAKTUR
+         *
+         * ALL
+         * BELUM_DITUKAR
+         * SUDAH_DITUKAR
+         */
+        if (statusTukar !== "ALL") {
+            if (
+                !["BELUM_DITUKAR", "SUDAH_DITUKAR"].includes(
+                    statusTukar
+                )
+            ) {
+                throw new Error(
+                    "Status tukar faktur tidak valid."
+                );
+            }
+
+            if (statusTukar === "BELUM_DITUKAR") {
+                condition += `
+                    AND tf.tukar_faktur_id IS NULL
+                `;
+            }
+
+            if (statusTukar === "SUDAH_DITUKAR") {
+                condition += `
+                    AND tf.tukar_faktur_id IS NOT NULL
+                `;
+            }
+        }
+
+        /*
+         * FILTER STATUS PEMBAYARAN
+         *
+         * ALL
+         * BELUM_LUNAS
+         * SUDAH_LUNAS
+         */
+        if (statusPembayaran !== "ALL") {
+            if (
+                !["BELUM_LUNAS", "SUDAH_LUNAS"].includes(
+                    statusPembayaran
+                )
+            ) {
+                throw new Error(
+                    "Status pembayaran hanya boleh BELUM_LUNAS atau SUDAH_LUNAS."
+                );
+            }
+
+            const collectionExpression = `
+                (
+                    COALESCE(cod.total_nominal_billing, 0)
+                    + COALESCE(pay.total_nominal_bayar, 0)
+                )
+            `;
+
+            if (statusPembayaran === "BELUM_LUNAS") {
+                condition += `
+                    AND ${collectionExpression} < COALESCE(p.dpp, 0)
+                `;
+            }
+
+            if (statusPembayaran === "SUDAH_LUNAS") {
+                condition += `
+                    AND COALESCE(p.dpp, 0) > 0
+                    AND ${collectionExpression} >= COALESCE(p.dpp, 0)
+                `;
+            }
+        }
+
+        /*
+         * FILTER TANGGAL AWAL
+         */
+        if (startDate) {
+            const startCondition = `
+                AND p.posting_date::date >= CAST(:start_date AS date)
+            `;
+
+            condition += startCondition;
+            summaryCondition += startCondition;
+
+            bind.start_date = startDate;
+            summaryBind.start_date = startDate;
+        }
+
+        /*
+         * FILTER TANGGAL AKHIR
+         */
+        if (endDate) {
+            const endCondition = `
+                AND p.posting_date::date <= CAST(:end_date AS date)
+            `;
+
+            condition += endCondition;
+            summaryCondition += endCondition;
+
+            bind.end_date = endDate;
+            summaryBind.end_date = endDate;
+        }
+
+        /*
+         * LIST DATA
+         */
+        const listQuery = query.getMonitoringPenugasan.replace(
+            ":condition",
+            condition
+        );
+
+        const listData = await db.query(listQuery, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT,
+        });
+
+        /*
+         * COUNT DATA
+         */
+        const countQuery = query.countMonitoringPenugasan.replace(
+            ":condition",
+            condition
+        );
+
+        const countData = await db.query(countQuery, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT,
+        });
+
+        const totalData = Number(
+            countData?.[0]?.total || 0
+        );
+
+        const totalHalaman = Math.ceil(
+            totalData / limit
+        );
+
+        /*
+         * SUMMARY
+         *
+         * Mengikuti keyword, cabang, customer, dan tanggal.
+         * Tidak dipersempit oleh filter status agar kartu summary
+         * tetap menampilkan keseluruhan status sesuai filter umum.
+         */
+        const summaryQuery =
+            query.summaryMonitoringPenugasan.replace(
+                ":condition",
+                summaryCondition
+            );
+
+        const summaryResult = await db.query(summaryQuery, {
+            replacements: summaryBind,
+            type: db.QueryTypes.SELECT,
+        });
+
+        const summary = summaryResult?.[0] || {};
+
+        return {
+            total_data: totalData,
+            total_halaman: totalHalaman,
+            limit,
+            page,
+            list_data: listData,
+            summary: {
+                total_penugasan: Number(
+                    summary.total_penugasan || 0
+                ),
+                belum_tukar_faktur: Number(
+                    summary.belum_tukar_faktur || 0
+                ),
+                sudah_tukar_faktur: Number(
+                    summary.sudah_tukar_faktur || 0
+                ),
+                belum_penagihan: Number(
+                    summary.belum_penagihan || 0
+                ),
+                sudah_penagihan: Number(
+                    summary.sudah_penagihan || 0
+                ),
+            },
+        };
+    } catch (error) {
+        console.error(
+            "ERROR SERVICE GET MONITORING PENUGASAN:",
+            error
+        );
+
+        throw error;
+    }
+};
+
+exports.getDataReportSales = async (params) => {
+  try {
+    // =========================================
+    // HELPER MULTIPLE FILTER
+    // =========================================
+    const normalizeFilterValues = (value) => {
+      const values = Array.isArray(value) ? value : [value];
+
+      return values
+        .filter((item) => item !== undefined && item !== null)
+        .map((item) => String(item).trim())
+        .filter(Boolean);
+    };
+
+    const isAll = (values) =>
+      !values.length ||
+      values.some((item) => item.toUpperCase() === "ALL");
+
+    // =========================================
+    // PAGINATION & SEARCH
+    // =========================================
+    const page = Math.max(Number(params?.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(params?.limit) || 10, 1), 1000);
+    const offset = (page - 1) * limit;
+    const keyword = String(params?.keyword || "").trim();
+
+    // =========================================
+    // FILTER
+    // =========================================
+    const salesOffices = normalizeFilterValues(
+      params?.sales_office ?? params?.["sales_office[]"]
+    );
+
+    const customers = normalizeFilterValues(
+      params?.customer ?? params?.["customer[]"]
+    );
+
+    const channels = normalizeFilterValues(
+      params?.channel ?? params?.["channel[]"]
+    );
+
+    const principles = normalizeFilterValues(
+      params?.principle ?? params?.["principle[]"]
+    );
+
+    const products = normalizeFilterValues(
+      params?.produk ?? params?.["produk[]"]
+    );
+
+    const startDate = String(params?.start_date || "").trim();
+    const endDate = String(params?.end_date || "").trim();
+
+    // =========================================
+    // DYNAMIC CONDITION
+    // =========================================
+    let condition = "";
+    const bind = { limit, offset };
+
+    if (keyword) {
+      condition += `
+        AND (
+          p.no_transaksi ILIKE :keyword
+          OR p.customer ILIKE :keyword
+          OR p.principal ILIKE :keyword
+          OR p.sales ILIKE :keyword
+          OR p.status ILIKE :keyword
+          OR p.no_transaksi::text ILIKE :keyword
+        )
+      `;
+
+      bind.keyword = `%${keyword}%`;
+    }
+
+    if (!isAll(salesOffices)) {
+      condition += ` AND p.sales_office IN (:sales_offices) `;
+      bind.sales_offices = salesOffices;
+    }
+
+    if (!isAll(customers)) {
+      condition += ` AND p.customer IN (:customers) `;
+      bind.customers = customers;
+    }
+
+    if (!isAll(channels)) {
+      condition += ` AND p.channel IN (:channels) `;
+      bind.channels = channels;
+    }
+
+    if (!isAll(principles)) {
+      condition += ` AND p.principal IN (:principles) `;
+      bind.principles = principles;
+    }
+
+    if (!isAll(products)) {
+      condition += ` AND p.produk IN (:products) `;
+      bind.products = products;
+    }
+
+    if (startDate) {
+      condition += ` AND p.tanggal >= CAST(:start_date AS DATE) `;
+      bind.start_date = startDate;
+    }
+
+    if (endDate) {
+      condition += ` AND p.tanggal < CAST(:end_date AS DATE) + INTERVAL '1 day' `;
+      bind.end_date = endDate;
+    }
+
+    // =========================================
+    // EXECUTE ONE QUERY
+    // =========================================
+    const SQL = query.getDataReportSales.replace(
+      /:condition/g,
+      condition
+    );
+
+    const result = await db.query(SQL, {
+      replacements: bind,
+      type: db.QueryTypes.SELECT,
+    });
+
+    const firstRow = result?.[0] || {};
+
+    return {
+      total_data: Number(firstRow.total_data || 0),
+      total_halaman: Math.ceil(Number(firstRow.total_data || 0) / limit),
+      page,
+      limit,
+
+      list_data: result.map((item) => {
+        const {
+          total_data,
+          total_penjualan,
+          total_retur,
+          total_pencairan,
+          total_sisa_pencairan,
+          total_transaksi,
+          total_customer,
+          total_retur_persentase,
+          ...row
+        } = item;
+
+        return row;
+      }),
+
+      summary: {
+        total_penjualan: Number(firstRow.total_penjualan || 0),
+        total_retur: Number(firstRow.total_retur || 0),
+        total_pencairan: Number(firstRow.total_pencairan || 0),
+        total_sisa_pencairan: Number(firstRow.total_sisa_pencairan || 0),
+        total_transaksi: Number(firstRow.total_transaksi || 0),
+        total_customer: Number(firstRow.total_customer || 0),
+        total_retur_persentase: Number(firstRow.total_retur_persentase || 0),
+      },
+    };
+  } catch (error) {
+    console.error("ERROR SERVICE GET DATA REPORT SALES:", error);
+    throw error;
+  }
+};
+
+exports.getDetailPenjualan = async (params) => {
+  try {
+    const kodeSales = String(
+      params?.kode_sales ?? ""
+    ).trim();
+
+    if (!kodeSales) {
+      throw new Error("Parameter kode_sales wajib diisi");
+    }
+
+    const result = await db.query(
+      query.getDetailPenjualan,
+      {
+        replacements: {
+          kode_sales: kodeSales,
+        },
+        type: db.QueryTypes.SELECT,
+      }
+    );
+
+    const listData = result.map((item) => ({
+      ...item,
+
+      // Nominal penjualan menggunakan DPP.
+      "Total Penjualan": Number(
+        item["Total Penjualan"] || 0
+      ),
+
+      "Tax Amount": Number(
+        item["Tax Amount"] || 0
+      ),
+
+      PPH: Number(
+        item.PPH || 0
+      ),
+
+      Aging: Number(
+        item.Aging || 0
+      ),
+    }));
+
+    return {
+      total_data: listData.length,
+      list_data: listData,
+    };
+  } catch (error) {
+    console.error(
+      "ERROR SERVICE GET DETAIL PENJUALAN:",
+      error
+    );
+
+    throw error;
+  }
+};
+
+
+exports.getDetailPencairan = async (params) => {
+  try {
+    const kodeSales = String(
+      params?.kode_sales ?? ""
+    ).trim();
+
+    if (!kodeSales) {
+      throw new Error("Parameter kode_sales wajib diisi");
+    }
+
+    const result = await db.query(
+      query.getDetailPencairan,
+      {
+        replacements: {
+          kode_sales: kodeSales,
+        },
+        type: db.QueryTypes.SELECT,
+      }
+    );
+
+    const listData = result.map((item) => ({
+      ...item,
+      "Total Pembayaran": Number(
+        item["Total Pembayaran"] || 0
+      ),
+    }));
+
+    return {
+      total_data: listData.length,
+      list_data: listData,
+    };
+  } catch (error) {
+    console.error(
+      "ERROR SERVICE GET DETAIL PENCAIRAN:",
+      error
+    );
+
+    throw error;
+  }
+};
+
+
+exports.getDataKonfirmasiPiutang = async (params) => {
+    try {
+        const page = Number(params?.page) || 1;
+        const limit = Math.min(
+            1000,
+            Math.max(1, Number(params?.limit) || 10)
+        );
+        const offset = (page - 1) * limit;
+
+        const keyword = String(
+            params?.keyword || ''
+        ).trim();
+
+        // STATUS KONFIRMASI
+        const status = String(
+            params?.status || 'ALL'
+        ).trim();
+
+        // TANGGAL MULAI
+        const startDate = String(
+            params?.start_date || ''
+        ).trim();
+
+        // TANGGAL AKHIR
+        const endDate = String(
+            params?.end_date || ''
+        ).trim();
+
+        let condition = '';
+
+        const bind = {
+            limit,
+            offset,
+        };
+
+        // =====================================================
+        // KEYWORD
+        // =====================================================
+        if (keyword) {
+            condition += `
+                AND (
+                    CAST(kp.k_piutang_id AS TEXT)
+                        ILIKE :keyword
+
+                    OR CAST(kp.piutang_id AS TEXT)
+                        ILIKE :keyword
+
+                    OR COALESCE(p.no_faktur::TEXT, '')
+                        ILIKE :keyword
+
+                    OR COALESCE(p.no_billing::TEXT, '')
+                        ILIKE :keyword
+
+                    OR COALESCE(p.customer::TEXT, '')
+                        ILIKE :keyword
+
+                    OR COALESCE(p.sales::TEXT, '')
+                        ILIKE :keyword
+
+                    OR COALESCE(p.cabang::TEXT, '')
+                        ILIKE :keyword
+
+                    OR COALESCE(p.principle::TEXT, '')
+                        ILIKE :keyword
+
+                    OR COALESCE(kp.created_by::TEXT, '')
+                        ILIKE :keyword
+
+                    OR COALESCE(
+                        kp.tgl_kirim_konfirmasi::TEXT,
+                        ''
+                    ) ILIKE :keyword
+
+                    OR COALESCE(
+                        kp.created_at::TEXT,
+                        ''
+                    ) ILIKE :keyword
+
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_customer mc_keyword
+                        WHERE mc_keyword.kode_customer = p.customer
+                          AND mc_keyword.name ILIKE :keyword
+                    )
+
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_referensi mr_keyword
+                        WHERE mr_keyword.kd_ref = p.cabang
+                          AND mr_keyword.jns_ref = 'cabang_id'
+                          AND mr_keyword.ur_ref ILIKE :keyword
+                    )
+
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword
+                        WHERE mp_keyword.principle = p.principle
+                          AND mp_keyword.nama_principle ILIKE :keyword
+                    )
+                )
+            `;
+
+            bind.keyword = `%${keyword}%`;
+        }
+
+        // =====================================================
+        // FILTER STATUS KONFIRMASI
+        // =====================================================
+        if (
+            status &&
+            status.toUpperCase() !== 'ALL'
+        ) {
+            condition += `
+                AND UPPER(
+                    COALESCE(ds.kd_status::TEXT, '')
+                ) = UPPER(:status)
+            `;
+
+            bind.status = status;
+        }
+
+        // =====================================================
+        // FILTER TANGGAL MULAI
+        // Berdasarkan tanggal kirim konfirmasi
+        // =====================================================
+        if (startDate) {
+            condition += `
+                AND kp.tgl_kirim_konfirmasi
+                    >= CAST(:start_date AS DATE)
+            `;
+
+            bind.start_date = startDate;
+        }
+
+        // =====================================================
+        // FILTER TANGGAL AKHIR
+        // Termasuk seluruh waktu pada tanggal akhir
+        // =====================================================
+        if (endDate) {
+            condition += `
+                AND kp.tgl_kirim_konfirmasi
+                    < (
+                        CAST(:end_date AS DATE)
+                        + INTERVAL '1 day'
+                    )
+            `;
+
+            bind.end_date = endDate;
+        }
+
+        // =====================================================
+        // 1. GET LIST DATA
+        // =====================================================
+        const LIST_QUERY =
+            query.getDataKonfirmasiPiutang.replace(
+                /:condition/g,
+                condition
+            );
+
+        const listData = await db.query(
+            LIST_QUERY,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        // =====================================================
+        // 2. GET TOTAL DATA
+        // =====================================================
+        const COUNT_QUERY =
+            query.countDataKonfirmasiPiutang.replace(
+                /:condition/g,
+                condition
+            );
+
+        const countData = await db.query(
+            COUNT_QUERY,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        const totalData = Number(
+            countData?.[0]?.total || 0
+        );
+
+        const totalHalaman = Math.ceil(
+            totalData / limit
+        );
+
+        // =====================================================
+        // 3. GET SUMMARY
+        // =====================================================
+        const SUMMARY_QUERY =
+            query.summaryDataKonfirmasiPiutang.replace(
+                /:condition/g,
+                condition
+            );
+
+        const summaryResult = await db.query(
+            SUMMARY_QUERY,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        const summary = summaryResult?.[0] || {
+            total: 0,
+            menunggu: 0,
+            disetujui: 0,
+            ditolak: 0,
+            otomatis: 0,
+        };
+
+        // =====================================================
+        // RETURN
+        // =====================================================
+        return {
+            total_data: totalData,
+            total_halaman: totalHalaman,
+            limit,
+            page,
+            list_data: listData,
+            summary,
+        };
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET DATA KONFIRMASI PIUTANG:',
+            error
+        );
+
+        throw error;
+    }
+};
