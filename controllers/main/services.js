@@ -28,6 +28,29 @@ const { Worker } = require('worker_threads');
 // const LINK_QRCODE = process.env.URL_QRCODE
 const LINK_QRCODE = 'https://kfcolls.kftd.co.id/validasi-approval'
 
+const nodemailer = require("nodemailer");
+
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT || 587),
+    secure:
+        String(process.env.SMTP_SECURE || "false").toLowerCase() === "true",
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
+
+const logoHeaderPath = path.join(
+    __dirname,
+    "../../files/logo_kfcolls.png"
+);
+
+const logoFixPath = path.join(
+    __dirname,
+    "../../files/LOGO_PUTIH_FIX.png"
+);
+
 exports.uploadFile = async (lampiran, path_upload, file_name) => {
     const full_path = path.join(path_upload, file_name);
 
@@ -904,7 +927,7 @@ exports.uploadPenjualanExcel = async (
                 addError(
                     excelRow,
                     error.message ||
-                        `Gagal memproses baris ${excelRow}.`
+                    `Gagal memproses baris ${excelRow}.`
                 );
             }
         }
@@ -991,7 +1014,7 @@ exports.uploadPenjualanExcel = async (
                         finishError(
                             new Error(
                                 message.message ||
-                                    'Worker gagal membaca Excel.'
+                                'Worker gagal membaca Excel.'
                             )
                         );
                     }
@@ -1088,7 +1111,7 @@ exports.uploadPenjualanExcel = async (
             total_updated: updatedCount || 0,
         };
     } catch (error) {
-        await worker.terminate().catch(() => {});
+        await worker.terminate().catch(() => { });
         throw error;
     }
 };
@@ -2333,7 +2356,6 @@ exports.deleteDataCod = async (codId) => {
 };
 
 exports.insertFakturPetugas = async (payload, transaction) => {
-
     if (!payload?.piutang_id) {
         throw new Error('piutang_id wajib diisi');
     }
@@ -2347,63 +2369,89 @@ exports.insertFakturPetugas = async (payload, transaction) => {
     }
 
     /*
-     * Cek apakah piutang + NIP + kegiatan
-     * masih memiliki assignment aktif
+     * Jika kegiatan gabungan, simpan sebagai
+     * dua kegiatan terpisah.
      */
-    const checkAssignment = await model.d_faktur_petugas.count({
-        where: {
-            piutang_id: payload.piutang_id,
-            nip: payload.nip,
-            kegiatan: payload.kegiatan,
-            is_active: 'Y'
-        },
-        transaction
-    });
+    const kegiatanInput = String(payload.kegiatan)
+        .trim()
+        .toUpperCase();
 
-    if (checkAssignment > 0) {
-        throw new Error(
-            'Piutang sudah ditugaskan kepada petugas untuk kegiatan tersebut !'
-        );
+    let daftarKegiatan = [];
+
+    if (kegiatanInput === 'TUKAR_FAKTUR_PENAGIHAN') {
+        daftarKegiatan = [
+            'TUKAR_FAKTUR',
+            'PENAGIHAN'
+        ];
+    } else if (
+        ['TUKAR_FAKTUR', 'PENAGIHAN'].includes(kegiatanInput)
+    ) {
+        daftarKegiatan = [kegiatanInput];
+    } else {
+        throw new Error('Kegiatan penugasan tidak valid');
+    }
+
+    /*
+     * Cek semua kegiatan terlebih dahulu.
+     * Jika salah satu sudah aktif, jangan insert apa pun.
+     */
+    for (const kegiatan of daftarKegiatan) {
+        const checkAssignment =
+            await model.d_faktur_petugas.count({
+                where: {
+                    piutang_id: payload.piutang_id,
+                    nip: payload.nip,
+                    kegiatan,
+                    is_active: 'Y'
+                },
+                transaction
+            });
+
+        if (checkAssignment > 0) {
+            throw new Error(
+                `Piutang sudah ditugaskan kepada petugas untuk kegiatan ${kegiatan}!`
+            );
+        }
     }
 
     const createdAt = new Date();
+    const hasil = [];
 
-    const fakturPetugas = await model.d_faktur_petugas.create({
-        faktur_petugas_id: payload?.faktur_petugas_id || uuidv4(),
-        piutang_id: payload?.piutang_id,
-        nip: payload?.nip,
-        kegiatan: payload?.kegiatan,
-        is_active: payload?.is_active || 'Y',
-        assigned_at: payload?.assigned_at || createdAt,
-        created_by: payload?.created_by,
-        created_at: createdAt
-    }, {
-        transaction,
-        returning: true
-    });
+    /*
+     * Insert record untuk setiap kegiatan.
+     */
+    for (const kegiatan of daftarKegiatan) {
+        const fakturPetugas =
+            await model.d_faktur_petugas.create({
+                faktur_petugas_id: uuidv4(),
+                piutang_id: payload.piutang_id,
+                nip: payload.nip,
+                kegiatan,
+                is_active: payload?.is_active || 'Y',
+                assigned_at: payload?.assigned_at || createdAt,
+                created_by: payload?.created_by,
+                created_at: createdAt
+            }, {
+                transaction,
+                returning: true
+            });
 
-    return {
-        faktur_petugas_id: fakturPetugas.faktur_petugas_id,
-        piutang_id: fakturPetugas.piutang_id,
-        nip: fakturPetugas.nip,
-        kegiatan: fakturPetugas.kegiatan,
-        is_active: fakturPetugas.is_active,
-        assigned_at: fakturPetugas.assigned_at,
-        created_by: fakturPetugas.created_by,
-        created_at: fakturPetugas.created_at
-    };
+        hasil.push({
+            faktur_petugas_id: fakturPetugas.faktur_petugas_id,
+            piutang_id: fakturPetugas.piutang_id,
+            nip: fakturPetugas.nip,
+            kegiatan: fakturPetugas.kegiatan,
+            is_active: fakturPetugas.is_active,
+            assigned_at: fakturPetugas.assigned_at,
+            created_by: fakturPetugas.created_by,
+            created_at: fakturPetugas.created_at
+        });
+    }
+
+    return hasil.length === 1 ? hasil[0] : hasil;
 };
 
-
-/**
- * UPDATE FAKTUR PETUGAS
- *
- * Pola:
- * 1. Nonaktifkan assignment lama
- * 2. Buat assignment baru sebagai aktif
- */
 exports.updateFakturPetugas = async (payload, transaction) => {
-
     const fakturPetugasId = payload?.faktur_petugas_id;
 
     if (!fakturPetugasId) {
@@ -2422,14 +2470,29 @@ exports.updateFakturPetugas = async (payload, transaction) => {
         throw new Error('Kegiatan wajib diisi');
     }
 
-    if (!VALID_KEGIATAN.includes(payload.kegiatan)) {
+    const kegiatanInput = String(payload.kegiatan)
+        .trim()
+        .toUpperCase();
+
+    let daftarKegiatan = [];
+
+    if (kegiatanInput === 'TUKAR_FAKTUR_PENAGIHAN') {
+        daftarKegiatan = [
+            'TUKAR_FAKTUR',
+            'PENAGIHAN'
+        ];
+    } else if (
+        ['TUKAR_FAKTUR', 'PENAGIHAN'].includes(kegiatanInput)
+    ) {
+        daftarKegiatan = [kegiatanInput];
+    } else {
         throw new Error(
-            'Kegiatan hanya boleh TUKAR_FAKTUR atau PENAGIHAN'
+            'Kegiatan hanya boleh TUKAR_FAKTUR, PENAGIHAN, atau TUKAR_FAKTUR_PENAGIHAN'
         );
     }
 
     /*
-     * Cek data yang akan di-update
+     * Cek data assignment lama
      */
     const existingData = await model.d_faktur_petugas.findOne({
         where: {
@@ -2443,26 +2506,29 @@ exports.updateFakturPetugas = async (payload, transaction) => {
     }
 
     /*
-     * Cek apakah assignment yang sama
-     * sudah dimiliki oleh record aktif lain
+     * Cek duplikasi untuk setiap kegiatan baru
+     * sebelum menonaktifkan assignment lama
      */
-    const duplicateAssignment = await model.d_faktur_petugas.count({
-        where: {
-            piutang_id: payload.piutang_id,
-            nip: payload.nip,
-            kegiatan: payload.kegiatan,
-            is_active: 'Y',
-            faktur_petugas_id: {
-                [Op.ne]: fakturPetugasId
-            }
-        },
-        transaction
-    });
+    for (const kegiatan of daftarKegiatan) {
+        const duplicateAssignment =
+            await model.d_faktur_petugas.count({
+                where: {
+                    piutang_id: payload.piutang_id,
+                    nip: payload.nip,
+                    kegiatan,
+                    is_active: 'Y',
+                    faktur_petugas_id: {
+                        [Op.ne]: fakturPetugasId
+                    }
+                },
+                transaction
+            });
 
-    if (duplicateAssignment > 0) {
-        throw new Error(
-            'Piutang sudah ditugaskan kepada petugas untuk kegiatan tersebut !'
-        );
+        if (duplicateAssignment > 0) {
+            throw new Error(
+                `Piutang sudah ditugaskan kepada petugas untuk kegiatan ${kegiatan}!`
+            );
+        }
     }
 
     const updatedAt = new Date();
@@ -2470,44 +2536,67 @@ exports.updateFakturPetugas = async (payload, transaction) => {
     /*
      * Nonaktifkan assignment lama
      */
-    const [deactivatedCount] = await model.d_faktur_petugas.update({
-        is_active: 'T',
-        updated_by: payload?.updated_by,
-        updated_at: updatedAt
-    }, {
-        where: {
-            faktur_petugas_id: fakturPetugasId,
-            is_active: 'Y'
-        },
-        transaction
-    });
+    const [deactivatedCount] =
+        await model.d_faktur_petugas.update({
+            is_active: 'T',
+            updated_by: payload?.updated_by,
+            updated_at: updatedAt
+        }, {
+            where: {
+                faktur_petugas_id: fakturPetugasId,
+                is_active: 'Y'
+            },
+            transaction
+        });
 
     /*
      * Buat assignment baru
      */
-    const activeAssignment = await model.d_faktur_petugas.create({
-        faktur_petugas_id: uuidv4(),
-        piutang_id: payload?.piutang_id,
-        nip: payload?.nip,
-        kegiatan: payload?.kegiatan,
-        is_active: 'Y',
-        assigned_at: payload?.assigned_at || updatedAt,
-        created_by: payload?.updated_by,
-        created_at: updatedAt
-    }, {
-        transaction,
-        returning: true
-    });
+    const hasil = [];
 
-    return {
-        faktur_petugas_id: activeAssignment.faktur_petugas_id,
-        piutang_id: activeAssignment.piutang_id,
-        nip: activeAssignment.nip,
-        kegiatan: activeAssignment.kegiatan,
-        is_active: activeAssignment.is_active,
-        assigned_at: activeAssignment.assigned_at,
+    for (const kegiatan of daftarKegiatan) {
+        const activeAssignment =
+            await model.d_faktur_petugas.create({
+                faktur_petugas_id: uuidv4(),
+                piutang_id: payload.piutang_id,
+                nip: payload.nip,
+                kegiatan,
+                is_active: 'Y',
+                assigned_at: payload?.assigned_at || updatedAt,
+                created_by: payload?.updated_by,
+                created_at: updatedAt
+            }, {
+                transaction,
+                returning: true
+            });
+
+        hasil.push({
+            faktur_petugas_id: activeAssignment.faktur_petugas_id,
+            piutang_id: activeAssignment.piutang_id,
+            nip: activeAssignment.nip,
+            kegiatan: activeAssignment.kegiatan,
+            is_active: activeAssignment.is_active,
+            assigned_at: activeAssignment.assigned_at,
+            created_by: activeAssignment.created_by,
+            created_at: activeAssignment.created_at
+        });
+    }
+
+    /*
+     * Pertahankan return object untuk satu kegiatan.
+     * Untuk kegiatan gabungan, return array berisi dua record.
+     */
+    if (hasil.length === 1) {
+        return {
+            ...hasil[0],
+            deactivated_count: deactivatedCount
+        };
+    }
+
+    return hasil.map((item) => ({
+        ...item,
         deactivated_count: deactivatedCount
-    };
+    }));
 };
 
 exports.getDataFakturPetugas = async (params) => {
@@ -4931,10 +5020,10 @@ exports.getDataBayarFaktur = async (params) => {
             );
 
         /*
-         * =====================================================
-         * SUMMARY
-         * =====================================================
-         */
+ * =====================================================
+ * SUMMARY
+ * =====================================================
+ */
         const summaryQuery =
             query.summaryDataBayarFaktur.replace(
                 ':condition',
@@ -4946,13 +5035,11 @@ exports.getDataBayarFaktur = async (params) => {
                 summaryQuery,
                 {
                     replacements: bind,
-                    type:
-                        db.QueryTypes.SELECT
+                    type: db.QueryTypes.SELECT
                 }
             );
 
-        const summary =
-            summaryResult?.[0] || {};
+        const summary = summaryResult?.[0] || {};
 
         /*
          * =====================================================
@@ -4960,75 +5047,43 @@ exports.getDataBayarFaktur = async (params) => {
          * =====================================================
          */
         return {
-            total_data:
-                totalData,
-
-            total_halaman:
-                totalHalaman,
-
+            total_data: totalData,
+            total_halaman: totalHalaman,
             limit,
-
             page,
 
-            list_data:
-                listDataWithHistory,
+            list_data: listDataWithHistory,
 
             summary: {
-                total_faktur:
-                    Number(
-                        summary?.total_faktur ||
-                        0
-                    ),
+                // 1. Total Faktur
+                total_faktur: Number(
+                    summary?.total_faktur || 0
+                ),
 
-                belum_dibayar:
-                    Number(
-                        summary?.belum_dibayar ||
-                        0
-                    ),
+                // 2. Belum Dibayar
+                belum_dibayar: Number(
+                    summary?.belum_dibayar || 0
+                ),
 
-                partial:
-                    Number(
-                        summary?.partial ||
-                        0
-                    ),
+                // 3. Collections (Menunggu Verifikasi)
+                total_collections_menunggu_verifikasi: Number(
+                    summary?.total_collections_menunggu_verifikasi || 0
+                ),
 
-                menunggu_pembayaran:
-                    Number(
-                        summary
-                            ?.menunggu_pembayaran ||
-                        0
-                    ),
+                // 4. Collections (Tidak Terverifikasi)
+                total_collections_tidak_terverifikasi: Number(
+                    summary?.total_collections_tidak_terverifikasi || 0
+                ),
 
-                sudah_dibayar:
-                    Number(
-                        summary?.sudah_dibayar ||
-                        0
-                    ),
+                // 5. Collections (Terverifikasi)
+                total_collections_terverifikasi: Number(
+                    summary?.total_collections_terverifikasi || 0
+                ),
 
-                total_nominal:
-                    Number(
-                        summary?.total_nominal ||
-                        0
-                    ),
-
-                total_collections:
-                    Number(
-                        summary?.total_collections ||
-                        0
-                    ),
-
-                total_dibayar:
-                    Number(
-                        summary?.total_dibayar ||
-                        0
-                    ),
-
-                total_saldo_piutang:
-                    Number(
-                        summary
-                            ?.total_saldo_piutang ||
-                        0
-                    )
+                // 6. Total Saldo Piutang
+                total_saldo_piutang: Number(
+                    summary?.total_saldo_piutang || 0
+                )
             }
         };
     } catch (error) {
@@ -5661,65 +5716,65 @@ exports.getMonitoringPenugasan = async (params = {}) => {
 };
 
 exports.getDataReportSales = async (params) => {
-  try {
-    // =========================================
-    // HELPER MULTIPLE FILTER
-    // =========================================
-    const normalizeFilterValues = (value) => {
-      const values = Array.isArray(value) ? value : [value];
+    try {
+        // =========================================
+        // HELPER MULTIPLE FILTER
+        // =========================================
+        const normalizeFilterValues = (value) => {
+            const values = Array.isArray(value) ? value : [value];
 
-      return values
-        .filter((item) => item !== undefined && item !== null)
-        .map((item) => String(item).trim())
-        .filter(Boolean);
-    };
+            return values
+                .filter((item) => item !== undefined && item !== null)
+                .map((item) => String(item).trim())
+                .filter(Boolean);
+        };
 
-    const isAll = (values) =>
-      !values.length ||
-      values.some((item) => item.toUpperCase() === "ALL");
+        const isAll = (values) =>
+            !values.length ||
+            values.some((item) => item.toUpperCase() === "ALL");
 
-    // =========================================
-    // PAGINATION & SEARCH
-    // =========================================
-    const page = Math.max(Number(params?.page) || 1, 1);
-    const limit = Math.min(Math.max(Number(params?.limit) || 10, 1), 1000);
-    const offset = (page - 1) * limit;
-    const keyword = String(params?.keyword || "").trim();
+        // =========================================
+        // PAGINATION & SEARCH
+        // =========================================
+        const page = Math.max(Number(params?.page) || 1, 1);
+        const limit = Math.min(Math.max(Number(params?.limit) || 10, 1), 1000);
+        const offset = (page - 1) * limit;
+        const keyword = String(params?.keyword || "").trim();
 
-    // =========================================
-    // FILTER
-    // =========================================
-    const salesOffices = normalizeFilterValues(
-      params?.sales_office ?? params?.["sales_office[]"]
-    );
+        // =========================================
+        // FILTER
+        // =========================================
+        const salesOffices = normalizeFilterValues(
+            params?.sales_office ?? params?.["sales_office[]"]
+        );
 
-    const customers = normalizeFilterValues(
-      params?.customer ?? params?.["customer[]"]
-    );
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.["customer[]"]
+        );
 
-    const channels = normalizeFilterValues(
-      params?.channel ?? params?.["channel[]"]
-    );
+        const channels = normalizeFilterValues(
+            params?.channel ?? params?.["channel[]"]
+        );
 
-    const principles = normalizeFilterValues(
-      params?.principle ?? params?.["principle[]"]
-    );
+        const principles = normalizeFilterValues(
+            params?.principle ?? params?.["principle[]"]
+        );
 
-    const products = normalizeFilterValues(
-      params?.produk ?? params?.["produk[]"]
-    );
+        const products = normalizeFilterValues(
+            params?.produk ?? params?.["produk[]"]
+        );
 
-    const startDate = String(params?.start_date || "").trim();
-    const endDate = String(params?.end_date || "").trim();
+        const startDate = String(params?.start_date || "").trim();
+        const endDate = String(params?.end_date || "").trim();
 
-    // =========================================
-    // DYNAMIC CONDITION
-    // =========================================
-    let condition = "";
-    const bind = { limit, offset };
+        // =========================================
+        // DYNAMIC CONDITION
+        // =========================================
+        let condition = "";
+        const bind = { limit, offset };
 
-    if (keyword) {
-      condition += `
+        if (keyword) {
+            condition += `
         AND (
           p.no_transaksi ILIKE :keyword
           OR p.customer ILIKE :keyword
@@ -5730,192 +5785,192 @@ exports.getDataReportSales = async (params) => {
         )
       `;
 
-      bind.keyword = `%${keyword}%`;
+            bind.keyword = `%${keyword}%`;
+        }
+
+        if (!isAll(salesOffices)) {
+            condition += ` AND p.sales_office IN (:sales_offices) `;
+            bind.sales_offices = salesOffices;
+        }
+
+        if (!isAll(customers)) {
+            condition += ` AND p.customer IN (:customers) `;
+            bind.customers = customers;
+        }
+
+        if (!isAll(channels)) {
+            condition += ` AND p.channel IN (:channels) `;
+            bind.channels = channels;
+        }
+
+        if (!isAll(principles)) {
+            condition += ` AND p.principal IN (:principles) `;
+            bind.principles = principles;
+        }
+
+        if (!isAll(products)) {
+            condition += ` AND p.produk IN (:products) `;
+            bind.products = products;
+        }
+
+        if (startDate) {
+            condition += ` AND p.tanggal >= CAST(:start_date AS DATE) `;
+            bind.start_date = startDate;
+        }
+
+        if (endDate) {
+            condition += ` AND p.tanggal < CAST(:end_date AS DATE) + INTERVAL '1 day' `;
+            bind.end_date = endDate;
+        }
+
+        // =========================================
+        // EXECUTE ONE QUERY
+        // =========================================
+        const SQL = query.getDataReportSales.replace(
+            /:condition/g,
+            condition
+        );
+
+        const result = await db.query(SQL, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT,
+        });
+
+        const firstRow = result?.[0] || {};
+
+        return {
+            total_data: Number(firstRow.total_data || 0),
+            total_halaman: Math.ceil(Number(firstRow.total_data || 0) / limit),
+            page,
+            limit,
+
+            list_data: result.map((item) => {
+                const {
+                    total_data,
+                    total_penjualan,
+                    total_retur,
+                    total_pencairan,
+                    total_sisa_pencairan,
+                    total_transaksi,
+                    total_customer,
+                    total_retur_persentase,
+                    ...row
+                } = item;
+
+                return row;
+            }),
+
+            summary: {
+                total_penjualan: Number(firstRow.total_penjualan || 0),
+                total_retur: Number(firstRow.total_retur || 0),
+                total_pencairan: Number(firstRow.total_pencairan || 0),
+                total_sisa_pencairan: Number(firstRow.total_sisa_pencairan || 0),
+                total_transaksi: Number(firstRow.total_transaksi || 0),
+                total_customer: Number(firstRow.total_customer || 0),
+                total_retur_persentase: Number(firstRow.total_retur_persentase || 0),
+            },
+        };
+    } catch (error) {
+        console.error("ERROR SERVICE GET DATA REPORT SALES:", error);
+        throw error;
     }
-
-    if (!isAll(salesOffices)) {
-      condition += ` AND p.sales_office IN (:sales_offices) `;
-      bind.sales_offices = salesOffices;
-    }
-
-    if (!isAll(customers)) {
-      condition += ` AND p.customer IN (:customers) `;
-      bind.customers = customers;
-    }
-
-    if (!isAll(channels)) {
-      condition += ` AND p.channel IN (:channels) `;
-      bind.channels = channels;
-    }
-
-    if (!isAll(principles)) {
-      condition += ` AND p.principal IN (:principles) `;
-      bind.principles = principles;
-    }
-
-    if (!isAll(products)) {
-      condition += ` AND p.produk IN (:products) `;
-      bind.products = products;
-    }
-
-    if (startDate) {
-      condition += ` AND p.tanggal >= CAST(:start_date AS DATE) `;
-      bind.start_date = startDate;
-    }
-
-    if (endDate) {
-      condition += ` AND p.tanggal < CAST(:end_date AS DATE) + INTERVAL '1 day' `;
-      bind.end_date = endDate;
-    }
-
-    // =========================================
-    // EXECUTE ONE QUERY
-    // =========================================
-    const SQL = query.getDataReportSales.replace(
-      /:condition/g,
-      condition
-    );
-
-    const result = await db.query(SQL, {
-      replacements: bind,
-      type: db.QueryTypes.SELECT,
-    });
-
-    const firstRow = result?.[0] || {};
-
-    return {
-      total_data: Number(firstRow.total_data || 0),
-      total_halaman: Math.ceil(Number(firstRow.total_data || 0) / limit),
-      page,
-      limit,
-
-      list_data: result.map((item) => {
-        const {
-          total_data,
-          total_penjualan,
-          total_retur,
-          total_pencairan,
-          total_sisa_pencairan,
-          total_transaksi,
-          total_customer,
-          total_retur_persentase,
-          ...row
-        } = item;
-
-        return row;
-      }),
-
-      summary: {
-        total_penjualan: Number(firstRow.total_penjualan || 0),
-        total_retur: Number(firstRow.total_retur || 0),
-        total_pencairan: Number(firstRow.total_pencairan || 0),
-        total_sisa_pencairan: Number(firstRow.total_sisa_pencairan || 0),
-        total_transaksi: Number(firstRow.total_transaksi || 0),
-        total_customer: Number(firstRow.total_customer || 0),
-        total_retur_persentase: Number(firstRow.total_retur_persentase || 0),
-      },
-    };
-  } catch (error) {
-    console.error("ERROR SERVICE GET DATA REPORT SALES:", error);
-    throw error;
-  }
 };
 
 exports.getDetailPenjualan = async (params) => {
-  try {
-    const kodeSales = String(
-      params?.kode_sales ?? ""
-    ).trim();
+    try {
+        const kodeSales = String(
+            params?.kode_sales ?? ""
+        ).trim();
 
-    if (!kodeSales) {
-      throw new Error("Parameter kode_sales wajib diisi");
+        if (!kodeSales) {
+            throw new Error("Parameter kode_sales wajib diisi");
+        }
+
+        const result = await db.query(
+            query.getDetailPenjualan,
+            {
+                replacements: {
+                    kode_sales: kodeSales,
+                },
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        const listData = result.map((item) => ({
+            ...item,
+
+            // Nominal penjualan menggunakan DPP.
+            "Total Penjualan": Number(
+                item["Total Penjualan"] || 0
+            ),
+
+            "Tax Amount": Number(
+                item["Tax Amount"] || 0
+            ),
+
+            PPH: Number(
+                item.PPH || 0
+            ),
+
+            Aging: Number(
+                item.Aging || 0
+            ),
+        }));
+
+        return {
+            total_data: listData.length,
+            list_data: listData,
+        };
+    } catch (error) {
+        console.error(
+            "ERROR SERVICE GET DETAIL PENJUALAN:",
+            error
+        );
+
+        throw error;
     }
-
-    const result = await db.query(
-      query.getDetailPenjualan,
-      {
-        replacements: {
-          kode_sales: kodeSales,
-        },
-        type: db.QueryTypes.SELECT,
-      }
-    );
-
-    const listData = result.map((item) => ({
-      ...item,
-
-      // Nominal penjualan menggunakan DPP.
-      "Total Penjualan": Number(
-        item["Total Penjualan"] || 0
-      ),
-
-      "Tax Amount": Number(
-        item["Tax Amount"] || 0
-      ),
-
-      PPH: Number(
-        item.PPH || 0
-      ),
-
-      Aging: Number(
-        item.Aging || 0
-      ),
-    }));
-
-    return {
-      total_data: listData.length,
-      list_data: listData,
-    };
-  } catch (error) {
-    console.error(
-      "ERROR SERVICE GET DETAIL PENJUALAN:",
-      error
-    );
-
-    throw error;
-  }
 };
 
 
 exports.getDetailPencairan = async (params) => {
-  try {
-    const kodeSales = String(
-      params?.kode_sales ?? ""
-    ).trim();
+    try {
+        const kodeSales = String(
+            params?.kode_sales ?? ""
+        ).trim();
 
-    if (!kodeSales) {
-      throw new Error("Parameter kode_sales wajib diisi");
+        if (!kodeSales) {
+            throw new Error("Parameter kode_sales wajib diisi");
+        }
+
+        const result = await db.query(
+            query.getDetailPencairan,
+            {
+                replacements: {
+                    kode_sales: kodeSales,
+                },
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        const listData = result.map((item) => ({
+            ...item,
+            "Total Pembayaran": Number(
+                item["Total Pembayaran"] || 0
+            ),
+        }));
+
+        return {
+            total_data: listData.length,
+            list_data: listData,
+        };
+    } catch (error) {
+        console.error(
+            "ERROR SERVICE GET DETAIL PENCAIRAN:",
+            error
+        );
+
+        throw error;
     }
-
-    const result = await db.query(
-      query.getDetailPencairan,
-      {
-        replacements: {
-          kode_sales: kodeSales,
-        },
-        type: db.QueryTypes.SELECT,
-      }
-    );
-
-    const listData = result.map((item) => ({
-      ...item,
-      "Total Pembayaran": Number(
-        item["Total Pembayaran"] || 0
-      ),
-    }));
-
-    return {
-      total_data: listData.length,
-      list_data: listData,
-    };
-  } catch (error) {
-    console.error(
-      "ERROR SERVICE GET DETAIL PENCAIRAN:",
-      error
-    );
-
-    throw error;
-  }
 };
 
 const normalizeFilterValues = (value) => {
@@ -6180,4 +6235,846 @@ exports.getDataKonfirmasiPiutang = async (params) => {
 
         throw error;
     }
+};
+
+exports.getDataLaporan = async (params) => {
+    try {
+        const normalizeFilterValues = (value) => {
+            const values = Array.isArray(value) ? value : [value];
+
+            return values
+                .filter(
+                    (item) =>
+                        item !== undefined &&
+                        item !== null &&
+                        String(item).trim() !== ''
+                )
+                .map((item) => String(item).trim())
+                .filter(Boolean);
+        };
+
+        const page = Math.max(1, Number(params?.page) || 1);
+        const limit = Math.max(1, Number(params?.limit) || 10);
+        const offset = (page - 1) * limit;
+
+        const keyword = String(params?.keyword || '').trim();
+
+        const salesOffices = normalizeFilterValues(
+            params?.sales_office ?? params?.['sales_office[]']
+        );
+
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.['customer[]']
+        );
+
+        const principles = normalizeFilterValues(
+            params?.principle ?? params?.['principle[]']
+        );
+
+        const status = String(params?.status || 'ALL').trim();
+        const startDate = String(params?.start_date || '').trim();
+        const endDate = String(params?.end_date || '').trim();
+
+        let condition = '';
+        const filterBind = {};
+
+        // =====================================================
+        // FILTER KEYWORD
+        // =====================================================
+        if (keyword) {
+            condition += `
+                AND (
+                    p.no_faktur ILIKE :keyword
+                    OR p.no_billing ILIKE :keyword
+                    OR p.document_type ILIKE :keyword
+                    OR p.customer ILIKE :keyword
+                    OR p.sales ILIKE :keyword
+                    OR p.nama_sales ILIKE :keyword
+                    OR p.cabang ILIKE :keyword
+                    OR p.principle ILIKE :keyword
+                    OR p.posting_date::text ILIKE :keyword
+                    OR p.jatuh_tempo::text ILIKE :keyword
+                    OR p.dpp::text ILIKE :keyword
+                    OR p.ppn::text ILIKE :keyword
+                    OR p.pph::text ILIKE :keyword
+                    OR p.total_dibayar::text ILIKE :keyword
+                    OR p.saldo_piutang::text ILIKE :keyword
+                    OR p.aging::text ILIKE :keyword
+
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_customer mc_keyword
+                        WHERE mc_keyword.kode_customer = p.customer
+                            AND mc_keyword.name ILIKE :keyword
+                    )
+
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_referensi mr_keyword
+                        WHERE mr_keyword.kd_ref = p.cabang
+                            AND mr_keyword.jns_ref = 'cabang_id'
+                            AND mr_keyword.ur_ref ILIKE :keyword
+                    )
+
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword
+                        WHERE mp_keyword.principle = p.principle
+                            AND mp_keyword.nama_principle ILIKE :keyword
+                    )
+                )
+            `;
+
+            filterBind.keyword = `%${keyword}%`;
+        }
+
+        // =====================================================
+        // FILTER CABANG / SALES OFFICE
+        // =====================================================
+        if (
+            salesOffices.length > 0 &&
+            !salesOffices.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND p.cabang IN (:sales_offices)
+            `;
+
+            filterBind.sales_offices = salesOffices;
+        }
+
+        // =====================================================
+        // FILTER CUSTOMER
+        // =====================================================
+        if (
+            customers.length > 0 &&
+            !customers.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND p.customer IN (:customers)
+            `;
+
+            filterBind.customers = customers;
+        }
+
+        // =====================================================
+        // FILTER STATUS PIUTANG
+        // Menggunakan status yang tersimpan di d_piutang.
+        // =====================================================
+        if (status && status.toUpperCase() !== 'ALL') {
+            condition += `
+                AND UPPER(COALESCE(p.status_piutang, ''))
+                    = UPPER(:status)
+            `;
+
+            filterBind.status = status;
+        }
+
+        // =====================================================
+        // FILTER PRINCIPLE
+        // =====================================================
+        if (
+            principles.length > 0 &&
+            !principles.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND p.principle IN (:principles)
+            `;
+
+            filterBind.principles = principles;
+        }
+
+        // =====================================================
+        // FILTER TANGGAL MULAI
+        // =====================================================
+        if (startDate) {
+            condition += `
+                AND p.posting_date >= CAST(:start_date AS DATE)
+            `;
+
+            filterBind.start_date = startDate;
+        }
+
+        // =====================================================
+        // FILTER TANGGAL SELESAI
+        // Jika posting_date bertipe timestamp, semua jam pada
+        // tanggal akhir tetap ikut terhitung.
+        // =====================================================
+        if (endDate) {
+            condition += `
+                AND p.posting_date <
+                    CAST(:end_date AS DATE) + INTERVAL '1 day'
+            `;
+
+            filterBind.end_date = endDate;
+        }
+
+        // =====================================================
+        // 1. GET LIST DATA
+        // =====================================================
+        const listQuery = query.getDataLaporan.replace(
+            /:condition/g,
+            condition
+        );
+
+        const listData = await db.query(listQuery, {
+            replacements: {
+                ...filterBind,
+                limit,
+                offset
+            },
+            type: db.QueryTypes.SELECT
+        });
+
+        // =====================================================
+        // 2. GET TOTAL DATA
+        // =====================================================
+        const countQuery = query.countDataLaporan.replace(
+            /:condition/g,
+            condition
+        );
+
+        const countData = await db.query(countQuery, {
+            replacements: filterBind,
+            type: db.QueryTypes.SELECT
+        });
+
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
+
+        // =====================================================
+        // 3. GET SUMMARY
+        // =====================================================
+        const summaryQuery = query.summaryDataLaporan.replace(
+            /:condition/g,
+            condition
+        );
+
+        const summaryResult = await db.query(summaryQuery, {
+            replacements: filterBind,
+            type: db.QueryTypes.SELECT
+        });
+
+        const summary = summaryResult?.[0] || {
+            total_piutang: 0,
+            sudah_dibayar: 0,
+            outstanding: 0,
+            outstanding_count: 0,
+            belum_lunas_count: 0,
+            lunas_count: 0,
+            akan_jatuh_tempo_amount: 0,
+            akan_jatuh_tempo_count: 0,
+            sudah_jatuh_tempo_amount: 0,
+            sudah_jatuh_tempo_count: 0,
+            total_data: 0
+        };
+
+        // =====================================================
+        // RETURN
+        // =====================================================
+        return {
+            total_data: totalData,
+            total_halaman: totalHalaman,
+            limit,
+            page,
+            list_data: listData,
+            summary
+        };
+    } catch (error) {
+        console.error('ERROR SERVICE GET DATA LAPORAN:', error);
+        throw error;
+    }
+};
+
+
+const escapeHtml = (value = "") =>
+    String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+const formatRupiah = (value) =>
+    new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(Number(value) || 0);
+
+exports.konfirmasiPiutang = async (
+    payload = {},
+    transaction
+) => {
+    const {
+        id,
+        piutang_id,
+        no_billing,
+        customer,
+        nama_customer,
+        media_email,
+        email_customer,
+        created_by,
+    } = payload;
+
+    const idPiutang = piutang_id || id;
+    const emailPenerima = String(email_customer || "").trim();
+
+    if (!transaction) {
+        throw new Error("Transaksi database wajib tersedia.");
+    }
+
+    if (!idPiutang) {
+        throw new Error("ID piutang wajib diisi.");
+    }
+
+    // ==================================================
+    // AMBIL DATA PIUTANG
+    // ==================================================
+
+    const dataPiutang = await model.d_piutang.findOne({
+        where: {
+            piutang_id: idPiutang,
+        },
+        transaction,
+    });
+
+    if (!dataPiutang) {
+        throw new Error("Data piutang tidak ditemukan.");
+    }
+
+    const dpp = Number(dataPiutang.dpp || 0);
+    const ppn = Number(dataPiutang.ppn || 0);
+    const totalTagihan = dpp + ppn;
+
+    const nomorBilling =
+        no_billing || dataPiutang.no_billing || "-";
+
+    const nama = nama_customer || "-";
+
+    const kodeCustomer =
+        customer || dataPiutang.customer || "-";
+
+    const waktuPercobaan = new Date();
+
+    let flagEmail = "F";
+    let keterangan = "";
+    let messageId = null;
+
+    // ==================================================
+    // KIRIM EMAIL
+    // ==================================================
+
+    try {
+        if (media_email !== true) {
+            throw new Error(
+                "Media pengiriman email tidak diaktifkan."
+            );
+        }
+
+        if (!emailPenerima) {
+            throw new Error("Email penerima wajib diisi.");
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!emailRegex.test(emailPenerima)) {
+            throw new Error(
+                "Format email penerima tidak valid."
+            );
+        }
+
+        if (
+            !process.env.SMTP_USER ||
+            !process.env.SMTP_PASS
+        ) {
+            throw new Error(
+                "Konfigurasi SMTP belum lengkap."
+            );
+        }
+
+        const subject =
+            `Konfirmasi Piutang - Billing ${nomorBilling}`;
+        // ==================================================
+        // LOGO HEADER
+        // ==================================================
+
+        const headerLogoHtml = `
+            <table
+                role="presentation"
+                cellpadding="0"
+                cellspacing="0"
+                style="border-collapse:collapse;margin-left:auto;"
+            >
+                <tr>
+                    ${fs.existsSync(logoHeaderPath)
+                ? `
+                                <td style="vertical-align:middle;padding-left:10px;">
+                                    <img
+                                        src="cid:logoKimiaFarmaHeader"
+                                        alt="Kimia Farma"
+                                        style="
+                                            display:block;
+                                            width:auto;
+                                            height:30px;
+                                            max-width:120px;
+                                            border:0;
+                                        "
+                                    />
+                                </td>
+                            `
+                : ""
+            }
+
+                    ${fs.existsSync(logoFixPath)
+                ? `
+                                <td style="vertical-align:middle;padding-left:10px;">
+                                    <img
+                                        src="cid:logoFixHeader"
+                                        alt="Logo Fix"
+                                        style="
+                                            display:block;
+                                            width:auto;
+                                            height:30px;
+                                            max-width:120px;
+                                            border:0;
+                                        "
+                                    />
+                                </td>
+                            `
+                : ""
+            }
+                </tr>
+            </table>
+        `;
+
+        // ==================================================
+        // HTML EMAIL
+        // ==================================================
+
+        const html = `
+            <!DOCTYPE html>
+            <html lang="id">
+            <head>
+                <meta charset="UTF-8">
+
+                <meta
+                    name="viewport"
+                    content="width=device-width, initial-scale=1.0"
+                >
+
+                <title>${escapeHtml(subject)}</title>
+            </head>
+
+            <body style="
+                margin:0;
+                padding:24px;
+                background:#f3f4f6;
+                font-family:Arial,Helvetica,sans-serif;
+                color:#1f2937;
+            ">
+                <div style="
+                    max-width:680px;
+                    margin:0 auto;
+                    background:#ffffff;
+                    border:1px solid #e5e7eb;
+                    border-radius:12px;
+                    overflow:hidden;
+                ">
+
+                    <!-- HEADER -->
+                    <div style="
+                        background:#1e3a8a;
+                        color:#ffffff;
+                        padding:12px 24px;
+                    ">
+                        <table
+                            role="presentation"
+                            width="100%"
+                            cellpadding="0"
+                            cellspacing="0"
+                            style="
+                                width:100%;
+                                border-collapse:collapse;
+                            "
+                        >
+                            <tr>
+                                <td style="
+                                    vertical-align:middle;
+                                    text-align:left;
+                                ">
+                                    <h2 style="
+                                        margin:0;
+                                        font-size:18px;
+                                        line-height:36px;
+                                        color:#ffffff;
+                                        font-weight:600;
+                                    ">
+                                        Konfirmasi Piutang
+                                    </h2>
+                                </td>
+
+                                <td style="
+                                    vertical-align:middle;
+                                    text-align:right;
+                                    width:160px;
+                                ">
+                                    ${headerLogoHtml}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- CONTENT -->
+                    <div style="
+                        padding:24px;
+                        background:#ffffff;
+                    ">
+                        <p style="margin:0 0 16px;">
+                            Yth.
+                            <strong>${escapeHtml(nama)}</strong>,
+                        </p>
+
+                        <p style="
+                            line-height:1.7;
+                            margin:0 0 20px;
+                        ">
+                            Bersama email ini kami menyampaikan
+                            konfirmasi piutang dengan rincian
+                            tagihan sebagai berikut:
+                        </p>
+
+                        <!-- DETAIL TAGIHAN -->
+                        <table
+                            role="presentation"
+                            width="100%"
+                            cellpadding="0"
+                            cellspacing="0"
+                            style="
+                                width:100%;
+                                border-collapse:collapse;
+                                font-size:14px;
+                            "
+                        >
+                            <tr>
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                    background:#f8fafc;
+                                    width:40%;
+                                ">
+                                    Kode Customer
+                                </td>
+
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                ">
+                                    ${escapeHtml(kodeCustomer)}
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                    background:#f8fafc;
+                                ">
+                                    Nama Customer
+                                </td>
+
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                ">
+                                    ${escapeHtml(nama)}
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                    background:#f8fafc;
+                                ">
+                                    No. Billing
+                                </td>
+
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                ">
+                                    ${escapeHtml(nomorBilling)}
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                    background:#f8fafc;
+                                ">
+                                    DPP
+                                </td>
+
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                    text-align:right;
+                                ">
+                                    ${escapeHtml(formatRupiah(dpp))}
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                    background:#f8fafc;
+                                ">
+                                    PPN
+                                </td>
+
+                                <td style="
+                                    padding:11px;
+                                    border:1px solid #e5e7eb;
+                                    text-align:right;
+                                ">
+                                    ${escapeHtml(formatRupiah(ppn))}
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="
+                                    padding:12px 11px;
+                                    border:1px solid #dbeafe;
+                                    background:#eff6ff;
+                                    font-weight:bold;
+                                ">
+                                    Total Tagihan
+                                </td>
+
+                                <td style="
+                                    padding:12px 11px;
+                                    border:1px solid #dbeafe;
+                                    background:#eff6ff;
+                                    text-align:right;
+                                    font-weight:bold;
+                                    color:#1e3a8a;
+                                ">
+                                    ${escapeHtml(formatRupiah(totalTagihan))}
+                                </td>
+                            </tr>
+                        </table>
+                                                <p style="
+                            line-height:1.7;
+                            margin:20px 0 16px;
+                        ">
+                            Mohon melakukan pengecekan atas rincian
+                            tagihan tersebut. Apabila terdapat
+                            perbedaan data, silakan menghubungi
+                            pihak terkait.
+                        </p>
+
+                        <!-- LINK KONFIRMASI -->
+                        <div style="
+                            margin:18px 0;
+                            padding:16px;
+                            background:#eff6ff;
+                            border:1px solid #bfdbfe;
+                            border-radius:8px;
+                        ">
+                            <p style="
+                                margin:0 0 10px;
+                                line-height:1.7;
+                                font-weight:bold;
+                                color:#1e3a8a;
+                            ">
+                                Mohon melakukan konfirmasi melalui
+                                link terkait:
+                            </p>
+
+                            <a
+                                href="https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=12345"
+                                target="_blank"
+                                style="
+                                    color:#1d4ed8;
+                                    text-decoration:underline;
+                                    overflow-wrap:anywhere;
+                                    line-height:1.7;
+                                "
+                            >
+                                https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=12345
+                            </a>
+                        </div>
+
+                        <p style="
+                            line-height:1.7;
+                            margin:16px 0 0;
+                        ">
+                            Terima kasih atas perhatian dan kerja samanya.
+                        </p>
+                    </div>
+
+                    <!-- FOOTER -->
+                    <div style="
+                        min-height:50px;
+                        padding:16px 24px;
+                        box-sizing:border-box;
+                        background-color:#f8fafc;
+                        border-top:1px solid #e5e7eb;
+                    ">
+                        <p style="
+                            margin:0;
+                            font-size:12px;
+                            line-height:1.6;
+                            color:#64748b;
+                        ">
+                            Email ini dikirim secara otomatis
+                            oleh sistem kfcolls.
+                        </p>
+                    </div>
+
+                </div>
+            </body>
+            </html>
+        `;
+
+        // ==================================================
+        // VERSI TEXT EMAIL
+        // ==================================================
+
+        const text = [
+            "KONFIRMASI PIUTANG",
+            "",
+            `Kode Customer: ${kodeCustomer}`,
+            `Nama Customer: ${nama}`,
+            `No. Billing: ${nomorBilling}`,
+            `DPP: ${formatRupiah(dpp)}`,
+            `PPN: ${formatRupiah(ppn)}`,
+            `Total Tagihan: ${formatRupiah(totalTagihan)}`,
+            "",
+            "Mohon melakukan pengecekan atas rincian tagihan tersebut.",
+            "",
+            "Mohon melakukan konfirmasi melalui link terkait:",
+            "https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=12345",
+            "",
+            "Terima kasih atas perhatian dan kerja samanya.",
+        ].join("\n");
+        // ==================================================
+        // ATTACHMENT LOGO HEADER
+        // ==================================================
+
+        const attachments = [];
+
+        if (fs.existsSync(logoHeaderPath)) {
+            attachments.push({
+                filename: "logo_kfcolls.png",
+                path: logoHeaderPath,
+                cid: "logoKimiaFarmaHeader",
+                contentDisposition: "inline",
+            });
+        }
+
+        if (fs.existsSync(logoFixPath)) {
+            attachments.push({
+                filename: "LOGO_FIX.png",
+                path: logoFixPath,
+                cid: "logoFixHeader",
+                contentDisposition: "inline",
+            });
+        }
+
+        // ==================================================
+        // KIRIM EMAIL
+        // ==================================================
+
+        const info = await transporter.sendMail({
+            from: {
+                name:
+                    process.env.SMTP_FROM_NAME ||
+                    "Konfirmasi Piutang",
+                address: process.env.SMTP_USER,
+            },
+            to: emailPenerima,
+            subject,
+            text,
+            html,
+            attachments,
+        });
+
+        flagEmail = "S";
+        messageId = info.messageId;
+
+        keterangan =
+            "Email konfirmasi piutang berhasil dikirim.";
+
+    } catch (error) {
+        flagEmail = "F";
+
+        keterangan =
+            `Gagal mengirim email: ${error.message}`;
+
+        console.error(
+            "[KONFIRMASI PIUTANG] Gagal:",
+            error.message
+        );
+    }
+    // ==================================================
+    // SIMPAN HASIL KE K_PIUTANG
+    // ==================================================
+
+    // Nonaktifkan catatan konfirmasi aktif sebelumnya
+    // untuk piutang_id yang sama.
+    await model.k_piutang.update(
+        {
+            flag_aktif: "T",
+        },
+        {
+            where: {
+                piutang_id: idPiutang,
+                flag_aktif: "Y",
+            },
+            transaction,
+        }
+    );
+
+    // Insert catatan konfirmasi terbaru sebagai data aktif.
+    const logKonfirmasi = await model.k_piutang.create(
+        {
+            k_piutang_id: uuidv4(),
+            piutang_id: idPiutang,
+            tgl_kirim_konfirmasi: waktuPercobaan,
+            keterangan,
+            created_by: created_by || null,
+            created_at: new Date(),
+            flag_wa: "N",
+            flag_email: flagEmail,
+            flag_aktif: "Y",
+            wa: null,
+            email: emailPenerima || null,
+        },
+        {
+            transaction,
+        }
+    );
+
+    return {
+        success: flagEmail === "S",
+        message: keterangan,
+        flag_email: flagEmail,
+        email: emailPenerima || null,
+        dpp,
+        ppn,
+        total_tagihan: totalTagihan,
+        messageId,
+        k_piutang_id: logKonfirmasi.k_piutang_id,
+        piutang_id: idPiutang,
+    };
 };

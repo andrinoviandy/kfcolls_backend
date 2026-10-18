@@ -5872,3 +5872,59 @@ exports.D_PEMBAYARAN = db.define('d_pembayaran',
     timestamps: false
 }
 )
+
+exports.K_PIUTANG = db.define(
+    'k_piutang',
+    {
+        k_piutang_id: {
+            type: DataTypes.UUID,
+            field: 'k_piutang_id',
+            primaryKey: true,
+        },
+        piutang_id: {
+            type: DataTypes.UUID,
+            field: 'piutang_id',
+        },
+        tgl_kirim_konfirmasi: {
+            type: DataTypes.DATE,
+            field: 'tgl_kirim_konfirmasi',
+        },
+        keterangan: {
+            type: DataTypes.TEXT,
+            field: 'keterangan',
+        },
+        created_by: {
+            type: DataTypes.STRING,
+            field: 'created_by',
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: 'created_at',
+        },
+        flag_wa: {
+            type: DataTypes.STRING,
+            field: 'flag_wa',
+        },
+        flag_email: {
+            type: DataTypes.STRING,
+            field: 'flag_email',
+        },
+        flag_aktif: {
+            type: DataTypes.STRING,
+            field: 'flag_aktif',
+        },
+        wa: {
+            type: DataTypes.STRING,
+            field: 'wa',
+        },
+        email: {
+            type: DataTypes.STRING,
+            field: 'email',
+        },
+    },
+    {
+        schema: 'public',
+        freezeTableName: true,
+        timestamps: false,
+    }
+);

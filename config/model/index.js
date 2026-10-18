@@ -32,5 +32,6 @@ model.d_faktur_petugas = n2n.D_FAKTUR_PETUGAS
 model.d_tukar_faktur = n2n.D_TUKAR_FAKTUR
 model.d_status = n2n.D_STATUS
 model.d_pembayaran = n2n.D_PEMBAYARAN
+model.k_piutang = n2n.K_PIUTANG
 
 module.exports = model

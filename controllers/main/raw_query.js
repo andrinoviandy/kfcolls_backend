@@ -18197,8 +18197,12 @@ query.getDataPenjualan = `
         dp.created_by,
         dp.created_at,
         dp.updated_by,
-        dp.updated_at
-    FROM public.d_penjualan dp
+        dp.updated_at,
+        mt.lini,
+        mt.top 
+    FROM public.d_penjualan dp LEFT JOIN public.m_top mt
+        ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') =
+       REPLACE(LOWER(dp.desc_cust_grp4), ' ', '')
     WHERE 1 = 1
         :condition
     ORDER BY
@@ -18441,7 +18445,7 @@ query.getUploadedDataPiutang = `
         CASE
             WHEN LEFT(x.billing_no, 2) = '28' AND x.dpp > 0 THEN 'RV'
             WHEN LEFT(x.billing_no, 2) = '28' AND x.dpp < 0 THEN 'DK'
-            WHEN LEFT(x.billing_no, 2) = '29' AND x.dpp < 0 THEN 'RV'
+            WHEN LEFT(x.billing_no, 2) = '29' AND x.dpp < 0 THEN 'RETUR'
             ELSE '-'
         END AS document_type,
         x.ppn,
@@ -19488,53 +19492,24 @@ query.getDataBayarFaktur = `
         /*
          * NOMINAL BILLING
          */
-        COALESCE(
-            cod.total_nominal_billing,
-            0
-        ) AS nominal_tagihan,
+        (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)) AS nominal_tagihan,
 
         /*
          * COLLECTIONS
          *
-         * COLLECTIONS =
-         * SUM(d_cod.nominal_billing)
-         * +
-         * SUM(d_pembayaran.nominal_bayar)
-         * yang sudah VERIFIED / STATUS S
+         * COLLECTIONS = total nominal_bayar dari d_pembayaran
          */
-        (
-            COALESCE(
-                cod.total_nominal_billing,
-                0
-            )
-            +
-            COALESCE(
-                pay.total_nominal_bayar,
-                0
-            )
-        ) AS collections,
+        COALESCE(pay.total_nominal_bayar_verified, 0) AS collections,
+        COALESCE(pay.total_nominal_bayar_waiting, 0) AS collections_menunggu_verifikasi,
+        COALESCE(pay.total_nominal_bayar_unverified, 0) AS collections_tidak_terverifikasi,
+        COALESCE(pay.total_nominal_bayar_verified, 0) AS collections_terverifikasi,
 
         /*
          * SALDO PIUTANG
          *
-         * DPP - COLLECTIONS
+         * TOTAL INVOICE (DPP + PPN) - COLLECTIONS
          */
-        COALESCE(
-            p.dpp,
-            0
-        )
-        -
-        (
-            COALESCE(
-                cod.total_nominal_billing,
-                0
-            )
-            +
-            COALESCE(
-                pay.total_nominal_bayar,
-                0
-            )
-        ) AS saldo_piutang,
+        GREATEST(0, COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0) - COALESCE(pay.total_nominal_bayar_verified, 0)) AS saldo_piutang,
 
         /*
          * DATA PETUGAS
@@ -19562,57 +19537,23 @@ query.getDataBayarFaktur = `
         /*
          * STATUS PEMBAYARAN
          *
-         * collections =
-         * nominal billing + pembayaran verified
+         * collections = total pembayaran dari d_pembayaran
          */
         CASE
             WHEN (
-                COALESCE(
-                    cod.total_nominal_billing,
-                    0
-                )
-                +
-                COALESCE(
-                    pay.total_nominal_bayar,
-                    0
-                )
+                COALESCE(pay.total_nominal_bayar_verified, 0)
             ) <= 0
                 THEN 'BELUM_DIBAYAR'
 
             WHEN (
-                COALESCE(
-                    cod.total_nominal_billing,
-                    0
-                )
-                +
-                COALESCE(
-                    pay.total_nominal_bayar,
-                    0
-                )
-            ) < COALESCE(
-                p.dpp,
-                0
-            )
+                COALESCE(pay.total_nominal_bayar_verified, 0)
+            ) < (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0))
                 THEN 'PARTIAL'
 
             WHEN (
-                COALESCE(
-                    cod.total_nominal_billing,
-                    0
-                )
-                +
-                COALESCE(
-                    pay.total_nominal_bayar,
-                    0
-                )
-            ) >= COALESCE(
-                p.dpp,
-                0
-            )
-                AND COALESCE(
-                    p.dpp,
-                    0
-                ) > 0
+                COALESCE(pay.total_nominal_bayar_verified, 0)
+            ) >= (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0))
+                AND (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)) > 0
                 THEN 'SUDAH_DIBAYAR'
 
             ELSE 'BELUM_DIBAYAR'
@@ -19623,52 +19564,19 @@ query.getDataBayarFaktur = `
          */
         CASE
             WHEN (
-                COALESCE(
-                    cod.total_nominal_billing,
-                    0
-                )
-                +
-                COALESCE(
-                    pay.total_nominal_bayar,
-                    0
-                )
+                COALESCE(pay.total_nominal_bayar_verified, 0)
             ) <= 0
                 THEN 'Belum Dibayar'
 
             WHEN (
-                COALESCE(
-                    cod.total_nominal_billing,
-                    0
-                )
-                +
-                COALESCE(
-                    pay.total_nominal_bayar,
-                    0
-                )
-            ) < COALESCE(
-                p.dpp,
-                0
-            )
+                COALESCE(pay.total_nominal_bayar_verified, 0)
+            ) < (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0))
                 THEN 'Partial Payment'
 
             WHEN (
-                COALESCE(
-                    cod.total_nominal_billing,
-                    0
-                )
-                +
-                COALESCE(
-                    pay.total_nominal_bayar,
-                    0
-                )
-            ) >= COALESCE(
-                p.dpp,
-                0
-            )
-                AND COALESCE(
-                    p.dpp,
-                    0
-                ) > 0
+                COALESCE(pay.total_nominal_bayar_verified, 0)
+            ) >= (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0))
+                AND (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)) > 0
                 THEN 'Sudah Dibayar'
 
             ELSE 'Belum Dibayar'
@@ -19680,7 +19588,7 @@ query.getDataBayarFaktur = `
         cod.total_nominal_billing,
 
         /*
-         * DATA PEMBAYARAN VERIFIED
+         * DATA PEMBAYARAN
          */
         pay.total_nominal_bayar,
 
@@ -19731,33 +19639,54 @@ query.getDataBayarFaktur = `
     ) cod ON TRUE
 
     /*
-     * TOTAL PEMBAYARAN VERIFIED
+     * TOTAL PEMBAYARAN
      *
-     * HANYA:
-     * kegiatan = PENAGIHAN
-     * kd_status = S
+     * Mengambil seluruh pembayaran berdasarkan no_billing.
+     * Status verifikasi diperiksa terpisah.
      */
     LEFT JOIN LATERAL (
         SELECT
+            SUM(COALESCE(dp.nominal_bayar, 0)) AS total_nominal_bayar,
+
+            /* Pembayaran yang sudah diverifikasi: memiliki status S */
             SUM(
-                COALESCE(
-                    dp.nominal_bayar,
-                    0
-                )
-            ) AS total_nominal_bayar
+                CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM public.d_status ds
+                    WHERE ds.foreign_id = dp.pembayaran_id
+                      AND ds.kegiatan = 'PENAGIHAN'
+                      AND ds.kd_status = 'S'
+                ) THEN COALESCE(dp.nominal_bayar, 0) ELSE 0 END
+            ) AS total_nominal_bayar_verified,
+
+            /* Menunggu verifikasi: belum memiliki record status PENAGIHAN sama sekali */
+            SUM(
+                CASE WHEN NOT EXISTS (
+                    SELECT 1
+                    FROM public.d_status ds
+                    WHERE ds.foreign_id = dp.pembayaran_id
+                      AND ds.kegiatan = 'PENAGIHAN'
+                ) THEN COALESCE(dp.nominal_bayar, 0) ELSE 0 END
+            ) AS total_nominal_bayar_waiting,
+
+            /* Tidak terverifikasi: memiliki status PENAGIHAN, tetapi tidak memiliki status S (misalnya ditolak) */
+            SUM(
+                CASE WHEN NOT EXISTS (
+                    SELECT 1
+                    FROM public.d_status ds
+                    WHERE ds.foreign_id = dp.pembayaran_id
+                      AND ds.kegiatan = 'PENAGIHAN'
+                      AND ds.kd_status = 'S'
+                ) AND EXISTS (
+                    SELECT 1
+                    FROM public.d_status ds
+                    WHERE ds.foreign_id = dp.pembayaran_id
+                      AND ds.kegiatan = 'PENAGIHAN'
+                ) THEN COALESCE(dp.nominal_bayar, 0) ELSE 0 END
+            ) AS total_nominal_bayar_unverified
 
         FROM public.d_pembayaran dp
-
-        INNER JOIN (
-            SELECT DISTINCT
-                foreign_id
-            FROM public.d_status
-            WHERE kegiatan = 'PENAGIHAN'
-                AND kd_status = 'S'
-        ) ds
-            ON ds.foreign_id = dp.pembayaran_id
-
-        WHERE dp.no_billing = p.no_billing
+        WHERE BTRIM(COALESCE(dp.no_billing, '')) = BTRIM(COALESCE(p.no_billing, ''))
     ) pay ON TRUE
 
     /*
@@ -19784,8 +19713,8 @@ query.getDataBayarFaktur = `
                         ON dsv.foreign_id =
                            dpv.pembayaran_id
 
-                    WHERE dpv.no_billing =
-                          p.no_billing
+                    WHERE BTRIM(COALESCE(dpv.no_billing, '')) =
+                          BTRIM(COALESCE(p.no_billing, ''))
                 )
                 THEN 'S'
 
@@ -19830,7 +19759,6 @@ query.getDataBayarFaktur = `
     OFFSET :offset
 `;
 
-
 query.countDataBayarFaktur = `
     SELECT
         COUNT(*) AS total
@@ -19863,29 +19791,13 @@ query.countDataBayarFaktur = `
     ) cod ON TRUE
 
     /*
-     * TOTAL PEMBAYARAN VERIFIED
+     * TOTAL PEMBAYARAN
      */
     LEFT JOIN LATERAL (
         SELECT
-            SUM(
-                COALESCE(
-                    dp.nominal_bayar,
-                    0
-                )
-            ) AS total_nominal_bayar
-
+            SUM(COALESCE(dp.nominal_bayar, 0)) AS total_nominal_bayar
         FROM public.d_pembayaran dp
-
-        INNER JOIN (
-            SELECT DISTINCT
-                foreign_id
-            FROM public.d_status
-            WHERE kegiatan = 'PENAGIHAN'
-                AND kd_status = 'S'
-        ) ds
-            ON ds.foreign_id = dp.pembayaran_id
-
-        WHERE dp.no_billing = p.no_billing
+        WHERE BTRIM(COALESCE(dp.no_billing, '')) = BTRIM(COALESCE(p.no_billing, ''))
     ) pay ON TRUE
 
     /*
@@ -19909,8 +19821,8 @@ query.countDataBayarFaktur = `
                         ON dsv.foreign_id =
                            dpv.pembayaran_id
 
-                    WHERE dpv.no_billing =
-                          p.no_billing
+                    WHERE BTRIM(COALESCE(dpv.no_billing, '')) =
+                          BTRIM(COALESCE(p.no_billing, ''))
                 )
                 THEN 'S'
 
@@ -19947,275 +19859,102 @@ query.countDataBayarFaktur = `
         :condition
 `;
 
-
 query.summaryDataBayarFaktur = `
     SELECT
-        COUNT(*) AS total_faktur,
+        /* 1. TOTAL FAKTUR */
+        COUNT(DISTINCT p.piutang_id) AS total_faktur,
 
-        /*
-         * BELUM DIBAYAR
+        /* 2. BELUM DIBAYAR
+         * Berdasarkan Collections Terverifikasi.
          */
         COUNT(
-            CASE
-                WHEN (
-                    COALESCE(
-                        cod.total_nominal_billing,
-                        0
-                    )
-                    +
-                    COALESCE(
-                        pay.total_nominal_bayar,
-                        0
-                    )
-                ) <= 0
-
-                AND COALESCE(
-                    p.dpp,
-                    0
-                ) > 0
-
-                THEN 1
+            DISTINCT CASE
+                WHEN COALESCE(pay.total_terverifikasi, 0) <= 0
+                THEN p.piutang_id
             END
         ) AS belum_dibayar,
 
-        /*
-         * PARTIAL
-         */
-        COUNT(
-            CASE
-                WHEN (
-                    COALESCE(
-                        cod.total_nominal_billing,
-                        0
-                    )
-                    +
-                    COALESCE(
-                        pay.total_nominal_bayar,
-                        0
-                    )
-                ) > 0
-
-                AND (
-                    COALESCE(
-                        cod.total_nominal_billing,
-                        0
-                    )
-                    +
-                    COALESCE(
-                        pay.total_nominal_bayar,
-                        0
-                    )
-                ) < COALESCE(
-                    p.dpp,
-                    0
-                )
-
-                THEN 1
-            END
-        ) AS partial,
-
-        /*
-         * MENUNGGU PEMBAYARAN
-         */
-        0 AS menunggu_pembayaran,
-
-        /*
-         * SUDAH DIBAYAR
-         */
-        COUNT(
-            CASE
-                WHEN (
-                    COALESCE(
-                        cod.total_nominal_billing,
-                        0
-                    )
-                    +
-                    COALESCE(
-                        pay.total_nominal_bayar,
-                        0
-                    )
-                ) >= COALESCE(
-                    p.dpp,
-                    0
-                )
-
-                AND COALESCE(
-                    p.dpp,
-                    0
-                ) > 0
-
-                THEN 1
-            END
-        ) AS sudah_dibayar,
-
-        /*
-         * TOTAL DPP
-         */
+        /* 3. COLLECTIONS MENUNGGU VERIFIKASI */
         SUM(
-            COALESCE(
-                p.dpp,
-                0
-            )
-        ) AS total_dpp,
+            COALESCE(pay.total_menunggu_verifikasi, 0)
+        ) AS total_collections_menunggu_verifikasi,
 
-        /*
-         * TOTAL COLLECTIONS
-         *
-         * SUM COD
-         * +
-         * SUM PAYMENT VERIFIED
-         */
+        /* 4. COLLECTIONS TIDAK TERVERIFIKASI */
         SUM(
-            COALESCE(
-                cod.total_nominal_billing,
-                0
-            )
-            +
-            COALESCE(
-                pay.total_nominal_bayar,
-                0
-            )
-        ) AS total_collections,
+            COALESCE(pay.total_tidak_terverifikasi, 0)
+        ) AS total_collections_tidak_terverifikasi,
 
-        /*
-         * TOTAL SALDO
-         */
+        /* 5. COLLECTIONS TERVERIFIKASI */
         SUM(
-            COALESCE(
-                p.dpp,
-                0
-            )
-            -
-            (
-                COALESCE(
-                    cod.total_nominal_billing,
-                    0
-                )
-                +
-                COALESCE(
-                    pay.total_nominal_bayar,
-                    0
-                )
-            )
-        ) AS total_saldo_piutang,
+            COALESCE(pay.total_terverifikasi, 0)
+        ) AS total_collections_terverifikasi,
 
-        /*
-         * TOTAL NOMINAL BILLING
-         */
+        /* 6. TOTAL SALDO PIUTANG */
         SUM(
-            COALESCE(
-                cod.total_nominal_billing,
+            GREATEST(
+                COALESCE(p.dpp, 0)
+                - COALESCE(pay.total_terverifikasi, 0),
                 0
             )
-        ) AS total_nominal_billing
+        ) AS total_saldo_piutang
 
     FROM public.d_piutang p
 
-    /*
-     * PETUGAS
-     */
-    LEFT JOIN public.d_faktur_petugas fp
-        ON fp.piutang_id = p.piutang_id
-        AND fp.kegiatan = 'PENAGIHAN'
-        AND fp.is_active = 'Y'
-
-    /*
-     * TOTAL BILLING DARI d_cod
-     */
     LEFT JOIN LATERAL (
         SELECT
+            /* PEMBAYARAN TERVERIFIKASI: STATUS S */
             SUM(
-                COALESCE(
-                    dc.nominal_billing,
-                    0
-                )
-            ) AS total_nominal_billing
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                            AND ds.kd_status = 'S'
+                    )
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
+            ) AS total_terverifikasi,
 
-        FROM public.d_cod dc
-
-        WHERE dc.no_billing = p.no_billing
-    ) cod ON TRUE
-
-    /*
-     * TOTAL PEMBAYARAN VERIFIED
-     */
-    LEFT JOIN LATERAL (
-        SELECT
+            /* MENUNGGU VERIFIKASI: BELUM ADA STATUS PENAGIHAN */
             SUM(
-                COALESCE(
-                    dp.nominal_bayar,
-                    0
-                )
-            ) AS total_nominal_bayar
+                CASE
+                    WHEN NOT EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                    )
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
+            ) AS total_menunggu_verifikasi,
+
+            /* TIDAK TERVERIFIKASI: ADA STATUS, TIDAK ADA S */
+            SUM(
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                            AND ds.kd_status = 'S'
+                    )
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
+            ) AS total_tidak_terverifikasi
 
         FROM public.d_pembayaran dp
-
-        INNER JOIN (
-            SELECT DISTINCT
-                foreign_id
-            FROM public.d_status
-            WHERE kegiatan = 'PENAGIHAN'
-                AND kd_status = 'S'
-        ) ds
-            ON ds.foreign_id = dp.pembayaran_id
-
         WHERE dp.no_billing = p.no_billing
     ) pay ON TRUE
-
-    /*
-     * STATUS VERIFIKASI
-     */
-    LEFT JOIN LATERAL (
-        SELECT
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-
-                    FROM public.d_pembayaran dpv
-
-                    INNER JOIN (
-                        SELECT DISTINCT
-                            foreign_id
-                        FROM public.d_status
-                        WHERE kegiatan = 'PENAGIHAN'
-                            AND kd_status = 'S'
-                    ) dsv
-                        ON dsv.foreign_id =
-                           dpv.pembayaran_id
-
-                    WHERE dpv.no_billing =
-                          p.no_billing
-                )
-                THEN 'S'
-
-                ELSE NULL
-            END AS kd_status_verifikasi
-    ) verifikasi ON TRUE
-
-    /*
-     * CUSTOMER
-     */
-    LEFT JOIN public.m_customer mc
-        ON mc.kode_customer = p.customer
-
-    /*
-     * CABANG
-     */
-    LEFT JOIN public.m_referensi mr
-        ON mr.kd_ref = p.cabang
-        AND mr.jns_ref = 'cabang_id'
-
-    /*
-     * PRINCIPLE
-     */
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
-    /*
-     * USER / PETUGAS
-     */
-    LEFT JOIN public.m_user mu
-        ON mu.nip = fp.nip
 
     WHERE 1 = 1
         :condition
@@ -20287,6 +20026,7 @@ SELECT
     dp.tanggal_pembayaran,
     dp.nominal_bayar,
     dp.metode_pembayaran,
+    CONCAT('${LINK_DOK}', dp.files) AS files,
     dp.created_at,
     dp.updated_at,
     p.no_faktur,
@@ -21419,7 +21159,10 @@ query.getDataKonfirmasiPiutang = `
         kp.tgl_kirim_konfirmasi,
         kp.created_by AS konfirmasi_created_by,
         kp.created_at AS konfirmasi_created_at,
-
+        kp.flag_wa AS konfirmasi_flag_wa,
+        kp.flag_email AS konfirmasi_flag_email,
+        kp.email AS konfirmasi_email,
+        kp.wa AS konfirmasi_wa,
         CASE
             WHEN kp.k_piutang_id IS NULL
                 THEN 'BELUM_DIKIRIM'
@@ -21446,10 +21189,15 @@ query.getDataKonfirmasiPiutang = `
             k.k_piutang_id,
             k.piutang_id,
             k.tgl_kirim_konfirmasi,
+            k.flag_wa,
+            k.wa,
+            k.flag_email,
+            k.email,
+            k.flag_aktif,
             k.created_by,
             k.created_at
         FROM public.k_piutang k
-        WHERE k.piutang_id = p.piutang_id
+        WHERE k.piutang_id = p.piutang_id AND k.flag_aktif = 'Y'
         ORDER BY
             k.created_at DESC NULLS LAST,
             k.k_piutang_id DESC
@@ -21693,6 +21441,348 @@ query.summaryDataKonfirmasiPiutang = `
     LEFT JOIN public.m_principle mp
         ON mp.principle = p.principle
 
+    WHERE 1 = 1
+        :condition
+`;
+
+query.getDataLaporan = `
+    WITH payment_status AS (
+        SELECT
+            dp.no_billing,
+            SUM(
+                CASE
+                    WHEN UPPER(COALESCE(ds.kd_status, '')) = 'S'
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
+            ) AS total_dibayar
+        FROM public.d_pembayaran dp
+        LEFT JOIN LATERAL (
+            SELECT ds1.kd_status
+            FROM public.d_status ds1
+            WHERE ds1.foreign_id = dp.pembayaran_id
+                AND ds1.kegiatan = 'PENAGIHAN'
+            ORDER BY
+                ds1.created_at DESC NULLS LAST,
+                ds1.status_id DESC
+            LIMIT 1
+        ) ds ON TRUE
+        GROUP BY dp.no_billing
+    ),
+    cod_totals AS (
+        SELECT
+            dc.no_billing,
+            SUM(COALESCE(dc.nominal_billing, 0)) AS total_cod
+        FROM public.d_cod dc
+        GROUP BY dc.no_billing
+    ),
+    piutang_data AS (
+        SELECT
+            p.*,
+            COALESCE(ps.total_dibayar, 0)
+                + COALESCE(ct.total_cod, 0) AS total_dibayar,
+            (
+                COALESCE(p.dpp, 0)
+                + COALESCE(p.ppn, 0)
+                - COALESCE(ps.total_dibayar, 0)
+                - COALESCE(ct.total_cod, 0)
+            ) AS saldo_piutang
+        FROM public.d_piutang p
+        LEFT JOIN payment_status ps
+            ON ps.no_billing = p.no_billing
+        LEFT JOIN cod_totals ct
+            ON ct.no_billing = p.no_billing
+    )
+    SELECT
+        p.piutang_id,
+        p.no_faktur,
+        p.no_billing,
+        p.document_type,
+        p.customer,
+        mc.name AS nama_customer,
+        p.sales,
+        p.nama_sales,
+        p.cabang,
+        mr.ur_ref AS nama_cabang,
+        p.principle,
+        mp.nama_principle AS nama_principle,
+        p.posting_date,
+        p.jatuh_tempo,
+        p.dpp,
+        p.ppn,
+        p.pph,
+        p.total_dibayar AS dibayar,
+        p.saldo_piutang AS outstanding,
+        p.aging,
+        p.status_piutang,
+
+        fp_tukar.faktur_petugas_id AS tukar_faktur_petugas_id,
+        fp_tukar.nip AS tukar_faktur_nip,
+        mu_tukar.nama AS tukar_faktur_nama,
+        fp_tukar.assigned_at AS tukar_faktur_assigned_at,
+
+        tf.tukar_faktur_id,
+        CASE
+            WHEN tf.tukar_faktur_id IS NULL
+                THEN 'Belum Tukar Faktur'
+            WHEN UPPER(COALESCE(fp_tukar.kd_status, '')) = 'S'
+                THEN 'Terverifikasi'
+            WHEN UPPER(COALESCE(fp_tukar.kd_status, '')) = 'T'
+                THEN 'Ditolak'
+            ELSE 'Menunggu Verifikasi'
+        END AS status_tukar_faktur,
+
+        fp_penagihan.faktur_petugas_id AS penagihan_petugas_id,
+        fp_penagihan.nip AS penagihan_nip,
+        mu_penagihan.nama AS penagihan_nama,
+        fp_penagihan.assigned_at AS penagihan_assigned_at,
+
+        CASE
+            WHEN p.saldo_piutang <= 0 THEN 'Sudah Lunas'
+            ELSE 'Belum Lunas'
+        END AS status_lunas,
+
+        p.created_by,
+        p.created_at,
+        p.updated_by,
+        p.updated_at
+
+    FROM piutang_data p
+
+    LEFT JOIN LATERAL (
+        SELECT
+            fp.faktur_petugas_id,
+            fp.nip,
+            fp.kd_status,
+            fp.assigned_at
+        FROM public.d_faktur_petugas fp
+        WHERE fp.piutang_id = p.piutang_id
+            AND fp.kegiatan = 'TUKAR_FAKTUR'
+            AND fp.is_active = 'Y'
+        ORDER BY
+            fp.assigned_at DESC NULLS LAST,
+            fp.created_at DESC NULLS LAST,
+            fp.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp_tukar ON TRUE
+
+    LEFT JOIN public.m_user mu_tukar
+        ON mu_tukar.nip = fp_tukar.nip
+
+    LEFT JOIN LATERAL (
+        SELECT
+            tf1.tukar_faktur_id,
+            tf1.piutang_id
+        FROM public.d_tukar_faktur tf1
+        WHERE tf1.piutang_id = p.piutang_id
+        ORDER BY
+            tf1.created_at DESC NULLS LAST,
+            tf1.tukar_faktur_id DESC
+        LIMIT 1
+    ) tf ON TRUE
+
+    LEFT JOIN LATERAL (
+        SELECT
+            fp.faktur_petugas_id,
+            fp.nip,
+            fp.assigned_at
+        FROM public.d_faktur_petugas fp
+        WHERE fp.piutang_id = p.piutang_id
+            AND fp.kegiatan = 'PENAGIHAN'
+            AND fp.is_active = 'Y'
+        ORDER BY
+            fp.assigned_at DESC NULLS LAST,
+            fp.created_at DESC NULLS LAST,
+            fp.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp_penagihan ON TRUE
+
+    LEFT JOIN public.m_user mu_penagihan
+        ON mu_penagihan.nip = fp_penagihan.nip
+
+    LEFT JOIN public.m_customer mc
+        ON mc.kode_customer = p.customer
+
+    LEFT JOIN public.m_referensi mr
+        ON mr.kd_ref = p.cabang
+        AND mr.jns_ref = 'cabang_id'
+
+    LEFT JOIN public.m_principle mp
+        ON mp.principle = p.principle
+
+    WHERE 1 = 1
+        :condition
+
+    ORDER BY
+        p.posting_date DESC NULLS LAST,
+        p.no_billing DESC NULLS LAST,
+        p.piutang_id DESC
+
+    LIMIT :limit
+    OFFSET :offset
+`;
+
+query.countDataLaporan = `
+    WITH payment_status AS (
+        SELECT
+            dp.no_billing,
+            SUM(
+                CASE
+                    WHEN UPPER(COALESCE(ds.kd_status, '')) = 'S'
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
+            ) AS total_dibayar
+        FROM public.d_pembayaran dp
+        LEFT JOIN LATERAL (
+            SELECT ds1.kd_status
+            FROM public.d_status ds1
+            WHERE ds1.foreign_id = dp.pembayaran_id
+                AND ds1.kegiatan = 'PENAGIHAN'
+            ORDER BY
+                ds1.created_at DESC NULLS LAST,
+                ds1.status_id DESC
+            LIMIT 1
+        ) ds ON TRUE
+        GROUP BY dp.no_billing
+    ),
+    cod_totals AS (
+        SELECT
+            dc.no_billing,
+            SUM(COALESCE(dc.nominal_billing, 0)) AS total_cod
+        FROM public.d_cod dc
+        GROUP BY dc.no_billing
+    ),
+    piutang_data AS (
+        SELECT
+            p.*,
+            COALESCE(ps.total_dibayar, 0)
+                + COALESCE(ct.total_cod, 0) AS total_dibayar,
+            COALESCE(p.dpp, 0)
+                + COALESCE(p.ppn, 0)
+                - COALESCE(ps.total_dibayar, 0)
+                - COALESCE(ct.total_cod, 0) AS saldo_piutang
+        FROM public.d_piutang p
+        LEFT JOIN payment_status ps
+            ON ps.no_billing = p.no_billing
+        LEFT JOIN cod_totals ct
+            ON ct.no_billing = p.no_billing
+    )
+    SELECT COUNT(*)::INTEGER AS total
+    FROM piutang_data p
+    WHERE 1 = 1
+        :condition
+`;
+
+query.summaryDataLaporan = `
+    WITH payment_status AS (
+        SELECT
+            dp.no_billing,
+            SUM(
+                CASE
+                    WHEN UPPER(COALESCE(ds.kd_status, '')) = 'S'
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
+            ) AS total_dibayar
+        FROM public.d_pembayaran dp
+        LEFT JOIN LATERAL (
+            SELECT ds1.kd_status
+            FROM public.d_status ds1
+            WHERE ds1.foreign_id = dp.pembayaran_id
+                AND ds1.kegiatan = 'PENAGIHAN'
+            ORDER BY
+                ds1.created_at DESC NULLS LAST,
+                ds1.status_id DESC
+            LIMIT 1
+        ) ds ON TRUE
+        GROUP BY dp.no_billing
+    ),
+    cod_totals AS (
+        SELECT
+            dc.no_billing,
+            SUM(COALESCE(dc.nominal_billing, 0)) AS total_cod
+        FROM public.d_cod dc
+        GROUP BY dc.no_billing
+    ),
+    piutang_data AS (
+        SELECT
+            p.*,
+            COALESCE(ps.total_dibayar, 0)
+                + COALESCE(ct.total_cod, 0) AS total_dibayar,
+            COALESCE(p.dpp, 0)
+                + COALESCE(p.ppn, 0)
+                - COALESCE(ps.total_dibayar, 0)
+                - COALESCE(ct.total_cod, 0) AS saldo_piutang,
+            CASE
+                WHEN (
+                    COALESCE(p.dpp, 0)
+                    + COALESCE(p.ppn, 0)
+                    - COALESCE(ps.total_dibayar, 0)
+                    - COALESCE(ct.total_cod, 0)
+                ) <= 0 THEN 'PAID'
+                WHEN p.jatuh_tempo < CURRENT_DATE THEN 'OVERDUE'
+                WHEN p.jatuh_tempo <= CURRENT_DATE + INTERVAL '7 days'
+                    THEN 'DUE_SOON'
+                ELSE 'NOT_DUE'
+            END AS status_laporan
+        FROM public.d_piutang p
+        LEFT JOIN payment_status ps
+            ON ps.no_billing = p.no_billing
+        LEFT JOIN cod_totals ct
+            ON ct.no_billing = p.no_billing
+    )
+    SELECT
+        COALESCE(
+            SUM(COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)),
+            0
+        ) AS total_piutang,
+
+        COALESCE(SUM(p.total_dibayar), 0) AS sudah_dibayar,
+
+        COALESCE(SUM(p.saldo_piutang), 0) AS outstanding,
+
+        COUNT(*) FILTER (
+            WHERE p.saldo_piutang > 0
+        ) AS outstanding_count,
+
+        COUNT(*) FILTER (
+            WHERE p.saldo_piutang > 0
+        ) AS belum_lunas_count,
+
+        COUNT(*) FILTER (
+            WHERE p.saldo_piutang <= 0
+        ) AS lunas_count,
+
+        COALESCE(
+            SUM(p.saldo_piutang) FILTER (
+                WHERE p.status_laporan = 'DUE_SOON'
+                    AND p.saldo_piutang > 0
+            ),
+            0
+        ) AS akan_jatuh_tempo_amount,
+
+        COUNT(*) FILTER (
+            WHERE p.status_laporan = 'DUE_SOON'
+                AND p.saldo_piutang > 0
+        ) AS akan_jatuh_tempo_count,
+
+        COALESCE(
+            SUM(p.saldo_piutang) FILTER (
+                WHERE p.status_laporan = 'OVERDUE'
+                    AND p.saldo_piutang > 0
+            ),
+            0
+        ) AS sudah_jatuh_tempo_amount,
+
+        COUNT(*) FILTER (
+            WHERE p.status_laporan = 'OVERDUE'
+                AND p.saldo_piutang > 0
+        ) AS sudah_jatuh_tempo_count,
+
+        COUNT(*) AS total_data
+
+    FROM piutang_data p
     WHERE 1 = 1
         :condition
 `;

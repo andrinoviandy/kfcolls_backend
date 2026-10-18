@@ -1078,6 +1078,59 @@ exports.verifikasiBayarFaktur = async (req, res) => {
     }
 };
 
+exports.konfirmasiPiutang = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const payload = req.body || {};
+        const { nip, nama, role_user_id } = req.user;
+
+        Object.assign(payload, {
+            created_by: `${nip} - ${nama}`,
+            role_pembuat_id: role_user_id,
+            dataUser: req.user
+        });
+
+        const result = await serviceMain.konfirmasiPiutang(
+            payload,
+            transaction
+        );
+
+        await transaction.commit();
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR VERIFIKASI BAYAR FAKTUR <<<<<<<<<'
+        );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
+
 exports.getMonitoringPenugasan = async (req, res) => {
     try {
 
@@ -1229,3 +1282,39 @@ exports.getDataKonfirmasiPiutang = async (req, res) => {
         );
     }
 };
+
+exports.getDataLaporan = async (req, res) => {
+    try {
+        const params = {
+            ...req.query
+        }
+
+        console.log(
+            params,
+            'params getDataLaporan'
+        )
+
+        const result =
+            await serviceMain.getDataLaporan(
+                params
+            )
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        )
+
+    } catch (error) {
+        console.log(
+            error,
+            "ERROR GET DATA LAPORAN <<<<<<<<<"
+        )
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        )
+    }
+}
