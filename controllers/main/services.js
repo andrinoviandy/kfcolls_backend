@@ -656,7 +656,7 @@ exports.insertDataPiutang = async (
         };
     }
 
-    const batchSize = 500;
+    const batchSize = 999999;
     let totalData = 0;
     let totalSuccess = 0;
 
@@ -701,6 +701,8 @@ exports.insertDataPiutang = async (
         const dataInsert = piutangRows.map((item) => ({
             piutang_id: uuidv4(),
             no_faktur: item.billing_no ?? null,
+            desc_cust_grp3: item.desc_cust_grp4 ?? null,
+            channel_id: item.channel_id ?? null,
             no_billing: item.billing_no ?? null,
             document_type: item.document_type ?? null,
             customer: item.bill_to_party ?? null,
@@ -1321,7 +1323,7 @@ exports.getDataPenjualan = async (params) => {
             )
         ) {
             condition += `
-                AND dp.name_principle IN (:principles)
+                AND dp.principle IN (:principles)
             `;
 
             replacements.principles = principles;
@@ -1572,7 +1574,7 @@ exports.getDataPiutang = async (params) => {
             !customerGroups.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
-                AND p.customer IN (:customer_groups)
+                AND p.channel_id IN (:customer_groups)
             `;
             bind.customer_groups = customerGroups;
         }
@@ -1609,6 +1611,8 @@ exports.getDataPiutang = async (params) => {
             replacements: bind,
             type: db.QueryTypes.SELECT
         });
+        console.log(listData.length, 'wkwkwk');
+        
         // 2. GET TOTAL DATA
         const COUNT_QUERY = query.countDataPiutang.replace(
             /:condition/g,

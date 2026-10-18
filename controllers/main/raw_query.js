@@ -18265,8 +18265,14 @@ query.getDataPiutang = `
             p.created_by,
             p.created_at,
             p.updated_by,
-            p.updated_at
-        FROM public.d_piutang p
+            p.updated_at,
+            p.desc_cust_grp3,
+            p.channel_id,
+            mt.lini,
+            mt.top 
+        FROM public.d_piutang p 
+        LEFT JOIN m_top mt 
+            ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') = REPLACE(LOWER(p.desc_cust_grp3), ' ', '') 
         LEFT JOIN payment_totals pay
             ON pay.no_billing = p.no_billing
     )
@@ -18295,7 +18301,11 @@ query.getDataPiutang = `
         p.created_by,
         p.created_at,
         p.updated_by,
-        p.updated_at
+        p.updated_at,
+        p.desc_cust_grp3,
+        p.channel_id,
+        p.lini,
+        p.top 
     FROM piutang_data p
     LEFT JOIN public.m_customer mc
         ON mc.kode_customer = p.customer
@@ -18355,7 +18365,9 @@ query.countDataPiutang = `
             p.created_by,
             p.created_at,
             p.updated_by,
-            p.updated_at
+            p.updated_at,
+            p.desc_cust_grp3,
+            p.channel_id 
         FROM public.d_piutang p
         LEFT JOIN payment_totals pay
             ON pay.no_billing = p.no_billing
@@ -18405,7 +18417,9 @@ query.summaryDataPiutang = `
             p.created_by,
             p.created_at,
             p.updated_by,
-            p.updated_at
+            p.updated_at,
+            p.desc_cust_grp3,
+            p.channel_id 
         FROM public.d_piutang p
         LEFT JOIN payment_totals pay
             ON pay.no_billing = p.no_billing
@@ -18452,15 +18466,30 @@ query.getUploadedDataPiutang = `
         ROUND(x.dpp * 0.015, 2) AS pph,
         COALESCE(pb.dibayar, 0) AS dibayar,
         x.dpp - COALESCE(pb.dibayar, 0) AS outstanding,
-        x.posting_date + INTERVAL '30 days' AS jatuh_tempo,
+        x.posting_date + (COALESCE(NULLIF(TRIM(x.top), '')::INTEGER, 30) * INTERVAL '1 day') AS jatuh_tempo,
         CURRENT_DATE - x.posting_date AS aging,
         CASE
             WHEN x.dpp - COALESCE(pb.dibayar, 0) <= 0 THEN 'PAID'
-            WHEN x.posting_date + INTERVAL '30 days' > CURRENT_DATE THEN 'NOT_DUE'
-            WHEN x.posting_date + INTERVAL '30 days' < CURRENT_DATE THEN 'OVERDUE'
-            WHEN x.posting_date + INTERVAL '30 days' <= CURRENT_DATE + INTERVAL '7 days' THEN 'DUE_SOON'
+
+            WHEN x.posting_date
+                + (COALESCE(NULLIF(TRIM(x.top), '')::INTEGER, 30) * INTERVAL '1 day')
+                > CURRENT_DATE
+                THEN 'NOT_DUE'
+
+            WHEN x.posting_date
+                + (COALESCE(NULLIF(TRIM(x.top), '')::INTEGER, 30) * INTERVAL '1 day')
+                < CURRENT_DATE
+                THEN 'OVERDUE'
+
+            WHEN x.posting_date
+                + (COALESCE(NULLIF(TRIM(x.top), '')::INTEGER, 30) * INTERVAL '1 day')
+                <= CURRENT_DATE + INTERVAL '7 days'
+                THEN 'DUE_SOON'
+
             ELSE 'OUTSTANDING'
-        END AS status_piutang
+        END AS status_piutang,
+        x.desc_cust_grp4,
+        x.channel_id 
     FROM (
         SELECT
             dp.billing_no,
@@ -18469,10 +18498,16 @@ query.getUploadedDataPiutang = `
             dp.bill_to_party,
             dp.salesman,
             dp.name_salesman,
+            dp.desc_cust_grp4,
+            m1.kd_ref as channel_id,
             -- dp.principle,
             COALESCE(SUM(dp.total_penjualan), 0) AS dpp,
-            COALESCE(SUM(dp.tax_amount), 0) AS ppn
-        FROM public.d_penjualan dp
+            COALESCE(SUM(dp.tax_amount), 0) AS ppn,
+            mt.top 
+        FROM public.d_penjualan dp LEFT JOIN m_top mt 
+            ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') = REPLACE(LOWER(dp.desc_cust_grp4), ' ', '') 
+            LEFT JOIN m_referensi m1 
+            ON REPLACE(LOWER(m1.ur_ref), ' ', '') = REPLACE(LOWER(mt.lini), ' ', '') AND m1.jns_ref = 'channel_id' 
         WHERE dp.is_upload = 1
             AND dp.sales_office != '2000'
             AND dp.penjualan_id IN (:penjualan_ids)
@@ -18481,9 +18516,12 @@ query.getUploadedDataPiutang = `
             dp.sales_office,
             dp.posting_date,
             dp.bill_to_party,
+            dp.desc_cust_grp4,
             -- dp.principle,
+            m1.kd_ref,
             dp.salesman,
-            dp.name_salesman
+            dp.name_salesman,
+            mt.top
     ) x
     LEFT JOIN (
         SELECT

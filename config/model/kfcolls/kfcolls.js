@@ -4541,7 +4541,15 @@ exports.D_PIUTANG = db.define('d_piutang',
         updated_at: {
             type: DataTypes.DATE,
             field: 'updated_at'
-        }
+        },
+        desc_cust_grp3: {
+            type: DataTypes.STRING,
+            field: 'desc_cust_grp3'
+        },
+        channel_id: {
+            type: DataTypes.STRING,
+            field: 'channel_id'
+        },
     }, {
         schema: 'public',
         freezeTableName: true,
