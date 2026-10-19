@@ -21483,51 +21483,28 @@ query.summaryDataKonfirmasiPiutang = `
         )::INTEGER AS belum_dikirim,
 
         -- Menunggu konfirmasi
+        -- Sudah dikirim tetapi belum ada status S, T, atau O
         COUNT(*) FILTER (
-            WHERE
-                CASE
-                    WHEN ds.kd_status = 'OTO' THEN 'OTO'
-                    WHEN ds.kd_status = 'STJ' THEN 'STJ'
-                    WHEN ds.kd_status = 'TLK' THEN 'TLK'
-                    WHEN ds.kd_status = 'MK'  THEN 'MK'
-                    ELSE COALESCE(ds.kd_status::TEXT, '-')
-                END = 'MK'
+            WHERE kp.k_piutang_id IS NOT NULL
+              AND (
+                    ds.kd_status IS NULL
+                    OR ds.kd_status::TEXT NOT IN ('S', 'T', 'O')
+              )
         )::INTEGER AS menunggu,
 
         -- Disetujui customer
         COUNT(*) FILTER (
-            WHERE
-                CASE
-                    WHEN ds.kd_status = 'OTO' THEN 'OTO'
-                    WHEN ds.kd_status = 'STJ' THEN 'STJ'
-                    WHEN ds.kd_status = 'TLK' THEN 'TLK'
-                    WHEN ds.kd_status = 'MK'  THEN 'MK'
-                    ELSE COALESCE(ds.kd_status::TEXT, '-')
-                END = 'STJ'
+            WHERE ds.kd_status::TEXT = 'S'
         )::INTEGER AS disetujui,
 
         -- Ditolak customer
         COUNT(*) FILTER (
-            WHERE
-                CASE
-                    WHEN ds.kd_status = 'OTO' THEN 'OTO'
-                    WHEN ds.kd_status = 'STJ' THEN 'STJ'
-                    WHEN ds.kd_status = 'TLK' THEN 'TLK'
-                    WHEN ds.kd_status = 'MK'  THEN 'MK'
-                    ELSE COALESCE(ds.kd_status::TEXT, '-')
-                END = 'TLK'
+            WHERE ds.kd_status::TEXT = 'T'
         )::INTEGER AS ditolak,
 
         -- Disetujui otomatis
         COUNT(*) FILTER (
-            WHERE
-                CASE
-                    WHEN ds.kd_status = 'OTO' THEN 'OTO'
-                    WHEN ds.kd_status = 'STJ' THEN 'STJ'
-                    WHEN ds.kd_status = 'TLK' THEN 'TLK'
-                    WHEN ds.kd_status = 'MK'  THEN 'MK'
-                    ELSE COALESCE(ds.kd_status::TEXT, '-')
-                END = 'OTO'
+            WHERE ds.kd_status::TEXT = 'O'
         )::INTEGER AS otomatis
 
     FROM public.d_piutang p
@@ -21568,7 +21545,8 @@ query.summaryDataKonfirmasiPiutang = `
         WHERE f.piutang_id = p.piutang_id
           AND f.kegiatan = 'PENAGIHAN'
           AND f.is_active = 'Y'
-        ORDER BY f.faktur_petugas_id DESC
+        ORDER BY
+            f.faktur_petugas_id DESC
         LIMIT 1
     ) fp ON TRUE
 

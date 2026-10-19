@@ -6154,18 +6154,65 @@ exports.getDataKonfirmasiPiutang = async (params) => {
             bind.keyword = `%${keyword}%`;
         }
 
-        // =====================================================
-        // FILTER STATUS KONFIRMASI
-        // Status dari d_status kegiatan KONFIRMASI_PIUTANG
-        // =====================================================
-        if (status && status.toUpperCase() !== 'ALL') {
-            condition += `
-                AND UPPER(
-                    COALESCE(ds.kd_status::TEXT, '')
-                ) = UPPER(:status)
-            `;
+        // Filter status konfirmasi piutang
+        const normalizedStatus = String(status ?? '')
+            .trim()
+            .toUpperCase()
+            .replace(/\s+/g, '_');
 
-            bind.status = status;
+        if (normalizedStatus && normalizedStatus !== 'ALL') {
+            switch (normalizedStatus) {
+                case 'BELUM_DIKIRIM':
+                    // Belum pernah dikirim untuk konfirmasi
+                    condition += `
+                AND kp.k_piutang_id IS NULL
+            `;
+                    break;
+
+                case 'MENUNGGU_KONFIRMASI':
+                case 'MK':
+                    // Sudah dikirim, tetapi belum ada keputusan final
+                    condition += `
+                AND kp.k_piutang_id IS NOT NULL
+                AND (
+                    ds.kd_status IS NULL
+                    OR UPPER(ds.kd_status::TEXT) NOT IN ('S', 'T', 'O')
+                )
+            `;
+                    break;
+
+                case 'DISETUJUI_CUSTOMER':
+                case 'STJ':
+                case 'S':
+                    // Disetujui customer
+                    condition += `
+                AND UPPER(ds.kd_status::TEXT) = 'S'
+            `;
+                    break;
+
+                case 'DITOLAK_CUSTOMER':
+                case 'TLK':
+                case 'T':
+                    // Ditolak customer
+                    condition += `
+                AND UPPER(ds.kd_status::TEXT) = 'T'
+            `;
+                    break;
+
+                case 'DISETUJUI_OTOMATIS':
+                case 'OTO':
+                case 'O':
+                    // Disetujui otomatis
+                    condition += `
+                AND UPPER(ds.kd_status::TEXT) = 'O'
+            `;
+                    break;
+
+                default:
+                    throw new Error(
+                        `Filter status konfirmasi tidak dikenal: ${status}`
+                    );
+            }
         }
 
         // =====================================================
