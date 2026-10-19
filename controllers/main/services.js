@@ -7114,6 +7114,7 @@ exports.konfirmasiPiutang = async (
     );
 
     return {
+        status: flagEmail === "S",
         success: flagEmail === "S",
         message: keterangan,
         flag_email: flagEmail,
