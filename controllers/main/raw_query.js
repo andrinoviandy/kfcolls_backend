@@ -21909,4 +21909,65 @@ query.summaryDataLaporan = `
         :condition
 `;
 
+query.getDataKonfirmasiCustomer = `
+    SELECT
+        kk.k_konfirmasi_id,
+        kp.k_piutang_id,
+        kp.piutang_id,
+        kp.tgl_kirim_konfirmasi,
+
+        p.no_billing,
+        p.piutang_id AS detail_piutang_id,
+        p.no_faktur,
+        p.document_type,
+
+        p.customer AS customer_id,
+        mc.name AS nama_customer,
+        mc.name AS customer_name,
+
+        p.cabang,
+        mr_cabang.ur_ref AS nama_cabang,
+
+        p.principle,
+        mp.nama_principle,
+
+        p.sales,
+        p.nama_sales,
+
+        p.posting_date,
+        p.jatuh_tempo,
+
+        COALESCE(p.dpp, 0) AS dpp,
+        COALESCE(p.ppn, 0) AS ppn,
+        COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)
+            AS total_piutang,
+
+        p.created_at AS tanggal_data_piutang
+
+    FROM public.k_konfirmasi kk
+
+    INNER JOIN public.k_piutang kp
+        ON kp.k_konfirmasi_id = kk.k_konfirmasi_id
+
+    INNER JOIN public.d_piutang p
+        ON p.piutang_id = kp.piutang_id
+
+    LEFT JOIN public.m_customer mc
+        ON mc.kode_customer = p.customer
+
+    LEFT JOIN public.m_referensi mr_cabang
+        ON mr_cabang.kd_ref = p.cabang
+        AND mr_cabang.jns_ref = 'cabang_id'
+
+    LEFT JOIN public.m_principle mp
+        ON mp.principle = p.principle
+
+    WHERE kk.k_konfirmasi_id = :status
+
+    ORDER BY
+        p.posting_date DESC NULLS LAST,
+        p.no_billing DESC NULLS LAST,
+        p.piutang_id DESC
+`;
+
 module.exports = query;

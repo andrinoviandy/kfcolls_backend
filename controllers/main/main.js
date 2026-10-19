@@ -1078,6 +1078,52 @@ exports.verifikasiBayarFaktur = async (req, res) => {
     }
 };
 
+exports.konfirmasiCustomer = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const payload = req.body || {};
+
+        const result = await serviceMain.konfirmasiCustomer(
+            payload,
+            transaction
+        );
+
+        await transaction.commit();
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR KONFIRMASI CUSTOMER <<<<<<<<<'
+        );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
+
 exports.konfirmasiPiutang = async (req, res) => {
     let transaction;
 
@@ -1259,6 +1305,44 @@ exports.getDataKonfirmasiPiutang = async (req, res) => {
 
         const result =
             await serviceMain.getDataKonfirmasiPiutang(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET MONITORING PENUGASAN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
+exports.getDataKonfirmasiCustomer = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataKonfirmasiCustomer'
+        );
+
+        const result =
+            await serviceMain.getDataKonfirmasiCustomer(
                 params
             );
 

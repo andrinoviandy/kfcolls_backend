@@ -33,5 +33,6 @@ model.d_tukar_faktur = n2n.D_TUKAR_FAKTUR
 model.d_status = n2n.D_STATUS
 model.d_pembayaran = n2n.D_PEMBAYARAN
 model.k_piutang = n2n.K_PIUTANG
+model.k_konfirmasi = n2n.K_KONFIRMASI
 
 module.exports = model

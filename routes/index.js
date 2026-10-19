@@ -33,6 +33,7 @@ router.get('/getDetailPenjualan', authorization.doAuth, controller.main.getDetai
 router.get('/getDetailPencairan', authorization.doAuth, controller.main.getDetailPencairan)
 router.get('/getDataKonfirmasiPiutang', authorization.doAuth, controller.main.getDataKonfirmasiPiutang)
 router.get('/getDataLaporan', authorization.doAuth, controller.main.getDataLaporan);
+router.get('/getDataKonfirmasiCustomer', authorization.doAuth, controller.main.getDataKonfirmasiCustomer)
 
 // Insert Data
 router.post('/insertPenjualanArray', authorization.doAuth, controller.main.insertPenjualanArray)
@@ -45,6 +46,7 @@ router.post('/insertBayarFaktur', authorization.doAuth, controller.main.insertBa
 router.post('/verifikasiTukarFaktur', authorization.doAuth, controller.main.verifikasiTukarFaktur)
 router.post('/verifikasiBayarFaktur', authorization.doAuth, controller.main.verifikasiBayarFaktur)
 router.post('/konfirmasiPiutang', authorization.doAuth, controller.main.konfirmasiPiutang)
+router.post('/konfirmasiCustomer', controller.main.konfirmasiCustomer)
 
 // UPDATE DATA
 router.put('/updateUser', authorization.doAuth, controller.main.updateUser)

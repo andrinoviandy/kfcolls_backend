@@ -5893,6 +5893,10 @@ exports.K_PIUTANG = db.define(
             type: DataTypes.UUID,
             field: 'piutang_id',
         },
+        k_konfirmasi_id: {
+            type: DataTypes.UUID,
+            field: 'k_konfirmasi_id',
+        },
         tgl_kirim_konfirmasi: {
             type: DataTypes.DATE,
             field: 'tgl_kirim_konfirmasi',
@@ -5928,6 +5932,38 @@ exports.K_PIUTANG = db.define(
         email: {
             type: DataTypes.STRING,
             field: 'email',
+        },
+    },
+    {
+        schema: 'public',
+        freezeTableName: true,
+        timestamps: false,
+    }
+);
+
+exports.K_KONFIRMASI = db.define(
+    'k_konfirmasi',
+    {
+        k_konfirmasi_id: {
+            type: DataTypes.UUID,
+            field: 'k_konfirmasi_id',
+            primaryKey: true,
+        },
+        tgl_kirim_konfirmasi: {
+            type: DataTypes.DATE,
+            field: 'tgl_kirim_konfirmasi',
+        },
+        keterangan: {
+            type: DataTypes.TEXT,
+            field: 'keterangan',
+        },
+        created_by: {
+            type: DataTypes.STRING,
+            field: 'created_by',
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: 'created_at',
         },
     },
     {

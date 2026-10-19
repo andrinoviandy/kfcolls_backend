@@ -5408,6 +5408,223 @@ exports.verifikasiBayarFaktur = async (
     }
 };
 
+
+exports.konfirmasiCustomer = async (
+    payload,
+    transaction
+) => {
+    try {
+        const {
+            k_piutang_id,
+            nama_customer,
+            keputusan,
+            catatan,
+            tanggal_rencana_pembayaran
+        } = payload;
+
+        /*
+         * =====================================================
+         * VALIDASI PAYLOAD
+         * =====================================================
+         */
+
+        if (
+            !Array.isArray(k_piutang_id) ||
+            k_piutang_id.length === 0
+        ) {
+            throw new Error(
+                'k_piutang_id wajib diisi dalam bentuk array'
+            );
+        }
+
+        if (
+            !String(nama_customer || '').trim()
+        ) {
+            throw new Error(
+                'nama_customer wajib diisi'
+            );
+        }
+
+        /*
+         * =====================================================
+         * MAPPING KEPUTUSAN KE KD_STATUS
+         * =====================================================
+         *
+         * DISETUJUI = S
+         * DITOLAK   = T
+         */
+
+        const keputusanUpper = String(
+            keputusan || ''
+        ).trim().toUpperCase();
+
+        let kd_status;
+
+        if (keputusanUpper === 'DISETUJUI') {
+            kd_status = 'S';
+        } else if (keputusanUpper === 'DITOLAK') {
+            kd_status = 'T';
+        } else {
+            throw new Error(
+                'keputusan harus DISETUJUI atau DITOLAK'
+            );
+        }
+
+        /*
+         * =====================================================
+         * VALIDASI CATATAN PENOLAKAN
+         * =====================================================
+         */
+
+        if (
+            kd_status === 'T' &&
+            !String(catatan || '').trim()
+        ) {
+            throw new Error(
+                'Catatan penolakan wajib diisi'
+            );
+        }
+
+        /*
+         * =====================================================
+         * NORMALISASI K_PIUTANG_ID
+         * =====================================================
+         *
+         * Menghapus ID kosong dan duplikat.
+         */
+
+        const piutangIds = [
+            ...new Set(
+                k_piutang_id
+                    .filter(
+                        (id) =>
+                            id !== null &&
+                            id !== undefined &&
+                            String(id).trim() !== ''
+                    )
+                    .map(
+                        (id) => String(id).trim()
+                    )
+            )
+        ];
+
+        if (piutangIds.length === 0) {
+            throw new Error(
+                'Tidak ada k_piutang_id yang valid'
+            );
+        }
+
+        /*
+         * =====================================================
+         * TANGGAL KONFIRMASI
+         * =====================================================
+         */
+
+        const tanggalKonfirmasi = new Date();
+
+        /*
+         * =====================================================
+         * LOOPING SETIAP PIUTANG
+         * =====================================================
+         */
+
+        const hasil = [];
+
+        for (const idPiutang of piutangIds) {
+
+            /*
+             * =================================================
+             * INSERT HISTORY KE D_STATUS
+             * =================================================
+             */
+
+            const dataStatus = {
+                foreign_id: idPiutang,
+
+                kegiatan: 'KONFIRMASI_CUSTOMER',
+
+                kd_status: kd_status,
+
+                keterangan: String(
+                    catatan || ''
+                ).trim(),
+
+                created_by: String(
+                    nama_customer
+                ).trim(),
+            };
+
+            const status =
+                await model.d_status.create(
+                    dataStatus,
+                    {
+                        transaction
+                    }
+                );
+
+            /*
+             * Simpan hasil masing-masing piutang.
+             */
+
+            hasil.push({
+                k_piutang_id: idPiutang,
+                kd_status: kd_status,
+
+                status:
+                    kd_status === 'S'
+                        ? 'DISETUJUI'
+                        : 'DITOLAK',
+
+                tanggal_verifikasi:
+                    tanggalKonfirmasi,
+
+                history: status
+            });
+        }
+
+        /*
+         * =====================================================
+         * RESPONSE SERVICE
+         * =====================================================
+         */
+
+        return {
+            nama_customer: String(
+                nama_customer
+            ).trim(),
+
+            keputusan: keputusanUpper,
+
+            kd_status: kd_status,
+
+            tanggal_rencana_pembayaran:
+                kd_status === 'S'
+                    ? tanggal_rencana_pembayaran || null
+                    : null,
+
+            total_piutang: piutangIds.length,
+
+            berhasil: hasil.filter(
+                (item) => item.status !== 'SKIPPED'
+            ).length,
+
+            dilewati: hasil.filter(
+                (item) => item.status === 'SKIPPED'
+            ).length,
+
+            detail: hasil
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE KONFIRMASI CUSTOMER:',
+            error
+        );
+
+        throw error;
+    }
+};
+
 exports.getMonitoringPenugasan = async (params = {}) => {
     try {
         const normalizeFilterValues = (value) => {
@@ -6332,6 +6549,109 @@ exports.getDataKonfirmasiPiutang = async (params) => {
     }
 };
 
+exports.getDataKonfirmasiCustomer = async (params) => {
+    try {
+        // =====================================================
+        // VALIDASI PARAMETER
+        // =====================================================
+        const status = String(
+            params?.status ?? ''
+        ).trim();
+
+        if (!status) {
+            throw new Error(
+                'Parameter status (k_konfirmasi_id) wajib diisi.'
+            );
+        }
+
+        // =====================================================
+        // GET DATA KONFIRMASI CUSTOMER + DETAIL BILLING
+        // =====================================================
+        const result = await db.query(
+            query.getDataKonfirmasiCustomer,
+            {
+                replacements: {
+                    status,
+                },
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        // =====================================================
+        // VALIDASI DATA
+        // =====================================================
+        if (!result || result.length === 0) {
+            return null;
+        }
+
+        // =====================================================
+        // DATA CUSTOMER
+        // Ambil informasi header dari billing pertama
+        // =====================================================
+        const first = result[0];
+
+        const customer = {
+            k_konfirmasi_id: first.k_konfirmasi_id,
+            customer_id: first.customer_id,
+            customer: first.nama_customer,
+            nama_customer: first.nama_customer,
+            customer_name: first.customer_name,
+            cabang: first.cabang,
+            nama_cabang: first.nama_cabang,
+            principle: first.principle,
+            nama_principle: first.nama_principle,
+            tanggal_kirim_konfirmasi:
+                first.tgl_kirim_konfirmasi,
+
+            // =================================================
+            // DETAIL BILLING
+            // =================================================
+            detail_billing: result.map((item) => ({
+                k_piutang_id: item.k_piutang_id,
+                piutang_id: item.detail_piutang_id,
+                no_billing: item.no_billing,
+                no_faktur: item.no_faktur,
+                document_type: item.document_type,
+
+                customer_id: item.customer_id,
+                customer: item.nama_customer,
+                nama_customer: item.nama_customer,
+
+                cabang: item.cabang,
+                nama_cabang: item.nama_cabang,
+
+                principle: item.principle,
+                nama_principle: item.nama_principle,
+
+                sales: item.sales,
+                nama_sales: item.nama_sales,
+
+                posting_date: item.posting_date,
+                jatuh_tempo: item.jatuh_tempo,
+
+                dpp: Number(item.dpp || 0),
+                ppn: Number(item.ppn || 0),
+                total_piutang: Number(
+                    item.total_piutang || 0
+                ),
+
+                tanggal_kirim_konfirmasi:
+                    item.tgl_kirim_konfirmasi,
+            })),
+        };
+
+        return customer;
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET DATA KONFIRMASI CUSTOMER:',
+            error
+        );
+
+        throw error;
+    }
+};
+
 exports.getDataLaporan = async (params) => {
     try {
         const normalizeFilterValues = (value) => {
@@ -6609,6 +6929,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         piutang_id,
         piutang_ids,
         no_billing,
+        customer_id,
         customer,
         nama_customer,
         media_email,
@@ -6812,6 +7133,8 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     // ==================================================
     // 5. KIRIM SATU EMAIL UNTUK SEMUA BILLING
     // ==================================================
+
+    const k_konfirmasi_id = uuidv4();
 
     try {
         if (media_email !== true) {
@@ -7047,11 +7370,11 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
                         <p style="margin:0 0 10px;line-height:1.6;font-weight:bold;color:#1e3a8a;">
                             Silakan melakukan konfirmasi piutang melalui tautan berikut:
                         </p>
-                        <a href="https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=12345"
+                        <a href="https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}"
                            target="_blank"
                            rel="noopener noreferrer"
                            style="color:#1d4ed8;overflow-wrap:anywhere;line-height:1.7;">
-                            https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=12345
+                            https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}
                         </a>
                     </div>
 
@@ -7169,42 +7492,53 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
 
     const logKonfirmasi = [];
 
-    for (const row of rows) {
-        // Nonaktifkan log konfirmasi sebelumnya untuk billing ini.
-        await model.k_piutang.update(
-            {
-                flag_aktif: "T",
-            },
-            {
-                where: {
-                    piutang_id: row.id,
-                    flag_aktif: "Y",
+    if (flagEmail === "S") {
+        await model.k_konfirmasi.create({
+            k_konfirmasi_id: k_konfirmasi_id,
+            tgl_kirim_konfirmasi: waktuPercobaan,
+            keterangan: email_customer,
+            created_by: created_by
+        }, {
+            transaction,
+        })
+        for (const row of rows) {
+            // Nonaktifkan log konfirmasi sebelumnya untuk billing ini.
+            await model.k_piutang.update(
+                {
+                    flag_aktif: "T",
                 },
-                transaction,
-            }
-        );
+                {
+                    where: {
+                        piutang_id: row.id,
+                        flag_aktif: "Y",
+                    },
+                    transaction,
+                }
+            );
 
-        // Buat log baru untuk masing-masing billing.
-        const log = await model.k_piutang.create(
-            {
-                k_piutang_id: uuidv4(),
-                piutang_id: row.id,
-                tgl_kirim_konfirmasi: waktuPercobaan,
-                keterangan,
-                created_by: created_by || null,
-                created_at: new Date(),
-                flag_wa: "N",
-                flag_email: flagEmail,
-                flag_aktif: "Y",
-                wa: null,
-                email: emailPenerima || null,
-            },
-            {
-                transaction,
-            }
-        );
+            // Buat log baru untuk masing-masing billing.
+            const log = await model.k_piutang.create(
+                {
+                    k_piutang_id: uuidv4(),
+                    k_konfirmasi_id: k_konfirmasi_id,
+                    piutang_id: row.id,
+                    tgl_kirim_konfirmasi: waktuPercobaan,
+                    keterangan,
+                    created_by: created_by || null,
+                    created_at: new Date(),
+                    flag_wa: "N",
+                    flag_email: flagEmail,
+                    flag_aktif: "Y",
+                    wa: null,
+                    email: emailPenerima || null,
+                },
+                {
+                    transaction,
+                }
+            );
 
-        logKonfirmasi.push(log);
+            logKonfirmasi.push(log);
+        }
     }
 
     // ==================================================
@@ -7212,6 +7546,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     // ==================================================
 
     return {
+        status: flagEmail === "S",
         success: flagEmail === "S",
         message: keterangan,
         flag_email: flagEmail,
