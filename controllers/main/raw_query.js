@@ -18226,18 +18226,36 @@ query.countDataPenjualan = `
 
 query.getDataPiutang = `
     WITH payment_totals AS (
+    SELECT
+        payment_rows.no_billing,
+        COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
+    FROM (
+        -- Pembayaran yang sudah terverifikasi
         SELECT
-            payment_rows.no_billing,
-            COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
-        FROM (
-            SELECT no_billing, nominal_bayar AS nominal
-            FROM public.d_pembayaran
-            UNION ALL
-            SELECT no_billing, nominal_billing AS nominal
-            FROM public.d_cod
-        ) payment_rows
-        GROUP BY payment_rows.no_billing
-    ), piutang_data AS (
+            dp.no_billing,
+            dp.nominal_bayar AS nominal
+        FROM public.d_pembayaran dp
+        JOIN LATERAL (
+            SELECT
+                ds.kd_status
+            FROM public.d_status ds
+            WHERE ds.foreign_id = dp.pembayaran_id
+              AND ds.kegiatan = 'PENAGIHAN'
+            ORDER BY ds.created_at DESC NULLS LAST
+            LIMIT 1
+        ) status_verifikasi ON TRUE
+        WHERE UPPER(COALESCE(status_verifikasi.kd_status, '')) = 'S'
+
+        UNION ALL
+
+        -- COD: sementara belum difilter verifikasi
+        SELECT
+            dc.no_billing,
+            dc.nominal_billing AS nominal
+        FROM public.d_cod dc
+    ) payment_rows
+    GROUP BY payment_rows.no_billing
+), piutang_data AS (
         SELECT
             p.piutang_id,
             p.no_faktur,
@@ -18328,18 +18346,36 @@ query.getDataPiutang = `
 
 query.countDataPiutang = `
     WITH payment_totals AS (
+    SELECT
+        payment_rows.no_billing,
+        COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
+    FROM (
+        -- Pembayaran yang sudah terverifikasi
         SELECT
-            payment_rows.no_billing,
-            COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
-        FROM (
-            SELECT no_billing, nominal_bayar AS nominal
-            FROM public.d_pembayaran
-            UNION ALL
-            SELECT no_billing, nominal_billing AS nominal
-            FROM public.d_cod
-        ) payment_rows
-        GROUP BY payment_rows.no_billing
-    ), piutang_data AS (
+            dp.no_billing,
+            dp.nominal_bayar AS nominal
+        FROM public.d_pembayaran dp
+        JOIN LATERAL (
+            SELECT
+                ds.kd_status
+            FROM public.d_status ds
+            WHERE ds.foreign_id = dp.pembayaran_id
+              AND ds.kegiatan = 'PENAGIHAN'
+            ORDER BY ds.created_at DESC NULLS LAST
+            LIMIT 1
+        ) status_verifikasi ON TRUE
+        WHERE UPPER(COALESCE(status_verifikasi.kd_status, '')) = 'S'
+
+        UNION ALL
+
+        -- COD: sementara belum difilter verifikasi
+        SELECT
+            dc.no_billing,
+            dc.nominal_billing AS nominal
+        FROM public.d_cod dc
+    ) payment_rows
+    GROUP BY payment_rows.no_billing
+), piutang_data AS (
         SELECT
             p.piutang_id,
             p.no_faktur,
@@ -18380,18 +18416,36 @@ query.countDataPiutang = `
 
 query.summaryDataPiutang = `
     WITH payment_totals AS (
+    SELECT
+        payment_rows.no_billing,
+        COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
+    FROM (
+        -- Pembayaran yang sudah terverifikasi
         SELECT
-            payment_rows.no_billing,
-            COALESCE(SUM(payment_rows.nominal), 0) AS dibayar
-        FROM (
-            SELECT no_billing, nominal_bayar AS nominal
-            FROM public.d_pembayaran
-            UNION ALL
-            SELECT no_billing, nominal_billing AS nominal
-            FROM public.d_cod
-        ) payment_rows
-        GROUP BY payment_rows.no_billing
-    ), piutang_data AS (
+            dp.no_billing,
+            dp.nominal_bayar AS nominal
+        FROM public.d_pembayaran dp
+        JOIN LATERAL (
+            SELECT
+                ds.kd_status
+            FROM public.d_status ds
+            WHERE ds.foreign_id = dp.pembayaran_id
+              AND ds.kegiatan = 'PENAGIHAN'
+            ORDER BY ds.created_at DESC NULLS LAST
+            LIMIT 1
+        ) status_verifikasi ON TRUE
+        WHERE UPPER(COALESCE(status_verifikasi.kd_status, '')) = 'S'
+
+        UNION ALL
+
+        -- COD: sementara belum difilter verifikasi
+        SELECT
+            dc.no_billing,
+            dc.nominal_billing AS nominal
+        FROM public.d_cod dc
+    ) payment_rows
+    GROUP BY payment_rows.no_billing
+), piutang_data AS (
         SELECT
             p.piutang_id,
             p.no_faktur,
