@@ -5741,7 +5741,10 @@ exports.getDataReportSales = async (params) => {
         // PAGINATION & SEARCH
         // =========================================
         const page = Math.max(Number(params?.page) || 1, 1);
-        const limit = Math.min(Math.max(Number(params?.limit) || 10, 1), 1000);
+        const limit = Math.min(
+            Math.max(Number(params?.limit) || 10, 1),
+            1000
+        );
         const offset = (page - 1) * limit;
         const keyword = String(params?.keyword || "").trim();
 
@@ -5764,118 +5767,159 @@ exports.getDataReportSales = async (params) => {
             params?.principle ?? params?.["principle[]"]
         );
 
-        const products = normalizeFilterValues(
-            params?.produk ?? params?.["produk[]"]
-        );
-
         const startDate = String(params?.start_date || "").trim();
         const endDate = String(params?.end_date || "").trim();
 
         // =========================================
         // DYNAMIC CONDITION
+        // Alias p mengarah ke public.d_piutang
         // =========================================
         let condition = "";
-        const bind = { limit, offset };
+
+        const filterBind = {};
 
         if (keyword) {
             condition += `
-        AND (
-          p.no_transaksi ILIKE :keyword
-          OR p.customer ILIKE :keyword
-          OR p.principal ILIKE :keyword
-          OR p.sales ILIKE :keyword
-          OR p.status ILIKE :keyword
-          OR p.no_transaksi::text ILIKE :keyword
-        )
-      `;
+                AND (
+                    p.no_billing ILIKE :keyword
+                    OR p.customer ILIKE :keyword
+                    OR p.principle ILIKE :keyword
+                    OR p.sales ILIKE :keyword
+                    OR p.nama_sales ILIKE :keyword
+                )
+            `;
 
-            bind.keyword = `%${keyword}%`;
+            filterBind.keyword = `%${keyword}%`;
         }
 
+        // sales_office dipetakan ke cabang karena
+        // query d_piutang yang diberikan menggunakan kolom cabang.
         if (!isAll(salesOffices)) {
-            condition += ` AND p.sales_office IN (:sales_offices) `;
-            bind.sales_offices = salesOffices;
+            condition += ` AND p.cabang IN (:sales_offices) `;
+            filterBind.sales_offices = salesOffices;
         }
 
         if (!isAll(customers)) {
             condition += ` AND p.customer IN (:customers) `;
-            bind.customers = customers;
+            filterBind.customers = customers;
         }
 
         if (!isAll(channels)) {
-            condition += ` AND p.channel IN (:channels) `;
-            bind.channels = channels;
+            condition += ` AND p.channel_id IN (:channels) `;
+            filterBind.channels = channels;
         }
 
         if (!isAll(principles)) {
-            condition += ` AND p.principal IN (:principles) `;
-            bind.principles = principles;
-        }
-
-        if (!isAll(products)) {
-            condition += ` AND p.produk IN (:products) `;
-            bind.products = products;
+            condition += ` AND p.principle IN (:principles) `;
+            filterBind.principles = principles;
         }
 
         if (startDate) {
-            condition += ` AND p.tanggal >= CAST(:start_date AS DATE) `;
-            bind.start_date = startDate;
+            condition += `
+                AND p.posting_date >= CAST(:start_date AS DATE)
+            `;
+
+            filterBind.start_date = startDate;
         }
 
         if (endDate) {
-            condition += ` AND p.tanggal < CAST(:end_date AS DATE) + INTERVAL '1 day' `;
-            bind.end_date = endDate;
+            condition += `
+                AND p.posting_date <
+                    CAST(:end_date AS DATE) + INTERVAL '1 day'
+            `;
+
+            filterBind.end_date = endDate;
         }
 
         // =========================================
-        // EXECUTE ONE QUERY
+        // EXECUTE DATA, COUNT, SUMMARY
+        // Semua memakai filter dan bind yang sama
         // =========================================
-        const SQL = query.getDataReportSales.replace(
-            /:condition/g,
-            condition
+        const dataSQL = query.getDataReportSales
+            .replace(/:condition/g, condition);
+
+        const countSQL = query.countDataReportSales
+            .replace(/:condition/g, condition);
+
+        const summarySQL = query.summaryDataReportSales
+            .replace(/:condition/g, condition);
+
+        const [listData, countResult, summaryResult] =
+            await Promise.all([
+                db.query(dataSQL, {
+                    replacements: {
+                        ...filterBind,
+                        limit,
+                        offset,
+                    },
+                    type: db.QueryTypes.SELECT,
+                }),
+
+                db.query(countSQL, {
+                    replacements: {
+                        ...filterBind,
+                    },
+                    type: db.QueryTypes.SELECT,
+                }),
+
+                db.query(summarySQL, {
+                    replacements: {
+                        ...filterBind,
+                    },
+                    type: db.QueryTypes.SELECT,
+                }),
+            ]);
+
+        // =========================================
+        // RESULT
+        // =========================================
+        const totalData = Number(
+            countResult?.[0]?.total_data || 0
         );
 
-        const result = await db.query(SQL, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT,
-        });
-
-        const firstRow = result?.[0] || {};
+        const summaryData = summaryResult?.[0] || {};
 
         return {
-            total_data: Number(firstRow.total_data || 0),
-            total_halaman: Math.ceil(Number(firstRow.total_data || 0) / limit),
+            total_data: totalData,
+            total_halaman: Math.ceil(totalData / limit),
             page,
             limit,
 
-            list_data: result.map((item) => {
-                const {
-                    total_data,
-                    total_penjualan,
-                    total_retur,
-                    total_pencairan,
-                    total_sisa_pencairan,
-                    total_transaksi,
-                    total_customer,
-                    total_retur_persentase,
-                    ...row
-                } = item;
-
-                return row;
-            }),
+            list_data: listData.map((item) => ({
+                ...item,
+                total_transaksi: Number(item.total_transaksi || 0),
+                total_customer: Number(item.total_customer || 0),
+                total_penjualan: Number(item.total_penjualan || 0),
+                total_pencairan: Number(item.total_pencairan || 0),
+                total_sisa_pencairan: Number(
+                    item.total_sisa_pencairan || 0
+                ),
+            })),
 
             summary: {
-                total_penjualan: Number(firstRow.total_penjualan || 0),
-                total_retur: Number(firstRow.total_retur || 0),
-                total_pencairan: Number(firstRow.total_pencairan || 0),
-                total_sisa_pencairan: Number(firstRow.total_sisa_pencairan || 0),
-                total_transaksi: Number(firstRow.total_transaksi || 0),
-                total_customer: Number(firstRow.total_customer || 0),
-                total_retur_persentase: Number(firstRow.total_retur_persentase || 0),
+                total_penjualan: Number(
+                    summaryData.total_penjualan || 0
+                ),
+                total_pencairan: Number(
+                    summaryData.total_pencairan || 0
+                ),
+                total_sisa_pencairan: Number(
+                    summaryData.total_sisa_pencairan || 0
+                ),
+                total_transaksi: Number(
+                    summaryData.total_transaksi || 0
+                ),
+                total_customer: Number(
+                    summaryData.total_customer || 0
+                ),
             },
         };
     } catch (error) {
-        console.error("ERROR SERVICE GET DATA REPORT SALES:", error);
+        console.error(
+            "ERROR SERVICE GET DATA REPORT SALES:",
+            error
+        );
+
         throw error;
     }
 };

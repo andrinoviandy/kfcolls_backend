@@ -21005,16 +21005,25 @@ query.summaryMonitoringPenugasan = `
 query.getDataReportSales = `
     WITH payment_rows AS (
         SELECT
-            no_billing,
-            nominal_bayar AS nominal
-        FROM public.d_pembayaran
+            dp.no_billing,
+            dp.nominal_bayar AS nominal
+        FROM public.d_pembayaran dp
+        JOIN LATERAL (
+            SELECT ds.kd_status
+            FROM public.d_status ds
+            WHERE ds.foreign_id = dp.pembayaran_id
+              AND ds.kegiatan = 'PENAGIHAN'
+            ORDER BY ds.created_at DESC NULLS LAST
+            LIMIT 1
+        ) verifikasi ON TRUE
+        WHERE UPPER(COALESCE(verifikasi.kd_status, '')) = 'S'
 
         UNION ALL
 
         SELECT
-            no_billing,
-            nominal_billing AS nominal
-        FROM public.d_cod
+            dc.no_billing,
+            dc.nominal_billing AS nominal
+        FROM public.d_cod dc
     ),
 
     payment_totals AS (
@@ -21034,7 +21043,9 @@ query.getDataReportSales = `
             p.principle,
             p.sales,
             p.nama_sales,
-            p.dpp,
+            p.channel_id,
+            p.posting_date,
+            COALESCE(p.dpp, 0) AS dpp,
             COALESCE(pay.total_pencairan, 0) AS total_pencairan
         FROM public.d_piutang p
         LEFT JOIN payment_totals pay
@@ -21055,53 +21066,14 @@ query.getDataReportSales = `
 
             COALESCE(SUM(dpp), 0) AS total_penjualan,
             COALESCE(SUM(total_pencairan), 0) AS total_pencairan,
-
-            COALESCE(
-                SUM(dpp - total_pencairan),
-                0
-            ) AS total_sisa_pencairan
-
+            COALESCE(SUM(dpp - total_pencairan), 0)
+                AS total_sisa_pencairan
         FROM invoice_data
         GROUP BY
             sales,
             nama_sales,
             cabang,
             principle
-    ),
-
-    report_with_summary AS (
-        SELECT
-            sales,
-            nama_sales,
-            cabang,
-            principle,
-
-            total_transaksi,
-            total_customer,
-            total_penjualan,
-            total_pencairan,
-            total_sisa_pencairan,
-
-            -- Summary mengikuti masing-masing Sales
-            total_penjualan AS summary_total_penjualan,
-            total_pencairan AS summary_total_pencairan,
-            total_sisa_pencairan AS summary_total_sisa_pencairan,
-            total_transaksi AS summary_total_transaksi,
-            total_customer AS summary_total_customer,
-
-            COUNT(*) OVER () AS total_data
-
-        FROM report_data
-    ),
-
-    paginated_data AS (
-        SELECT *
-        FROM report_with_summary
-        ORDER BY
-            nama_sales ASC NULLS LAST,
-            sales ASC NULLS LAST
-        LIMIT :limit
-        OFFSET :offset
     )
 
     SELECT
@@ -21109,26 +21081,106 @@ query.getDataReportSales = `
         nama_sales,
         cabang,
         principle,
-
         total_transaksi,
         total_customer,
         total_penjualan,
         total_pencairan,
-        total_sisa_pencairan,
-
-        total_data,
-
-        summary_total_penjualan,
-        summary_total_pencairan,
-        summary_total_sisa_pencairan,
-        summary_total_transaksi,
-        summary_total_customer
-
-    FROM paginated_data
-
+        total_sisa_pencairan
+    FROM report_data
     ORDER BY
         nama_sales ASC NULLS LAST,
         sales ASC NULLS LAST
+    LIMIT :limit
+    OFFSET :offset
+`;
+
+query.countDataReportSales = `
+    WITH invoice_data AS (
+        SELECT
+            p.piutang_id,
+            p.no_billing,
+            p.customer,
+            p.cabang,
+            p.principle,
+            p.sales,
+            p.nama_sales
+        FROM public.d_piutang p
+        WHERE 1 = 1
+            :condition
+    ),
+
+    report_data AS (
+        SELECT
+            sales,
+            nama_sales,
+            cabang,
+            principle
+        FROM invoice_data
+        GROUP BY
+            sales,
+            nama_sales,
+            cabang,
+            principle
+    )
+
+    SELECT COUNT(*) AS total_data
+    FROM report_data
+`;
+
+query.summaryDataReportSales = `
+    WITH payment_rows AS (
+        SELECT
+            dp.no_billing,
+            dp.nominal_bayar AS nominal
+        FROM public.d_pembayaran dp
+        JOIN LATERAL (
+            SELECT ds.kd_status
+            FROM public.d_status ds
+            WHERE ds.foreign_id = dp.pembayaran_id
+              AND ds.kegiatan = 'PENAGIHAN'
+            ORDER BY ds.created_at DESC NULLS LAST
+            LIMIT 1
+        ) verifikasi ON TRUE
+        WHERE UPPER(COALESCE(verifikasi.kd_status, '')) = 'S'
+
+        UNION ALL
+
+        SELECT
+            dc.no_billing,
+            dc.nominal_billing AS nominal
+        FROM public.d_cod dc
+    ),
+
+    payment_totals AS (
+        SELECT
+            no_billing,
+            COALESCE(SUM(nominal), 0) AS total_pencairan
+        FROM payment_rows
+        GROUP BY no_billing
+    ),
+
+    invoice_data AS (
+        SELECT
+            p.no_billing,
+            p.customer,
+            COALESCE(p.dpp, 0) AS dpp,
+            COALESCE(pay.total_pencairan, 0) AS total_pencairan
+        FROM public.d_piutang p
+        LEFT JOIN payment_totals pay
+            ON pay.no_billing = p.no_billing
+        WHERE 1 = 1
+            :condition
+    )
+
+    SELECT
+        COALESCE(SUM(dpp), 0) AS total_penjualan,
+        COALESCE(SUM(total_pencairan), 0) AS total_pencairan,
+        COALESCE(
+            SUM(dpp - total_pencairan), 0
+        ) AS total_sisa_pencairan,
+        COUNT(DISTINCT no_billing) AS total_transaksi,
+        COUNT(DISTINCT customer) AS total_customer
+    FROM invoice_data
 `;
 
 query.getDetailPenjualan = `
