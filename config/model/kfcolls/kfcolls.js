@@ -5901,6 +5901,10 @@ exports.K_PIUTANG = db.define(
             type: DataTypes.DATE,
             field: 'tgl_kirim_konfirmasi',
         },
+        tgl_rencana_pembayaran: {
+            type: DataTypes.DATE,
+            field: 'tgl_rencana_pembayaran',
+        },
         keterangan: {
             type: DataTypes.TEXT,
             field: 'keterangan',

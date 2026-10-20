@@ -5566,6 +5566,10 @@ exports.konfirmasiCustomer = async (
              * Simpan hasil masing-masing piutang.
              */
 
+            await model.k_piutang.update({
+                tgl_rencana_pembayaran: tanggal_rencana_pembayaran
+            }, { where: { k_piutang_id: idPiutang } })
+
             hasil.push({
                 k_piutang_id: idPiutang,
                 kd_status: kd_status,
@@ -6596,10 +6600,13 @@ exports.getDataKonfirmasiCustomer = async (params) => {
             customer: first.nama_customer,
             nama_customer: first.nama_customer,
             customer_name: first.customer_name,
+
             cabang: first.cabang,
             nama_cabang: first.nama_cabang,
+
             principle: first.principle,
             nama_principle: first.nama_principle,
+
             tanggal_kirim_konfirmasi:
                 first.tgl_kirim_konfirmasi,
 
@@ -6609,6 +6616,7 @@ exports.getDataKonfirmasiCustomer = async (params) => {
             detail_billing: result.map((item) => ({
                 k_piutang_id: item.k_piutang_id,
                 piutang_id: item.detail_piutang_id,
+
                 no_billing: item.no_billing,
                 no_faktur: item.no_faktur,
                 document_type: item.document_type,
@@ -6631,12 +6639,26 @@ exports.getDataKonfirmasiCustomer = async (params) => {
 
                 dpp: Number(item.dpp || 0),
                 ppn: Number(item.ppn || 0),
+
                 total_piutang: Number(
                     item.total_piutang || 0
                 ),
 
                 tanggal_kirim_konfirmasi:
                     item.tgl_kirim_konfirmasi,
+
+                // =============================================
+                // STATUS KONFIRMASI TERBARU PER BILLING
+                // =============================================
+                kd_status: item.kd_status ?? null,
+
+                keterangan_konfirmasi:
+                    item.keterangan_konfirmasi ?? null,
+
+                tanggal_konfirmasi:
+                    item.tanggal_konfirmasi ?? null,
+                tgl_rencana_pembayaran:
+                    item.tgl_rencana_pembayaran ?? null,
             })),
         };
 
@@ -7302,7 +7324,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
 
                     <p style="line-height:1.7;margin:0 0 14px;">
                         Untuk keperluan tersebut, Bapak/Ibu dapat menghubungi pihak
-                        terkait di PT Anugerah Pharmindo Lestari. Mohon cantumkan
+                        terkait di PT Kimia Farma Trading Distribution. Mohon cantumkan
                         catatan atau informasi pendukung apabila terdapat perbedaan
                         pada rincian transaksi di bawah ini.
                     </p>

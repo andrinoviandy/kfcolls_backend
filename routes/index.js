@@ -33,7 +33,7 @@ router.get('/getDetailPenjualan', authorization.doAuth, controller.main.getDetai
 router.get('/getDetailPencairan', authorization.doAuth, controller.main.getDetailPencairan)
 router.get('/getDataKonfirmasiPiutang', authorization.doAuth, controller.main.getDataKonfirmasiPiutang)
 router.get('/getDataLaporan', authorization.doAuth, controller.main.getDataLaporan);
-router.get('/getDataKonfirmasiCustomer', authorization.doAuth, controller.main.getDataKonfirmasiCustomer)
+router.get('/getDataKonfirmasiCustomer', controller.main.getDataKonfirmasiCustomer)
 
 // Insert Data
 router.post('/insertPenjualanArray', authorization.doAuth, controller.main.insertPenjualanArray)

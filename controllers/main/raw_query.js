@@ -21315,6 +21315,8 @@ query.getDataKonfirmasiPiutang = `
 
         -- Status asli
         ds.kd_status AS status_konfirmasi,
+        TO_CHAR(ds.created_at, 'YYYY-MM-DD HH24:MI:SS') AS status_konfirmasi_date,
+        ds.keterangan AS status_catatan,
 
         -- Kode singkat dibuat langsung menggunakan CASE WHEN
         CASE
@@ -21352,9 +21354,10 @@ query.getDataKonfirmasiPiutang = `
     LEFT JOIN LATERAL (
         SELECT
             s.kd_status,
-            s.created_at
+            s.created_at,
+            s.keterangan 
         FROM public.d_status s
-        WHERE s.kegiatan = 'KONFIRMASI_PIUTANG'
+        WHERE s.kegiatan = 'KONFIRMASI_CUSTOMER'
           AND s.foreign_id = kp.k_piutang_id
         ORDER BY
             s.created_at DESC NULLS LAST
@@ -21909,12 +21912,18 @@ query.summaryDataLaporan = `
         :condition
 `;
 
+
 query.getDataKonfirmasiCustomer = `
     SELECT
         kk.k_konfirmasi_id,
         kp.k_piutang_id,
         kp.piutang_id,
         kp.tgl_kirim_konfirmasi,
+
+        -- STATUS KONFIRMASI TERBARU PER BILLING
+        ds.kd_status,
+        ds.keterangan AS keterangan_status,
+        ds.created_at AS tanggal_status,
 
         p.no_billing,
         p.piutang_id AS detail_piutang_id,
@@ -21942,7 +21951,8 @@ query.getDataKonfirmasiCustomer = `
         COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)
             AS total_piutang,
 
-        p.created_at AS tanggal_data_piutang
+        p.created_at AS tanggal_data_piutang,
+        TO_CHAR(kp.tgl_rencana_pembayaran, 'DD/MM/YYYY') AS tgl_rencana_pembayaran  
 
     FROM public.k_konfirmasi kk
 
@@ -21962,6 +21972,19 @@ query.getDataKonfirmasiCustomer = `
     LEFT JOIN public.m_principle mp
         ON mp.principle = p.principle
 
+    LEFT JOIN LATERAL (
+        SELECT
+            dsk.kd_status,
+            dsk.keterangan,
+            dsk.created_at
+        FROM public.d_status dsk
+        WHERE dsk.foreign_id = kp.k_piutang_id
+          AND dsk.kegiatan = 'KONFIRMASI_CUSTOMER'
+        ORDER BY
+            dsk.created_at DESC NULLS LAST
+        LIMIT 1
+    ) ds ON TRUE
+
     WHERE kk.k_konfirmasi_id = :status
 
     ORDER BY
@@ -21969,5 +21992,6 @@ query.getDataKonfirmasiCustomer = `
         p.no_billing DESC NULLS LAST,
         p.piutang_id DESC
 `;
+
 
 module.exports = query;
