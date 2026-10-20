@@ -1367,6 +1367,44 @@ exports.getDataKonfirmasiCustomer = async (req, res) => {
     }
 };
 
+exports.getDataPenerimaanLain = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query
+        };
+
+        console.log(
+            params,
+            'params getDataPenerimaanLain'
+        );
+
+        const result =
+            await serviceMain.getDataPenerimaanLain(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET MONITORING PENUGASAN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
 exports.getDataLaporan = async (req, res) => {
     try {
         const params = {

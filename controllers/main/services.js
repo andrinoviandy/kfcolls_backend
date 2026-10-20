@@ -3788,15 +3788,6 @@ exports.insertBayarFaktur = async (
     try {
 
         if (
-            !Array.isArray(payload?.faktur) ||
-            payload.faktur.length === 0
-        ) {
-            throw new Error(
-                'Data faktur wajib diisi'
-            );
-        }
-
-        if (
             !files ||
             files.length === 0
         ) {
@@ -3813,7 +3804,9 @@ exports.insertBayarFaktur = async (
         const allowedJenisPembayaran = [
             'FULL_PAYMENT',
             'PARTIAL_PAYMENT',
-            'MENUNGGU_PEMBAYARAN'
+            'MENUNGGU_PEMBAYARAN',
+            'PENERIMAAN_LAIN',
+            'SPP'
         ];
 
         if (
@@ -3835,20 +3828,12 @@ exports.insertBayarFaktur = async (
         }
 
         const piutangIds =
-            payload.faktur
+            payload.faktur ? payload.faktur
                 .map(
                     item =>
                         item?.piutang_id
                 )
-                .filter(Boolean);
-
-        if (
-            piutangIds.length === 0
-        ) {
-            throw new Error(
-                'piutang_id wajib diisi'
-            );
-        }
+                .filter(Boolean) : [];
 
         const uniquePiutangIds = [
             ...new Set(
@@ -3915,130 +3900,178 @@ exports.insertBayarFaktur = async (
 
         const pembayaranData = [];
 
-        for (
-            const item of payload.faktur
-        ) {
-
-            /*
-             * SALDO PIUTANG
-             *
-             * Nilai ini berasal dari frontend:
-             *
-             * saldo_piutang =
-             * dpp - collections
-             */
-            const saldoPiutang =
-                Number(
-                    item?.saldo_piutang ??
-                    item?.sisa_tagihan ??
-                    item?.nominal_tagihan ??
-                    0
-                );
-
-            let totalBayar = 0;
-            let nominalBayar = 0;
-
-            /*
-             * FULL PAYMENT
-             */
-            if (
-                jenisPembayaran ===
-                'FULL_PAYMENT'
+        if (payload.faktur) {
+            for (
+                const item of payload.faktur
             ) {
 
-                totalBayar =
-                    saldoPiutang;
-
-                nominalBayar =
-                    saldoPiutang;
-            }
-
-            /*
-             * PARTIAL PAYMENT
-             */
-            else if (
-                jenisPembayaran ===
-                'PARTIAL_PAYMENT'
-            ) {
-
-                totalBayar =
-                    saldoPiutang;
-
-                nominalBayar =
+                /*
+                 * SALDO PIUTANG
+                 *
+                 * Nilai ini berasal dari frontend:
+                 *
+                 * saldo_piutang =
+                 * dpp - collections
+                 */
+                const saldoPiutang =
                     Number(
-                        item?.nominal_pembayaran ||
+                        item?.saldo_piutang ??
+                        item?.sisa_tagihan ??
+                        item?.nominal_tagihan ??
                         0
                     );
-            }
 
-            /*
-             * MENUNGGU PEMBAYARAN
-             */
-            else if (
-                jenisPembayaran ===
-                'MENUNGGU_PEMBAYARAN'
-            ) {
+                let totalBayar = 0;
+                let nominalBayar = 0;
 
-                totalBayar =
-                    saldoPiutang;
+                /*
+                 * FULL PAYMENT
+                 */
+                if (
+                    jenisPembayaran ===
+                    'FULL_PAYMENT'
+                ) {
 
-                nominalBayar = 0;
-            }
+                    totalBayar =
+                        saldoPiutang;
 
-            /*
-             * VALIDASI NOMINAL
-             */
-            if (
-                jenisPembayaran !==
-                'MENUNGGU_PEMBAYARAN' &&
-                nominalBayar <= 0
-            ) {
-                throw new Error(
-                    `Nominal pembayaran untuk faktur ${item?.no_faktur || '-'} harus lebih dari 0`
+                    nominalBayar =
+                        saldoPiutang;
+                }
+
+                /*
+                 * PARTIAL PAYMENT
+                 */
+                else if (
+                    jenisPembayaran ===
+                    'PARTIAL_PAYMENT'
+                ) {
+
+                    totalBayar =
+                        saldoPiutang;
+
+                    nominalBayar =
+                        Number(
+                            item?.nominal_pembayaran ||
+                            0
+                        );
+                }
+
+                /*
+                 * MENUNGGU PEMBAYARAN
+                 */
+                else if (
+                    jenisPembayaran ===
+                    'MENUNGGU_PEMBAYARAN'
+                ) {
+
+                    totalBayar =
+                        saldoPiutang;
+
+                    nominalBayar = 0;
+                }
+
+                /*
+                 * VALIDASI NOMINAL
+                 */
+                if (
+                    jenisPembayaran !==
+                    'MENUNGGU_PEMBAYARAN' &&
+                    nominalBayar <= 0
+                ) {
+                    throw new Error(
+                        `Nominal pembayaran untuk faktur ${item?.no_faktur || '-'} harus lebih dari 0`
+                    );
+                }
+
+                /*
+                 * VALIDASI PEMBAYARAN
+                 * TIDAK BOLEH MELEBIHI
+                 * SALDO PIUTANG
+                 */
+                if (
+                    jenisPembayaran ===
+                    'PARTIAL_PAYMENT' &&
+                    nominalBayar > saldoPiutang
+                ) {
+                    throw new Error(
+                        `Nominal pembayaran faktur ${item?.no_faktur || '-'} melebihi saldo piutang`
+                    );
+                }
+
+                /*
+                 * INSERT d_pembayaran
+                 */
+                const pembayaran =
+                    await model.d_pembayaran.create(
+                        {
+                            pembayaran_id:
+                                uuidv4(),
+
+                            bill_to_party:
+                                item?.customer_id ||
+                                item?.customer ||
+                                null,
+
+                            no_billing:
+                                item?.no_billing ||
+                                null,
+
+                            total_bayar:
+                                totalBayar,
+
+                            nominal_bayar:
+                                nominalBayar,
+
+                            tanggal_pembayaran:
+                                tanggalPembayaran,
+
+                            jenis_pembayaran: jenisPembayaran,
+
+                            metode_pembayaran:
+                                payload?.metode_pembayaran,
+
+                            created_by:
+                                payload?.created_by ||
+                                'SYSTEM',
+
+                            created_at:
+                                new Date(),
+
+                            files:
+                                filePath,
+
+                            keterangan:
+                                payload?.keterangan ||
+                                null
+                        },
+                        {
+                            transaction,
+                            returning: true
+                        }
+                    );
+
+                pembayaranData.push(
+                    pembayaran
                 );
-            }
 
-            /*
-             * VALIDASI PEMBAYARAN
-             * TIDAK BOLEH MELEBIHI
-             * SALDO PIUTANG
-             */
-            if (
-                jenisPembayaran ===
-                'PARTIAL_PAYMENT' &&
-                nominalBayar > saldoPiutang
-            ) {
-                throw new Error(
-                    `Nominal pembayaran faktur ${item?.no_faktur || '-'} melebihi saldo piutang`
-                );
             }
+        }
 
-            /*
-             * INSERT d_pembayaran
-             */
+        if (jenisPembayaran === 'PENERIMAAN_LAIN') {
             const pembayaran =
                 await model.d_pembayaran.create(
                     {
                         pembayaran_id:
                             uuidv4(),
 
-                        bill_to_party:
-                            item?.customer_id ||
-                            item?.customer ||
-                            null,
-
-                        no_billing:
-                            item?.no_billing ||
-                            null,
-
-                        total_bayar:
-                            totalBayar,
-
                         nominal_bayar:
-                            nominalBayar,
+                            payload?.nominal_bayar,
 
                         tanggal_pembayaran:
                             tanggalPembayaran,
+
+                        jenis_pembayaran: jenisPembayaran,
 
                         metode_pembayaran:
                             payload?.metode_pembayaran,
@@ -4046,9 +4079,6 @@ exports.insertBayarFaktur = async (
                         created_by:
                             payload?.created_by ||
                             'SYSTEM',
-
-                        created_at:
-                            new Date(),
 
                         files:
                             filePath,
@@ -4066,7 +4096,6 @@ exports.insertBayarFaktur = async (
             pembayaranData.push(
                 pembayaran
             );
-
         }
 
         return {
@@ -4428,8 +4457,7 @@ exports.getDataBayarFaktur = async (params) => {
             1
         );
 
-        const offset =
-            (page - 1) * limit;
+        const offset = (page - 1) * limit;
 
         /*
          * =====================================================
@@ -4445,48 +4473,40 @@ exports.getDataBayarFaktur = async (params) => {
          * SALES OFFICE
          * =====================================================
          */
-        const salesOffices =
-            normalizeFilterValues(
-                params?.sales_office ??
-                params?.['sales_office[]']
-            );
+        const salesOffices = normalizeFilterValues(
+            params?.sales_office ??
+            params?.['sales_office[]']
+        );
 
         /*
          * =====================================================
          * CUSTOMER
          * =====================================================
          */
-        const customers =
-            normalizeFilterValues(
-                params?.customer ??
-                params?.['customer[]']
-            );
+        const customers = normalizeFilterValues(
+            params?.customer ??
+            params?.['customer[]']
+        );
 
         /*
          * =====================================================
          * STATUS PEMBAYARAN
          * =====================================================
          */
-        const statusValues =
-            normalizeFilterValues(
-                params?.status ??
-                params?.['status[]']
-            ).map((item) =>
-                item.toUpperCase()
-            );
+        const statusValues = normalizeFilterValues(
+            params?.status ??
+            params?.['status[]']
+        ).map((item) => item.toUpperCase());
 
         /*
          * =====================================================
          * STATUS VERIFIKASI
          * =====================================================
          */
-        const statusVerifikasiValues =
-            normalizeFilterValues(
-                params?.status_verifikasi ??
-                params?.['status_verifikasi[]']
-            ).map((item) =>
-                item.toUpperCase()
-            );
+        const statusVerifikasiValues = normalizeFilterValues(
+            params?.status_verifikasi ??
+            params?.['status_verifikasi[]']
+        ).map((item) => item.toUpperCase());
 
         /*
          * =====================================================
@@ -4556,8 +4576,7 @@ exports.getDataBayarFaktur = async (params) => {
                 )
             `;
 
-            bind.keyword =
-                `%${keyword}%`;
+            bind.keyword = `%${keyword}%`;
         }
 
         /*
@@ -4568,17 +4587,14 @@ exports.getDataBayarFaktur = async (params) => {
         if (
             salesOffices.length &&
             !salesOffices.some(
-                (item) =>
-                    item.toUpperCase() ===
-                    'ALL'
+                (item) => item.toUpperCase() === 'ALL'
             )
         ) {
             condition += `
                 AND p.cabang IN (:sales_offices)
             `;
 
-            bind.sales_offices =
-                salesOffices;
+            bind.sales_offices = salesOffices;
         }
 
         /*
@@ -4589,17 +4605,14 @@ exports.getDataBayarFaktur = async (params) => {
         if (
             customers.length &&
             !customers.some(
-                (item) =>
-                    item.toUpperCase() ===
-                    'ALL'
+                (item) => item.toUpperCase() === 'ALL'
             )
         ) {
             condition += `
                 AND p.customer IN (:customers)
             `;
 
-            bind.customers =
-                customers;
+            bind.customers = customers;
         }
 
         /*
@@ -4614,22 +4627,14 @@ exports.getDataBayarFaktur = async (params) => {
             'SUDAH_DIBAYAR'
         ];
 
-        const filteredStatusValues =
-            statusValues.filter(
-                (item) =>
-                    item !== 'ALL'
-            );
+        const filteredStatusValues = statusValues.filter(
+            (item) => item !== 'ALL'
+        );
 
-        if (
-            filteredStatusValues.length
-        ) {
-            const invalidStatus =
-                filteredStatusValues.find(
-                    (item) =>
-                        !allowedStatus.includes(
-                            item
-                        )
-                );
+        if (filteredStatusValues.length) {
+            const invalidStatus = filteredStatusValues.find(
+                (item) => !allowedStatus.includes(item)
+            );
 
             if (invalidStatus) {
                 throw new Error(
@@ -4637,23 +4642,13 @@ exports.getDataBayarFaktur = async (params) => {
                 );
             }
 
-            /*
-             * -------------------------------------------------
-             * SINGLE STATUS
-             * -------------------------------------------------
-             *
-             * Kita gunakan OR supaya jika frontend
-             * mengirim lebih dari satu status tetap aman.
-             */
             const statusConditions = [];
 
             /*
              * BELUM DIBAYAR
              */
             if (
-                filteredStatusValues.includes(
-                    'BELUM_DIBAYAR'
-                )
+                filteredStatusValues.includes('BELUM_DIBAYAR')
             ) {
                 statusConditions.push(`
                     (
@@ -4662,10 +4657,7 @@ exports.getDataBayarFaktur = async (params) => {
                             0
                         ) <= 0
 
-                        AND COALESCE(
-                            p.dpp,
-                            0
-                        ) > 0
+                        AND COALESCE(p.dpp, 0) > 0
                     )
                 `);
             }
@@ -4673,11 +4665,7 @@ exports.getDataBayarFaktur = async (params) => {
             /*
              * PARTIAL
              */
-            if (
-                filteredStatusValues.includes(
-                    'PARTIAL'
-                )
-            ) {
+            if (filteredStatusValues.includes('PARTIAL')) {
                 statusConditions.push(`
                     (
                         COALESCE(
@@ -4688,10 +4676,7 @@ exports.getDataBayarFaktur = async (params) => {
                         AND COALESCE(
                             pay.total_nominal_bayar,
                             0
-                        ) < COALESCE(
-                            p.dpp,
-                            0
-                        )
+                        ) < COALESCE(p.dpp, 0)
                     )
                 `);
             }
@@ -4700,24 +4685,16 @@ exports.getDataBayarFaktur = async (params) => {
              * SUDAH DIBAYAR
              */
             if (
-                filteredStatusValues.includes(
-                    'SUDAH_DIBAYAR'
-                )
+                filteredStatusValues.includes('SUDAH_DIBAYAR')
             ) {
                 statusConditions.push(`
                     (
                         COALESCE(
                             pay.total_nominal_bayar,
                             0
-                        ) >= COALESCE(
-                            p.dpp,
-                            0
-                        )
+                        ) >= COALESCE(p.dpp, 0)
 
-                        AND COALESCE(
-                            p.dpp,
-                            0
-                        ) > 0
+                        AND COALESCE(p.dpp, 0) > 0
                     )
                 `);
             }
@@ -4737,14 +4714,10 @@ exports.getDataBayarFaktur = async (params) => {
                 `);
             }
 
-            if (
-                statusConditions.length
-            ) {
+            if (statusConditions.length) {
                 condition += `
                     AND (
-                        ${statusConditions.join(
-                    ' OR '
-                )}
+                        ${statusConditions.join(' OR ')}
                     )
                 `;
             }
@@ -4762,39 +4735,29 @@ exports.getDataBayarFaktur = async (params) => {
 
         const filteredVerificationValues =
             statusVerifikasiValues.filter(
-                (item) =>
-                    item !== 'ALL'
+                (item) => item !== 'ALL'
             );
 
-        if (
-            filteredVerificationValues.length
-        ) {
+        if (filteredVerificationValues.length) {
             const invalidVerificationStatus =
                 filteredVerificationValues.find(
                     (item) =>
-                        !allowedVerificationStatus.includes(
-                            item
-                        )
+                        !allowedVerificationStatus.includes(item)
                 );
 
-            if (
-                invalidVerificationStatus
-            ) {
+            if (invalidVerificationStatus) {
                 throw new Error(
                     'Status verifikasi hanya boleh VERIFIED atau BELUM_DIVERIFIKASI'
                 );
             }
 
-            const verificationConditions =
-                [];
+            const verificationConditions = [];
 
             /*
              * VERIFIED
              */
             if (
-                filteredVerificationValues.includes(
-                    'VERIFIED'
-                )
+                filteredVerificationValues.includes('VERIFIED')
             ) {
                 verificationConditions.push(`
                     (
@@ -4818,18 +4781,10 @@ exports.getDataBayarFaktur = async (params) => {
                 `);
             }
 
-            /*
-             * Jika dua-duanya dipilih,
-             * otomatis OR.
-             */
-            if (
-                verificationConditions.length
-            ) {
+            if (verificationConditions.length) {
                 condition += `
                     AND (
-                        ${verificationConditions.join(
-                    ' OR '
-                )}
+                        ${verificationConditions.join(' OR ')}
                     )
                 `;
             }
@@ -4845,8 +4800,7 @@ exports.getDataBayarFaktur = async (params) => {
                 AND p.posting_date >= :start_date
             `;
 
-            bind.start_date =
-                startDate;
+            bind.start_date = startDate;
         }
 
         /*
@@ -4862,8 +4816,7 @@ exports.getDataBayarFaktur = async (params) => {
                 )
             `;
 
-            bind.end_date =
-                endDate;
+            bind.end_date = endDate;
         }
 
         /*
@@ -4877,121 +4830,95 @@ exports.getDataBayarFaktur = async (params) => {
                 condition
             );
 
-        const listData =
-            await db.query(
-                listQuery,
-                {
-                    replacements: bind,
-                    type:
-                        db.QueryTypes.SELECT,
-                    logging: console.log
-                }
-            );
+        const listData = await db.query(
+            listQuery,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+                logging: console.log
+            }
+        );
 
         /*
          * =====================================================
          * HISTORY PEMBAYARAN
          * =====================================================
          */
-        const getHistoryPembayaran =
-            async (noBilling) => {
-                try {
-                    if (!noBilling) {
-                        return [];
-                    }
-
-                    const result =
-                        await db.query(
-                            query.getHistoryPembayaranBayarFaktur,
-                            {
-                                replacements: {
-                                    no_billing:
-                                        noBilling
-                                },
-                                type:
-                                    db.QueryTypes
-                                        .SELECT
-                            }
-                        );
-
-                    if (
-                        Array.isArray(
-                            result?.[0]
-                                ?.h_pembayaran
-                        )
-                    ) {
-                        return result[0]
-                            .h_pembayaran;
-                    }
-
-                    if (
-                        typeof result?.[0]
-                            ?.h_pembayaran ===
-                        'string'
-                    ) {
-                        try {
-                            const parsed =
-                                JSON.parse(
-                                    result[0]
-                                        .h_pembayaran
-                                );
-
-                            return Array.isArray(
-                                parsed
-                            )
-                                ? parsed
-                                : [];
-                        } catch (error) {
-                            return [];
-                        }
-                    }
-
-                    if (
-                        Array.isArray(
-                            result
-                        )
-                    ) {
-                        return result;
-                    }
-
-                    return [];
-                } catch (error) {
-                    console.error(
-                        'ERROR GET HISTORY PEMBAYARAN:',
-                        {
-                            no_billing:
-                                noBilling,
-                            error:
-                                error?.message ||
-                                error
-                        }
-                    );
-
+        const getHistoryPembayaran = async (noBilling) => {
+            try {
+                if (!noBilling) {
                     return [];
                 }
-            };
+
+                const result = await db.query(
+                    query.getHistoryPembayaranBayarFaktur,
+                    {
+                        replacements: {
+                            no_billing: noBilling
+                        },
+                        type: db.QueryTypes.SELECT
+                    }
+                );
+
+                if (
+                    Array.isArray(
+                        result?.[0]?.h_pembayaran
+                    )
+                ) {
+                    return result[0].h_pembayaran;
+                }
+
+                if (
+                    typeof result?.[0]?.h_pembayaran === 'string'
+                ) {
+                    try {
+                        const parsed = JSON.parse(
+                            result[0].h_pembayaran
+                        );
+
+                        return Array.isArray(parsed)
+                            ? parsed
+                            : [];
+                    } catch (error) {
+                        return [];
+                    }
+                }
+
+                if (Array.isArray(result)) {
+                    return result;
+                }
+
+                return [];
+            } catch (error) {
+                console.error(
+                    'ERROR GET HISTORY PEMBAYARAN:',
+                    {
+                        no_billing: noBilling,
+                        error: error?.message || error
+                    }
+                );
+
+                return [];
+            }
+        };
 
         /*
          * =====================================================
          * TAMBAHKAN HISTORY
          * =====================================================
          */
-        const listDataWithHistory =
-            await Promise.all(
-                (listData || []).map(
-                    async (item) => {
-                        const h_pembayaran =
-                            await getHistoryPembayaran(
-                                item?.no_billing
-                            );
+        const listDataWithHistory = await Promise.all(
+            (listData || []).map(async (item) => {
+                const h_pembayaran = await getHistoryPembayaran(
+                    item?.no_billing
+                );
 
-                        return {
-                            ...item,
-                            h_pembayaran
-                        };
-                    }
-                )
-            );
+                return {
+                    ...item,
+                    h_pembayaran
+                };
+            })
+        );
 
         /*
          * =====================================================
@@ -5004,46 +4931,40 @@ exports.getDataBayarFaktur = async (params) => {
                 condition
             );
 
-        const countData =
-            await db.query(
-                countQuery,
-                {
-                    replacements: bind,
-                    type:
-                        db.QueryTypes.SELECT
-                }
-            );
+        const countData = await db.query(
+            countQuery,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }
+        );
 
-        const totalData =
-            Number(
-                countData?.[0]?.total ||
-                0
-            );
+        const totalData = Number(
+            countData?.[0]?.total || 0
+        );
 
-        const totalHalaman =
-            Math.ceil(
-                totalData / limit
-            );
+        const totalHalaman = Math.ceil(
+            totalData / limit
+        );
 
         /*
- * =====================================================
- * SUMMARY
- * =====================================================
- */
+         * =====================================================
+         * SUMMARY
+         * =====================================================
+         */
         const summaryQuery =
             query.summaryDataBayarFaktur.replace(
                 ':condition',
                 condition
             );
 
-        const summaryResult =
-            await db.query(
-                summaryQuery,
-                {
-                    replacements: bind,
-                    type: db.QueryTypes.SELECT
-                }
-            );
+        const summaryResult = await db.query(
+            summaryQuery,
+            {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }
+        );
 
         const summary = summaryResult?.[0] || {};
 
@@ -5066,22 +4987,42 @@ exports.getDataBayarFaktur = async (params) => {
                     summary?.total_faktur || 0
                 ),
 
+                total_nominal_faktur: Number(
+                    summary?.total_nominal_faktur || 0
+                ),
+
                 // 2. Belum Dibayar
                 belum_dibayar: Number(
                     summary?.belum_dibayar || 0
                 ),
 
-                // 3. Collections (Menunggu Verifikasi)
+                nominal_belum_dibayar: Number(
+                    summary?.nominal_belum_dibayar || 0
+                ),
+
+                // 3. Collections Menunggu Verifikasi
+                total_data_menunggu_verifikasi: Number(
+                    summary?.total_data_menunggu_verifikasi || 0
+                ),
+
                 total_collections_menunggu_verifikasi: Number(
                     summary?.total_collections_menunggu_verifikasi || 0
                 ),
 
-                // 4. Collections (Tidak Terverifikasi)
+                // 4. Collections Tidak Terverifikasi
+                total_data_tidak_terverifikasi: Number(
+                    summary?.total_data_tidak_terverifikasi || 0
+                ),
+
                 total_collections_tidak_terverifikasi: Number(
                     summary?.total_collections_tidak_terverifikasi || 0
                 ),
 
-                // 5. Collections (Terverifikasi)
+                // 5. Collections Terverifikasi
+                total_data_terverifikasi: Number(
+                    summary?.total_data_terverifikasi || 0
+                ),
+
                 total_collections_terverifikasi: Number(
                     summary?.total_collections_terverifikasi || 0
                 ),
@@ -5089,6 +5030,11 @@ exports.getDataBayarFaktur = async (params) => {
                 // 6. Total Saldo Piutang
                 total_saldo_piutang: Number(
                     summary?.total_saldo_piutang || 0
+                ),
+
+                // 7. Total Penerimaan Lain
+                total_penerimaan_lain: Number(
+                    summary?.total_penerimaan_lain || 0
                 )
             }
         };
@@ -6669,6 +6615,80 @@ exports.getDataKonfirmasiCustomer = async (params) => {
     } catch (error) {
         console.error(
             'ERROR SERVICE GET DATA KONFIRMASI CUSTOMER:',
+            error
+        );
+
+        throw error;
+    }
+};
+
+exports.getDataPenerimaanLain = async (params) => {
+    try {
+        // =====================================================
+        // VALIDASI PARAMETER
+        // =====================================================
+        const page = Math.max(
+            1,
+            parseInt(params?.page, 10) || 1
+        );
+
+        const limit = Math.max(
+            1,
+            parseInt(params?.limit, 10) || 10
+        );
+
+        const keyword = String(
+            params?.keyword ?? ''
+        ).trim();
+
+        const offset = (page - 1) * limit;
+
+        // =====================================================
+        // GET DATA PENERIMAAN LAIN
+        // =====================================================
+        const listData = await db.query(
+            query.getDataPenerimaanLain,
+            {
+                replacements: {
+                    keyword: `%${keyword}%`,
+                    limit,
+                    offset,
+                },
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        // =====================================================
+        // TOTAL DATA
+        // =====================================================
+        const totalData = Number(
+            listData?.[0]?.total_data || 0
+        );
+
+        // =====================================================
+        // TOTAL HALAMAN
+        // =====================================================
+        const totalHalaman = Math.ceil(
+            totalData / limit
+        );
+
+        // =====================================================
+        // RETURN DATA
+        // =====================================================
+        return {
+            total_data: totalData,
+            total_halaman: totalHalaman,
+            limit,
+            page,
+            list_data: listData.map((item) => {
+                const { total_data, ...data } = item;
+                return data;
+            }),
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET DATA PENERIMAAN LAIN:',
             error
         );
 

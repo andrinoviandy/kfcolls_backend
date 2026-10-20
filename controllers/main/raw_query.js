@@ -19956,9 +19956,11 @@ query.summaryDataBayarFaktur = `
         /* 1. TOTAL FAKTUR */
         COUNT(DISTINCT p.piutang_id) AS total_faktur,
 
-        /* 2. BELUM DIBAYAR
-         * Berdasarkan Collections Terverifikasi.
-         */
+        /* TOTAL NOMINAL FAKTUR */
+        COALESCE(SUM(p.dpp), 0) AS total_nominal_faktur,
+
+
+        /* 2. BELUM DIBAYAR */
         COUNT(
             DISTINCT CASE
                 WHEN COALESCE(pay.total_terverifikasi, 0) <= 0
@@ -19966,35 +19968,75 @@ query.summaryDataBayarFaktur = `
             END
         ) AS belum_dibayar,
 
+        /* NOMINAL BELUM DIBAYAR */
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN COALESCE(pay.total_terverifikasi, 0) <= 0
+                    THEN GREATEST(COALESCE(p.dpp, 0), 0)
+                    ELSE 0
+                END
+            ), 0
+        ) AS nominal_belum_dibayar,
+
+
         /* 3. COLLECTIONS MENUNGGU VERIFIKASI */
-        SUM(
-            COALESCE(pay.total_menunggu_verifikasi, 0)
+        COALESCE(
+            SUM(pay.jumlah_menunggu_verifikasi), 0
+        ) AS total_data_menunggu_verifikasi,
+
+        COALESCE(
+            SUM(pay.total_menunggu_verifikasi), 0
         ) AS total_collections_menunggu_verifikasi,
 
+
         /* 4. COLLECTIONS TIDAK TERVERIFIKASI */
-        SUM(
-            COALESCE(pay.total_tidak_terverifikasi, 0)
+        COALESCE(
+            SUM(pay.jumlah_tidak_terverifikasi), 0
+        ) AS total_data_tidak_terverifikasi,
+
+        COALESCE(
+            SUM(pay.total_tidak_terverifikasi), 0
         ) AS total_collections_tidak_terverifikasi,
 
+
         /* 5. COLLECTIONS TERVERIFIKASI */
-        SUM(
-            COALESCE(pay.total_terverifikasi, 0)
+        COALESCE(
+            SUM(pay.jumlah_terverifikasi), 0
+        ) AS total_data_terverifikasi,
+
+        COALESCE(
+            SUM(pay.total_terverifikasi), 0
         ) AS total_collections_terverifikasi,
 
+
         /* 6. TOTAL SALDO PIUTANG */
-        SUM(
-            GREATEST(
-                COALESCE(p.dpp, 0)
-                - COALESCE(pay.total_terverifikasi, 0),
-                0
-            )
-        ) AS total_saldo_piutang
+        COALESCE(
+            SUM(
+                GREATEST(
+                    COALESCE(p.dpp, 0)
+                    - COALESCE(pay.total_terverifikasi, 0),
+                    0
+                )
+            ), 0
+        ) AS total_saldo_piutang,
+
+
+        /* 7. TOTAL PENERIMAAN LAIN */
+        COALESCE(
+            (
+                SELECT SUM(COALESCE(dp_lain.nominal_bayar, 0))
+                FROM public.d_pembayaran dp_lain
+                WHERE dp_lain.jenis_pembayaran = 'PENERIMAAN_LAIN'
+            ),
+            0
+        ) AS total_penerimaan_lain
 
     FROM public.d_piutang p
 
     LEFT JOIN LATERAL (
         SELECT
-            /* PEMBAYARAN TERVERIFIKASI: STATUS S */
+            /* NOMINAL PEMBAYARAN TERVERIFIKASI */
             SUM(
                 CASE
                     WHEN EXISTS (
@@ -20009,7 +20051,22 @@ query.summaryDataBayarFaktur = `
                 END
             ) AS total_terverifikasi,
 
-            /* MENUNGGU VERIFIKASI: BELUM ADA STATUS PENAGIHAN */
+            /* JUMLAH DATA PEMBAYARAN TERVERIFIKASI */
+            COUNT(
+                DISTINCT CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                            AND ds.kd_status = 'S'
+                    )
+                    THEN dp.pembayaran_id
+                END
+            ) AS jumlah_terverifikasi,
+
+
+            /* NOMINAL PEMBAYARAN MENUNGGU VERIFIKASI */
             SUM(
                 CASE
                     WHEN NOT EXISTS (
@@ -20023,7 +20080,21 @@ query.summaryDataBayarFaktur = `
                 END
             ) AS total_menunggu_verifikasi,
 
-            /* TIDAK TERVERIFIKASI: ADA STATUS, TIDAK ADA S */
+            /* JUMLAH DATA MENUNGGU VERIFIKASI */
+            COUNT(
+                DISTINCT CASE
+                    WHEN NOT EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                    )
+                    THEN dp.pembayaran_id
+                END
+            ) AS jumlah_menunggu_verifikasi,
+
+
+            /* NOMINAL PEMBAYARAN TIDAK TERVERIFIKASI */
             SUM(
                 CASE
                     WHEN EXISTS (
@@ -20042,7 +20113,27 @@ query.summaryDataBayarFaktur = `
                     THEN COALESCE(dp.nominal_bayar, 0)
                     ELSE 0
                 END
-            ) AS total_tidak_terverifikasi
+            ) AS total_tidak_terverifikasi,
+
+            /* JUMLAH DATA TIDAK TERVERIFIKASI */
+            COUNT(
+                DISTINCT CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                            AND ds.kd_status = 'S'
+                    )
+                    THEN dp.pembayaran_id
+                END
+            ) AS jumlah_tidak_terverifikasi
 
         FROM public.d_pembayaran dp
         WHERE dp.no_billing = p.no_billing
@@ -21993,5 +22084,28 @@ query.getDataKonfirmasiCustomer = `
         p.piutang_id DESC
 `;
 
+query.getDataPenerimaanLain = `
+    SELECT
+        dp.pembayaran_id AS id,
+        dp.jenis_pembayaran,
+        dp.metode_pembayaran,
+        dp.nominal_bayar,
+        dp.tanggal_pembayaran,
+        dp.keterangan,
+        COUNT(*) OVER() AS total_data
+    FROM public.d_pembayaran dp
+    WHERE dp.jenis_pembayaran = 'PENERIMAAN_LAIN'
+      AND (
+          :keyword = ''
+          OR CAST(dp.pembayaran_id AS TEXT) ILIKE :keyword
+          OR COALESCE(dp.keterangan, '') ILIKE :keyword
+          OR COALESCE(dp.metode_pembayaran, '') ILIKE :keyword
+      )
+    ORDER BY
+        dp.tanggal_pembayaran DESC,
+        dp.pembayaran_id DESC
+    LIMIT :limit
+    OFFSET :offset
+`;
 
 module.exports = query;

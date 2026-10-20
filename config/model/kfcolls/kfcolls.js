@@ -5850,6 +5850,10 @@ exports.D_PEMBAYARAN = db.define('d_pembayaran',
             type: DataTypes.STRING,
             field: 'metode_pembayaran'
         },
+        jenis_pembayaran: {
+            type: DataTypes.STRING,
+            field: 'jenis_pembayaran'
+        },
         created_by: {
             type: DataTypes.STRING,
             field: 'created_by'
