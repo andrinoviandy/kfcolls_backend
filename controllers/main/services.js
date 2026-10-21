@@ -7476,23 +7476,23 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
 
         const attachments = [];
 
-        // if (fs.existsSync(logoHeaderPath)) {
-        //     attachments.push({
-        //         filename: "logo_kfcolls.png",
-        //         path: logoHeaderPath,
-        //         cid: "logoKimiaFarmaHeader",
-        //         contentDisposition: "inline",
-        //     });
-        // }
+        if (fs.existsSync(logoHeaderPath)) {
+            attachments.push({
+                filename: "logo_kfcolls.png",
+                path: logoHeaderPath,
+                cid: "logoKimiaFarmaHeader",
+                contentDisposition: "inline",
+            });
+        }
 
-        // if (fs.existsSync(logoFixPath)) {
-        //     attachments.push({
-        //         filename: "LOGO_FIX.png",
-        //         path: logoFixPath,
-        //         cid: "logoFixHeader",
-        //         contentDisposition: "inline",
-        //     });
-        // }
+        if (fs.existsSync(logoFixPath)) {
+            attachments.push({
+                filename: "LOGO_FIX.png",
+                path: logoFixPath,
+                cid: "logoFixHeader",
+                contentDisposition: "inline",
+            });
+        }
 
         // ==================================================
         // KIRIM EMAIL SATU KALI
@@ -7509,7 +7509,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             subject,
             text,
             html,
-            // attachments,
+            attachments,
         });
 
         flagEmail = "S";
