@@ -7229,39 +7229,39 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         // dan escapeHtml harus tersedia di file service.
         // ==================================================
 
-        // const headerLogoHtml = `
-        //     <table role="presentation"
-        //         cellpadding="0"
-        //         cellspacing="0"
-        //         style="border-collapse:collapse;margin-left:auto;">
-        //         <tr>
-        //             ${fs.existsSync(logoHeaderPath)
-        //         ? `
-        //                         <td style="vertical-align:middle;padding-left:10px;">
-        //                             <img
-        //                                 src="cid:logoKimiaFarmaHeader"
-        //                                 alt="Kimia Farma"
-        //                                 style="display:block;width:auto;height:30px;max-width:120px;border:0;"
-        //                             />
-        //                         </td>
-        //                     `
-        //         : ""
-        //     }
-        //             ${fs.existsSync(logoFixPath)
-        //         ? `
-        //                         <td style="vertical-align:middle;padding-left:10px;">
-        //                             <img
-        //                                 src="cid:logoFixHeader"
-        //                                 alt="Logo Fix"
-        //                                 style="display:block;width:auto;height:30px;max-width:120px;border:0;"
-        //                             />
-        //                         </td>
-        //                     `
-        //         : ""
-        //     }
-        //         </tr>
-        //     </table>
-        // `;
+        const headerLogoHtml = `
+            <table role="presentation"
+                cellpadding="0"
+                cellspacing="0"
+                style="border-collapse:collapse;margin-left:auto;">
+                <tr>
+                    ${fs.existsSync(logoHeaderPath)
+                ? `
+                                <td style="vertical-align:middle;padding-left:10px;">
+                                    <img
+                                        src="cid:logoKimiaFarmaHeader"
+                                        alt="Kimia Farma"
+                                        style="display:block;width:auto;height:30px;max-width:120px;border:0;"
+                                    />
+                                </td>
+                            `
+                : ""
+            }
+                    ${fs.existsSync(logoFixPath)
+                ? `
+                                <td style="vertical-align:middle;padding-left:10px;">
+                                    <img
+                                        src="cid:logoFixHeader"
+                                        alt="Logo Fix"
+                                        style="display:block;width:auto;height:30px;max-width:120px;border:0;"
+                                    />
+                                </td>
+                            `
+                : ""
+            }
+                </tr>
+            </table>
+        `;
 
         // ==================================================
         // BARIS TABEL BILLING
@@ -7302,7 +7302,9 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
                 <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #d1d5db;padding:32px;box-sizing:border-box;">
 
-                    
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+                        ${headerLogoHtml}
+                    </div>
 
                     <p style="margin:0 0 8px;">
                         ${escapeHtml(tanggalSurat)}
