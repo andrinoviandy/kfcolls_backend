@@ -7229,39 +7229,39 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         // dan escapeHtml harus tersedia di file service.
         // ==================================================
 
-        const headerLogoHtml = `
-            <table role="presentation"
-                cellpadding="0"
-                cellspacing="0"
-                style="border-collapse:collapse;margin-left:auto;">
-                <tr>
-                    ${fs.existsSync(logoHeaderPath)
-                ? `
-                                <td style="vertical-align:middle;padding-left:10px;">
-                                    <img
-                                        src="cid:logoKimiaFarmaHeader"
-                                        alt="Kimia Farma"
-                                        style="display:block;width:auto;height:30px;max-width:120px;border:0;"
-                                    />
-                                </td>
-                            `
-                : ""
-            }
-                    ${fs.existsSync(logoFixPath)
-                ? `
-                                <td style="vertical-align:middle;padding-left:10px;">
-                                    <img
-                                        src="cid:logoFixHeader"
-                                        alt="Logo Fix"
-                                        style="display:block;width:auto;height:30px;max-width:120px;border:0;"
-                                    />
-                                </td>
-                            `
-                : ""
-            }
-                </tr>
-            </table>
-        `;
+        // const headerLogoHtml = `
+        //     <table role="presentation"
+        //         cellpadding="0"
+        //         cellspacing="0"
+        //         style="border-collapse:collapse;margin-left:auto;">
+        //         <tr>
+        //             ${fs.existsSync(logoHeaderPath)
+        //         ? `
+        //                         <td style="vertical-align:middle;padding-left:10px;">
+        //                             <img
+        //                                 src="cid:logoKimiaFarmaHeader"
+        //                                 alt="Kimia Farma"
+        //                                 style="display:block;width:auto;height:30px;max-width:120px;border:0;"
+        //                             />
+        //                         </td>
+        //                     `
+        //         : ""
+        //     }
+        //             ${fs.existsSync(logoFixPath)
+        //         ? `
+        //                         <td style="vertical-align:middle;padding-left:10px;">
+        //                             <img
+        //                                 src="cid:logoFixHeader"
+        //                                 alt="Logo Fix"
+        //                                 style="display:block;width:auto;height:30px;max-width:120px;border:0;"
+        //                             />
+        //                         </td>
+        //                     `
+        //         : ""
+        //     }
+        //         </tr>
+        //     </table>
+        // `;
 
         // ==================================================
         // BARIS TABEL BILLING
@@ -7474,23 +7474,23 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
 
         const attachments = [];
 
-        if (fs.existsSync(logoHeaderPath)) {
-            attachments.push({
-                filename: "logo_kfcolls.png",
-                path: logoHeaderPath,
-                cid: "logoKimiaFarmaHeader",
-                contentDisposition: "inline",
-            });
-        }
+        // if (fs.existsSync(logoHeaderPath)) {
+        //     attachments.push({
+        //         filename: "logo_kfcolls.png",
+        //         path: logoHeaderPath,
+        //         cid: "logoKimiaFarmaHeader",
+        //         contentDisposition: "inline",
+        //     });
+        // }
 
-        if (fs.existsSync(logoFixPath)) {
-            attachments.push({
-                filename: "LOGO_FIX.png",
-                path: logoFixPath,
-                cid: "logoFixHeader",
-                contentDisposition: "inline",
-            });
-        }
+        // if (fs.existsSync(logoFixPath)) {
+        //     attachments.push({
+        //         filename: "LOGO_FIX.png",
+        //         path: logoFixPath,
+        //         cid: "logoFixHeader",
+        //         contentDisposition: "inline",
+        //     });
+        // }
 
         // ==================================================
         // KIRIM EMAIL SATU KALI
@@ -7507,7 +7507,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             subject,
             text,
             html,
-            attachments,
+            // attachments,
         });
 
         flagEmail = "S";
