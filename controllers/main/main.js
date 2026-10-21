@@ -1474,3 +1474,43 @@ exports.getDataLaporan = async (req, res) => {
         )
     }
 }
+
+exports.updateNotifikasiPush = async (req, res) => {
+    try {
+        const payload = req.body
+        const { nip, nama } = req.user
+        Object.assign(payload, { updated_by: nama, updated_at: moment().format('YYYY-MM-DD HH:mm:ss') })
+
+        const result = await serviceMain.updateNotifikasiPush(payload)
+        res.status(statusCode.success).json(successMessage(result))
+    } catch (error) {
+        console.log(error, "Error Update Master Data")
+        res.status(statusCode.bad).json(errorMessage(error.message))
+    }
+}
+
+exports.readAllNotification = async (req, res) => {
+    try {
+        const payload = req.body
+        const { nip, nama, user_id } = req.user
+        Object.assign(payload, { updated_by: nama, user_id: user_id, updated_at: moment().format('YYYY-MM-DD HH:mm:ss') })
+
+        const result = await serviceMain.readAllNotification(payload)
+        res.status(statusCode.success).json(successMessage(result))
+    } catch (error) {
+        console.log(error, "Error Update Master Data")
+        res.status(statusCode.bad).json(errorMessage(error.message))
+    }
+}
+
+exports.getListNotification = async (req, res) => {
+    try {
+        const params = { ...req.query }
+        params.user_id = req?.user?.user_id
+        const result = await serviceMain.getListNotification(params)
+        res.status(statusCode.success).json(successMessage(result))
+    } catch (error) {
+        console.log(error, "ERROR <<<<<<<<<")
+        res.status(statusCode.error).json(errorMessage(error))
+    }
+}

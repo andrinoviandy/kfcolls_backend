@@ -4041,13 +4041,13 @@ exports.D_NOTIFIKASI = db.define('d_notifikasi',
             field: 'notifikasi_id',
             primaryKey: true,
         },
-        pengajuan_id: {
+        // pengajuan_id: {
+        //     type: DataTypes.STRING,
+        //     field: 'pengajuan_id'
+        // },
+        no_billing: {
             type: DataTypes.STRING,
-            field: 'pengajuan_id'
-        },
-        no_pengajuan: {
-            type: DataTypes.STRING,
-            field: 'no_pengajuan'
+            field: 'no_billing'
         },
         title: {
             type: DataTypes.STRING,
@@ -4056,6 +4056,10 @@ exports.D_NOTIFIKASI = db.define('d_notifikasi',
         body: {
             type: DataTypes.STRING,
             field: 'body'
+        },
+        kegiatan: {
+            type: DataTypes.STRING,
+            field: 'kegiatan'
         },
         created_by: {
             type: DataTypes.STRING,

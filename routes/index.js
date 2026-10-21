@@ -35,6 +35,7 @@ router.get('/getDataKonfirmasiPiutang', authorization.doAuth, controller.main.ge
 router.get('/getDataLaporan', authorization.doAuth, controller.main.getDataLaporan);
 router.get('/getDataKonfirmasiCustomer', controller.main.getDataKonfirmasiCustomer)
 router.get('/getDataPenerimaanLain', controller.main.getDataPenerimaanLain)
+router.get('/getListNotification', authorization.doAuth, controller.main.getListNotification);
 
 // Insert Data
 router.post('/insertPenjualanArray', authorization.doAuth, controller.main.insertPenjualanArray)
@@ -55,6 +56,8 @@ router.put('/updateUser', authorization.doAuth, controller.main.updateUser)
 router.put('/editDataCod', authorization.doAuth, controller.main.editDataCod)
 router.post("/gantipassword-user", authorization.doAuth, controller.main.changePassword)
 router.put('/updateFakturPetugas', authorization.doAuth, controller.main.updateFakturPetugas)
+router.put('/updateNotifikasiPush', authorization.doAuth, controller.main.updateNotifikasiPush);
+router.put('/readAllNotification', authorization.doAuth, controller.main.readAllNotification);
 
 // Delete Data
 router.delete('/deleteDataCod/:cod_id', authorization.doAuth, controller.main.deleteDataCod)

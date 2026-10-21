@@ -109,10 +109,12 @@ exports.insertNotifikasi = async (payload, transaction) => {
     const insertNotif = await model.d_notifikasi.create(payload, { transaction })
     if (payload?.user && payload?.user?.length > 0) {
         for (const item of payload?.user) {
+            const dataUser = await model.m_user.findOne({ where: { user_id: item } })
             const payPush = {
                 notifikasi_push_id: uuidv4(),
                 notifikasi_id: payload?.notifikasi_id,
-                user_id: item
+                user_id: item,
+                username: dataUser?.username
             }
             const insertNotifPush = await model.d_notifikasi_push.create(payPush, { transaction })
         }
@@ -2442,6 +2444,23 @@ exports.insertFakturPetugas = async (payload, transaction) => {
                 returning: true
             });
 
+        if (fakturPetugas) {
+            const dataUser = await model.m_user.findOne({ where: { nip: payload?.nip }, plain: true, returning: true })
+            const dataPiutang = await model.d_piutang.findOne({ where: { piutang_id: payload?.piutang_id }, plain: true, returning: true })
+            const userToNotif = await model.m_role_user.findAll({ where: { user_id: dataUser?.user_id }, returning: true })
+            const payNotif = {
+                notifikasi_id: uuidv4(),
+                no_billing: dataPiutang?.no_billing,
+                username: payload?.nip,
+                title: kegiatan === 'TUKAR_FAKTUR' ? `Ditugaskan Tukar Faktur` : 'Ditugaskan Penagihan',
+                body: `Anda Telah Ditunjuk Untuk Melakukan ${kegiatan === 'TUKAR_FAKTUR' ? 'Tukar Faktur' : 'Penagihan'} Pada Billing Ini`,
+                created_by: payload?.created_by || '',
+                kegiatan: kegiatan,
+                user: [...new Set(userToNotif.map(a => a.user_id))]
+            }
+            await this.insertNotifikasi(payNotif, transaction)
+        }
+
         hasil.push({
             faktur_petugas_id: fakturPetugas.faktur_petugas_id,
             piutang_id: fakturPetugas.piutang_id,
@@ -3761,6 +3780,21 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
                 }
             );
 
+        if (tukarFaktur) {
+            const userToNotif = await model.m_role_user.findAll({ where: { cabang_id: payload?.dataUser?.cabang_id, role_id: '03' }, returning: true })
+            const payNotif = {
+                notifikasi_id: uuidv4(),
+                no_billing: payload?.no_faktur,
+                // username: payload?.nip,
+                title: 'Penukaran Faktur',
+                body: `Sales Telah Melakukan Tukar Faktur Pada Faktur Ini`,
+                created_by: payload?.created_by || '',
+                kegiatan: 'SALES_TUKAR_FAKTUR',
+                user: [...new Set(userToNotif.map(a => a.user_id))]
+            }
+            await this.insertNotifikasi(payNotif, transaction)
+        }
+
         return {
             total:
                 tukarFaktur.length,
@@ -4050,6 +4084,21 @@ exports.insertBayarFaktur = async (
                             returning: true
                         }
                     );
+
+                if (pembayaran && (item?.no_billing || item?.no_faktur)) {
+                    const userToNotif = await model.m_role_user.findAll({ where: { cabang_id: payload?.dataUser?.cabang_id, role_id: '03' }, returning: true })
+                    const payNotif = {
+                        notifikasi_id: uuidv4(),
+                        no_billing: item?.no_faktur || item?.no_billing,
+                        // username: payload?.nip,
+                        title: 'Penukaran Faktur',
+                        body: `Sales Telah Melakukan Tukar Faktur Pada Faktur Ini`,
+                        created_by: payload?.created_by || '',
+                        kegiatan: 'SALES_TUKAR_FAKTUR',
+                        user: [...new Set(userToNotif.map(a => a.user_id))]
+                    }
+                    await this.insertNotifikasi(payNotif, transaction)
+                }
 
                 pembayaranData.push(
                     pembayaran
@@ -4357,6 +4406,21 @@ exports.verifikasiTukarFaktur = async (
                     transaction
                 }
             );
+
+        if (status && no_faktur) {
+            const userToNotif = await model.m_user.findAll({ where: { nip: fakturPetugas?.nip } })
+            const payNotif = {
+                notifikasi_id: uuidv4(),
+                no_billing: no_faktur,
+                // username: payload?.nip,
+                title: 'Verifikasi Tukar Faktur',
+                body: `Inkaso Telah Melakukan Verifikasi Pada Faktur Yang Telah Anda Tukar`,
+                created_by: payload?.created_by || '',
+                kegiatan: 'VERIFIKASI_TUKAR_FAKTUR',
+                user: [...new Set(userToNotif.map(a => a.user_id))]
+            }
+            await this.insertNotifikasi(payNotif, transaction)
+        }
 
 
         /*
@@ -5695,6 +5759,7 @@ exports.verifikasiBayarFaktur = async (
         const {
             pembayaran_id,
             piutang_id,
+            petugas_nip,
             kegiatan,
             kd_status,
             keterangan,
@@ -5939,7 +6004,20 @@ exports.verifikasiBayarFaktur = async (
                 }
             );
 
-
+        if (status) {
+            const userToNotif = await model.m_user.findAll({ where: { nip: petugas_nip } })
+            const payNotif = {
+                notifikasi_id: uuidv4(),
+                no_billing: no_faktur,
+                // username: payload?.nip,
+                title: 'Verifikasi Pembayaran Faktur',
+                body: `Inkaso Sudah Melakukan Verifikasi Pada Pembayaran Yang Anda Masukkan`,
+                created_by: payload?.created_by || '',
+                kegiatan: 'VERIFIKASI_PENAGIHAN',
+                user: [...new Set(userToNotif.map(a => a.user_id))]
+            }
+            await this.insertNotifikasi(payNotif, transaction)
+        }
         /*
          * =====================================================
          * RESPONSE
@@ -6147,6 +6225,31 @@ exports.konfirmasiCustomer = async (
                         transaction
                     }
                 );
+
+            if (status) {
+                const kPiutang = await model.k_piutang.findOne({
+                    where: {
+                        k_piutang_id: idPiutang
+                    }
+                })
+                const dataPiutang = await model.d_piutang.findOne({
+                    where: {
+                        piutang_id: kPiutang?.piutang_id
+                    }
+                })
+                const userToNotif = await model.m_role_user.findAll({ where: { cabang_id: dataPiutang?.cabang, role_id: '03' }, returning: true })
+                const payNotif = {
+                    notifikasi_id: uuidv4(),
+                    no_billing: dataPiutang?.no_billing,
+                    // username: payload?.nip,
+                    title: 'Konfirmasi Dari Customer',
+                    body: `Customer Telah Melakukan Konfirmasi Piutang Pada Billing Ini`,
+                    created_by: payload?.created_by || '',
+                    kegiatan: 'KONFIRMASI_CUSTOMER',
+                    user: [...new Set(userToNotif.map(a => a.user_id))]
+                }
+                await this.insertNotifikasi(payNotif, transaction)
+            }
 
             /*
              * Simpan hasil masing-masing piutang.
@@ -8333,3 +8436,32 @@ exports.alokasiPenerimaanLain = async (payload) => {
         throw error;
     }
 };
+
+exports.updateNotifikasiPush = async (payload) => {
+    const result = await model.d_notifikasi_push.update(payload, { where: { notifikasi_push_id: payload?.notifikasi_push_id }, returning: true })
+    return result
+}
+
+exports.readAllNotification = async (payload) => {
+    const result = await model.d_notifikasi_push.update({ is_read: 'Y' }, { where: { user_id: payload?.user_id } })
+    return result
+}
+
+exports.getListNotification = async ({ user_id, page, limit }) => {
+    const QUERY = query.getListNotification
+
+    // console.log(user_id, 'user_id');
+
+    const bindList = {
+        user_id: String(user_id),
+        page: page,
+        limit: limit
+    }
+
+    const listNotification = await db.query(QUERY, {
+        replacements: bindList,
+        type: db.QueryTypes.SELECT,
+    })
+
+    return listNotification
+}

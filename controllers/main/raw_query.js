@@ -17140,10 +17140,10 @@ WHERE 1 = 1 :condition;
 `
 
 query.getListNotification = `
-SELECT a.*, b.*, dp.no_pengajuan as no_pengajuan 
-FROM d_notifikasi a left join d_notifikasi_push b ON a.notifikasi_id = b.notifikasi_id left join d_pengajuan dp on dp.pengajuan_id = a.pengajuan_id 
+SELECT a.*, b.*, dp.no_billing  
+FROM d_notifikasi a left join d_notifikasi_push b ON a.notifikasi_id = b.notifikasi_id left join d_piutang dp on dp.no_billing = a.no_billing 
 WHERE b.user_id = :user_id  
-ORDER BY b.CREATED_AT DESC 
+ORDER BY b.created_at DESC 
 OFFSET (:page - 1) * :limit 
 FETCH NEXT :limit ROWS ONLY;
 `;
@@ -20281,6 +20281,7 @@ SELECT
     p.aging,
     p.status_piutang,
     fp.nip AS petugas_nip,
+    fp.faktur_petugas_id,
     mu.nama AS nama_penagih,
     ds.kd_status AS kd_status_verifikasi,
     CASE
