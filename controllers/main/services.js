@@ -7302,9 +7302,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
                 <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #d1d5db;padding:32px;box-sizing:border-box;">
 
-                    <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
-                        ${headerLogoHtml}
-                    </div>
+                    
 
                     <p style="margin:0 0 8px;">
                         ${escapeHtml(tanggalSurat)}
@@ -7414,7 +7412,12 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
                         <p style="margin:0 0 10px;line-height:1.6;font-weight:bold;color:#1e3a8a;">
                             Silakan melakukan konfirmasi piutang melalui tautan berikut:
                         </p>
-                        
+                        <a href="https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           style="color:#1d4ed8;overflow-wrap:anywhere;line-height:1.7;">
+                            https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}
+                        </a>
                     </div>
 
                     <p style="line-height:1.7;margin:0 0 14px;">
