@@ -1917,7 +1917,7 @@ exports.getDataPelanggan = async (params) => {
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT,
-                logging: console.log
+                // logging: console.log
             }
         )
         // =====================================================
@@ -2312,7 +2312,7 @@ exports.getListDataCod = async ({ keyword = null, page = 1, limit = 10 } = {}) =
     const listData = await db.query(listQuery, {
         replacements: bindList,
         type: db.QueryTypes.SELECT,
-        logging: console.log, // Enable logging for debugging
+        // logging: console.log, // Enable logging for debugging
     });
 
     const countData = await db.query(countQuery, {
@@ -2742,7 +2742,7 @@ exports.getDataFakturPetugas = async (params) => {
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT,
-                logging: console.log
+                // logging: console.log
             }
         );
         const countQuery = query.countDataFakturPetugas.replace(':condition', condition);
@@ -3053,7 +3053,7 @@ exports.getDataTukarFaktur = async (params) => {
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT,
-                logging: console.log
+                // logging: console.log
             }
         );
 
@@ -3333,7 +3333,7 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT,
-                logging: console.log
+                // logging: console.log
             }
         );
 
@@ -3570,7 +3570,7 @@ exports.getDataVerifikasiPembayaran = async (params) => {
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT,
-                logging: console.log
+                // logging: console.log
             }
         );
         /*
@@ -5473,7 +5473,7 @@ exports.getDataBayarFaktur = async (params) => {
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT,
-                logging: console.log
+                // logging: console.log
             }
         );
 
