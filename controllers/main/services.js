@@ -7414,12 +7414,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
                         <p style="margin:0 0 10px;line-height:1.6;font-weight:bold;color:#1e3a8a;">
                             Silakan melakukan konfirmasi piutang melalui tautan berikut:
                         </p>
-                        <a href="https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           style="color:#1d4ed8;overflow-wrap:anywhere;line-height:1.7;">
-                            https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}
-                        </a>
+                        
                     </div>
 
                     <p style="line-height:1.7;margin:0 0 14px;">
