@@ -19853,7 +19853,7 @@ query.getDataBayarFaktur = `
 
 query.countDataBayarFaktur = `
     SELECT
-        COUNT(*) AS total
+        COUNT(DISTINCT p.piutang_id) AS total
 
     FROM public.d_piutang p
 
@@ -20027,7 +20027,7 @@ query.summaryDataBayarFaktur = `
             (
                 SELECT SUM(COALESCE(dp_lain.nominal_bayar, 0))
                 FROM public.d_pembayaran dp_lain
-                WHERE dp_lain.jenis_pembayaran = 'PENERIMAAN_LAIN'
+                WHERE dp_lain.jenis_pembayaran = 'PENERIMAAN_LAIN' AND (dp_lain.no_billing is null or dp_lain.no_billing = '')
             ),
             0
         ) AS total_penerimaan_lain
@@ -20036,6 +20036,9 @@ query.summaryDataBayarFaktur = `
 
     LEFT JOIN LATERAL (
         SELECT
+            /* TOTAL PEMBAYARAN, dipakai search dan filter status */
+            SUM(COALESCE(dp.nominal_bayar, 0)) AS total_nominal_bayar,
+
             /* NOMINAL PEMBAYARAN TERVERIFIKASI */
             SUM(
                 CASE
@@ -20138,6 +20141,54 @@ query.summaryDataBayarFaktur = `
         FROM public.d_pembayaran dp
         WHERE dp.no_billing = p.no_billing
     ) pay ON TRUE
+
+    /* TOTAL BILLING DARI COD */
+    LEFT JOIN LATERAL (
+        SELECT SUM(COALESCE(dc.nominal_billing, 0)) AS total_nominal_billing
+        FROM public.d_cod dc
+        WHERE BTRIM(COALESCE(dc.no_billing, '')) =
+              BTRIM(COALESCE(p.no_billing, ''))
+    ) cod ON TRUE
+
+    /* STATUS VERIFIKASI */
+    LEFT JOIN LATERAL (
+        SELECT CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM public.d_pembayaran dpv
+                INNER JOIN public.d_status ds
+                    ON ds.foreign_id = dpv.pembayaran_id
+                   AND ds.kegiatan = 'PENAGIHAN'
+                   AND ds.kd_status = 'S'
+                WHERE BTRIM(COALESCE(dpv.no_billing, '')) =
+                      BTRIM(COALESCE(p.no_billing, ''))
+            ) THEN 'S'
+            ELSE NULL
+        END AS kd_status_verifikasi
+    ) verifikasi ON TRUE
+
+    /* CUSTOMER */
+    LEFT JOIN public.m_customer mc
+        ON mc.kode_customer = p.customer
+
+    /* CABANG */
+    LEFT JOIN public.m_referensi mr
+        ON mr.kd_ref = p.cabang
+       AND mr.jns_ref = 'cabang_id'
+
+    /* PRINCIPLE */
+    LEFT JOIN public.m_principle mp
+        ON mp.principle = p.principle
+
+    /* PETUGAS PENAGIHAN */
+    LEFT JOIN public.d_faktur_petugas fp
+        ON fp.piutang_id = p.piutang_id
+       AND fp.kegiatan = 'PENAGIHAN'
+       AND fp.is_active = 'Y'
+
+    /* USER */
+    LEFT JOIN public.m_user mu
+        ON mu.nip = fp.nip
 
     WHERE 1 = 1
         :condition
@@ -22094,7 +22145,8 @@ query.getDataPenerimaanLain = `
         dp.keterangan,
         COUNT(*) OVER() AS total_data
     FROM public.d_pembayaran dp
-    WHERE dp.jenis_pembayaran = 'PENERIMAAN_LAIN'
+    WHERE dp.jenis_pembayaran = 'PENERIMAAN_LAIN' 
+      AND (dp.no_billing is null or dp.no_billing = '') 
       AND (
           :keyword = ''
           OR CAST(dp.pembayaran_id AS TEXT) ILIKE :keyword

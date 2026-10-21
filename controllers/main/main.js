@@ -1124,6 +1124,40 @@ exports.konfirmasiCustomer = async (req, res) => {
     }
 };
 
+exports.alokasiPenerimaanLain = async (req, res) => {
+
+    try {
+
+        const payload = req.body || {};
+
+        const result = await serviceMain.alokasiPenerimaanLain(
+            payload
+        );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR ALOKASI PENERIMAAN LAIN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
+
 exports.konfirmasiPiutang = async (req, res) => {
     let transaction;
 

@@ -48,6 +48,7 @@ router.post('/verifikasiTukarFaktur', authorization.doAuth, controller.main.veri
 router.post('/verifikasiBayarFaktur', authorization.doAuth, controller.main.verifikasiBayarFaktur)
 router.post('/konfirmasiPiutang', authorization.doAuth, controller.main.konfirmasiPiutang)
 router.post('/konfirmasiCustomer', controller.main.konfirmasiCustomer)
+router.post('/alokasiPenerimaanLain', authorization.doAuth, controller.main.alokasiPenerimaanLain)
 
 // UPDATE DATA
 router.put('/updateUser', authorization.doAuth, controller.main.updateUser)
