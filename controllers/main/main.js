@@ -1705,7 +1705,8 @@ const dashboardHandlers = [
     'getPrincipleDashboard',
     'getCustomerDashboard',
     'getProdukDashboard',
-    'getSaldoAkhirJatuhTempoDashboard'
+    'getSaldoAkhirJatuhTempoDashboard',
+    'getAgingPiutangDashboard'
 ];
 
 dashboardHandlers.forEach((handlerName) => {

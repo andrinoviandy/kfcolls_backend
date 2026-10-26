@@ -115,6 +115,12 @@ router.get(
     controller.main.getSaldoAkhirJatuhTempoDashboard
 );
 
+router.get(
+    '/getAgingPiutangDashboard',
+    authorization.doAuth,
+    controller.main.getAgingPiutangDashboard
+);
+
 // Insert Data
 router.post('/insertPenjualanArray', authorization.doAuth, controller.main.insertPenjualanArray)
 router.post('/uploadPenjualanExcel', authorization.doAuth, controller.main.uploadPenjualanExcel)

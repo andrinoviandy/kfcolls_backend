@@ -9268,9 +9268,14 @@ exports.getTrendSaldoPiutangDashboard = async (params) => {
 // =====================================================
 // 3. DETAIL PIUTANG
 // =====================================================
+
 exports.getDetailPiutangDashboard = async (params = {}) => {
     try {
-        const filters = prepareFilters(params);
+        const filters = prepareFilters({
+            ...params,
+            tanggal_mulai: params.tanggal_mulai ?? null,
+            tanggal_akhir: params.tanggal_akhir ?? null,
+        });
 
         const page = Math.max(
             1,
@@ -9278,7 +9283,7 @@ exports.getDetailPiutangDashboard = async (params = {}) => {
         );
 
         const limit = Math.min(
-            100,
+            1000000,
             Math.max(
                 1,
                 Number.parseInt(params.limit, 10) || 10
@@ -9526,7 +9531,6 @@ exports.getProdukDashboard = async (params) => {
     );
 };
 
-
 exports.getSaldoAkhirJatuhTempoDashboard = async (params) => {
     try {
         const normalizeFilterValues = (value) => {
@@ -9704,3 +9708,119 @@ exports.getSaldoAkhirJatuhTempoDashboard = async (params) => {
         throw error;
     }
 };
+
+exports.getAgingPiutangDashboard = async (params) => {
+    try {
+        const normalizeFilterValues = (value) => {
+            const values = Array.isArray(value) ? value : [value];
+
+            return values
+                .filter((item) => item !== undefined && item !== null)
+                .flatMap((item) => String(item).split(","))
+                .map((item) => item.trim())
+                .filter(Boolean);
+        };
+
+        const cabang = normalizeFilterValues(
+            params?.cabang ?? params?.["cabang[]"]
+        );
+
+        const principals = normalizeFilterValues(
+            params?.principal ??
+            params?.principal_id ??
+            params?.["principal[]"] ??
+            params?.["principal_id[]"]
+        );
+
+        const channels = normalizeFilterValues(
+            params?.channel ?? params?.["channel[]"]
+        );
+
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.["customer[]"]
+        );
+
+        const tanggalMulai = String(
+            params?.tanggal_mulai || ""
+        ).trim();
+
+        const tanggalAkhir = String(
+            params?.tanggal_akhir || ""
+        ).trim();
+
+        let condition = "";
+        const bind = {};
+
+        if (
+            cabang.length &&
+            !cabang.some((item) => item.toUpperCase() === "ALL")
+        ) {
+            condition += ` AND p.cabang IN (:cabang)`;
+            bind.cabang = cabang;
+        }
+
+        if (
+            principals.length &&
+            !principals.some((item) => item.toUpperCase() === "ALL")
+        ) {
+            condition += ` AND p.principle IN (:principals)`;
+            bind.principals = principals;
+        }
+
+        if (
+            channels.length &&
+            !channels.some((item) => item.toUpperCase() === "ALL")
+        ) {
+            condition += ` AND p.channel_id IN (:channels)`;
+            bind.channels = channels;
+        }
+
+        if (
+            customers.length &&
+            !customers.some((item) => item.toUpperCase() === "ALL")
+        ) {
+            condition += ` AND p.customer IN (:customers)`;
+            bind.customers = customers;
+        }
+
+        if (tanggalMulai) {
+            condition += `
+        AND p.posting_date >= CAST(:tanggal_mulai AS DATE)
+      `;
+            bind.tanggal_mulai = tanggalMulai;
+        }
+
+        if (tanggalAkhir) {
+            condition += `
+        AND p.posting_date < (
+          CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+        )
+      `;
+            bind.tanggal_akhir = tanggalAkhir;
+        }
+
+        const SQL_QUERY = query.getAgingPiutangDashboard.replace(
+            /:condition/g,
+            condition
+        );
+
+        const result = await db.query(SQL_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT,
+        });
+
+        return result.map((item) => ({
+            label: item.label,
+            value: Number(item.value) || 0,
+            percentage: Number(item.percentage) || 0,
+        }));
+    } catch (error) {
+        console.error(
+            "ERROR SERVICE GET AGING PIUTANG DASHBOARD:",
+            error
+        );
+
+        throw error;
+    }
+};
+
