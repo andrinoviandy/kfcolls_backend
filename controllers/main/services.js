@@ -541,7 +541,7 @@ exports.insertPenjualanArray2 = async (payload, transaction) => {
 
     const createdAt = new Date();
 
-    const dataInsert = payload.map((item) => ({
+    const dataInsert = payload?.filter(a => a.sales_office !== '2000' || !['KFA', 'KFD'].includes(a.desc_cust_grp4))?.map?.((item) => ({
         penjualan_id: item.penjualan_id,
         sales_office: item.sales_office ?? null,
         desc_s_office: item.desc_s_office ?? null,
@@ -605,7 +605,7 @@ exports.insertPenjualanArray2 = async (payload, transaction) => {
         prod_hierarchy3: item.prod_hierarchy3 ?? null,
         principle: item.principle ?? null,
         name_principle: item.name_principle ?? null,
-        desc_cust_grp4: item.desc_cust_grp4 ?? null,
+        desc_cust_grp4: item.desc_cust_grp4 ? item?.desc_cust_grp3 : null,
         salesman: item.salesman ?? null,
         name_salesman: item.name_salesman ?? null,
 
@@ -1661,6 +1661,275 @@ exports.getDataPiutang = async (params) => {
         };
     } catch (error) {
         console.error('ERROR SERVICE GET DATA PIUTANG:', error);
+        throw error;
+    }
+};
+
+exports.getDataKreasiFaktur = async (params) => {
+    try {
+        const normalizeFilterValues = (value) => {
+            const values = Array.isArray(value) ? value : [value];
+
+            return values
+                .filter((item) => item !== undefined && item !== null)
+                .map((item) => String(item).trim())
+                .filter(Boolean);
+        };
+
+        const page = Math.max(Number(params?.page) || 1, 1);
+        const limit = Math.max(Number(params?.limit) || 10, 1);
+        const offset = (page - 1) * limit;
+        const keyword = String(params?.keyword || '').trim();
+
+        const salesOffices = normalizeFilterValues(
+            params?.sales_office ?? params?.['sales_office[]']
+        );
+
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.['customer[]']
+        );
+
+        const customerGroups = normalizeFilterValues(
+            params?.customer_group ?? params?.['customer_group[]']
+        );
+
+        const principles = normalizeFilterValues(
+            params?.principle ?? params?.['principle[]']
+        );
+
+        const statusPiutang = String(params?.status || 'ALL').trim();
+        const postingStatus = String(
+            params?.posting_status || 'ALL'
+        ).trim();
+
+        const statusTerimaFaktur = String(
+            params?.status_terima_faktur || 'ALL'
+        ).trim().toUpperCase();
+
+        const startDate = String(params?.start_date || '').trim();
+        const endDate = String(params?.end_date || '').trim();
+
+        let condition = '';
+        let summaryCondition = '';
+
+        const bind = { limit, offset };
+        const summaryBind = {};
+
+        // FILTER KEYWORD
+        if (keyword) {
+            const keywordCondition = `
+                AND (
+                    p.no_faktur ILIKE :keyword
+                    OR p.no_billing ILIKE :keyword
+                    OR p.customer ILIKE :keyword
+                    OR p.sales ILIKE :keyword
+                    OR p.nama_sales ILIKE :keyword
+                    OR p.cabang ILIKE :keyword
+                    OR p.principle ILIKE :keyword
+                    OR p.posting_date::text ILIKE :keyword
+                    OR p.jatuh_tempo::text ILIKE :keyword
+                    OR p.dpp::text ILIKE :keyword
+                    OR p.ppn::text ILIKE :keyword
+                    OR p.pph::text ILIKE :keyword
+                    OR p.dibayar::text ILIKE :keyword
+                    OR p.outstanding::text ILIKE :keyword
+                    OR p.aging::text ILIKE :keyword
+                    OR p.status_piutang ILIKE :keyword
+                    OR p.created_by ILIKE :keyword
+                    OR p.created_at::text ILIKE :keyword
+                    OR p.updated_by ILIKE :keyword
+                    OR p.updated_at::text ILIKE :keyword
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_customer mc_keyword
+                        WHERE mc_keyword.kode_customer = p.customer
+                          AND mc_keyword.name ILIKE :keyword
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_referensi mr_keyword
+                        WHERE mr_keyword.kd_ref = p.cabang
+                          AND mr_keyword.jns_ref = 'cabang_id'
+                          AND mr_keyword.ur_ref ILIKE :keyword
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword
+                        WHERE mp_keyword.principle = p.principle
+                          AND mp_keyword.nama_principle ILIKE :keyword
+                    )
+                )
+            `;
+
+            condition += keywordCondition;
+            summaryCondition += keywordCondition;
+
+            bind.keyword = `%${keyword}%`;
+            summaryBind.keyword = `%${keyword}%`;
+        }
+
+        // FILTER SALES OFFICE
+        if (
+            salesOffices.length &&
+            !salesOffices.some((value) => value.toUpperCase() === 'ALL')
+        ) {
+            condition += ` AND p.cabang IN (:sales_offices)`;
+            summaryCondition += ` AND p.cabang IN (:sales_offices)`;
+
+            bind.sales_offices = salesOffices;
+            summaryBind.sales_offices = salesOffices;
+        }
+
+        // FILTER CUSTOMER
+        if (
+            customers.length &&
+            !customers.some((value) => value.toUpperCase() === 'ALL')
+        ) {
+            condition += ` AND p.customer IN (:customers)`;
+            summaryCondition += ` AND p.customer IN (:customers)`;
+
+            bind.customers = customers;
+            summaryBind.customers = customers;
+        }
+
+        // FILTER STATUS PIUTANG
+        if (statusPiutang && statusPiutang.toUpperCase() !== 'ALL') {
+            condition += `
+                AND UPPER(p.status_piutang) = UPPER(:status)
+            `;
+
+            summaryCondition += `
+                AND UPPER(p.status_piutang) = UPPER(:status)
+            `;
+
+            bind.status = statusPiutang;
+            summaryBind.status = statusPiutang;
+        }
+
+        // FILTER CUSTOMER GROUP
+        if (
+            customerGroups.length &&
+            !customerGroups.some((value) => value.toUpperCase() === 'ALL')
+        ) {
+            condition += ` AND p.channel_id IN (:customer_groups)`;
+            summaryCondition += ` AND p.channel_id IN (:customer_groups)`;
+
+            bind.customer_groups = customerGroups;
+            summaryBind.customer_groups = customerGroups;
+        }
+
+        // FILTER PRINCIPLE
+        if (
+            principles.length &&
+            !principles.some((value) => value.toUpperCase() === 'ALL')
+        ) {
+            condition += ` AND p.principle IN (:principles)`;
+            summaryCondition += ` AND p.principle IN (:principles)`;
+
+            bind.principles = principles;
+            summaryBind.principles = principles;
+        }
+
+        // FILTER TANGGAL AWAL
+        if (startDate) {
+            condition += ` AND p.posting_date >= :start_date`;
+            summaryCondition += ` AND p.posting_date >= :start_date`;
+
+            bind.start_date = startDate;
+            summaryBind.start_date = startDate;
+        }
+
+        // FILTER TANGGAL AKHIR
+        if (endDate) {
+            condition += `
+                AND p.posting_date < (:end_date::date + INTERVAL '1 day')
+            `;
+
+            summaryCondition += `
+                AND p.posting_date < (:end_date::date + INTERVAL '1 day')
+            `;
+
+            bind.end_date = endDate;
+            summaryBind.end_date = endDate;
+        }
+
+        // FILTER STATUS PENERIMAAN FAKTUR
+        if (statusTerimaFaktur === 'BELUM_DITERIMA') {
+            condition += `
+        AND COALESCE(p.diterima::text, '0') = '0'
+    `;
+        } else if (
+            statusTerimaFaktur === 'DITERIMA' ||
+            statusTerimaFaktur === 'SUDAH_DITERIMA'
+        ) {
+            condition += `
+        AND COALESCE(p.diterima::text, '0') = '1'
+    `;
+        } else if (
+            statusTerimaFaktur !== 'ALL' &&
+            statusTerimaFaktur !== ''
+        ) {
+            throw new Error(
+                `status_terima_faktur tidak valid: ${statusTerimaFaktur}`
+            );
+        }
+
+        // 1. GET LIST DATA
+        const LIST_QUERY = query.getDataKreasiFaktur.replace(
+            /:condition/g,
+            condition
+        );
+
+        const listData = await db.query(LIST_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+
+        // 2. GET TOTAL DATA
+        const COUNT_QUERY = query.countDataKreasiFaktur.replace(
+            /:condition/g,
+            condition
+        );
+
+        const countData = await db.query(COUNT_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
+
+        // 3. GET SUMMARY
+        // Summary memakai filter lain, tetapi tidak dibatasi oleh
+        // statusTerimaFaktur agar kedua kartu tetap menampilkan jumlahnya.
+        const SUMMARY_QUERY = query.summaryDataKreasiFaktur.replace(
+            /:condition/g,
+            summaryCondition
+        );
+
+        const summaryResult = await db.query(SUMMARY_QUERY, {
+            replacements: summaryBind,
+            type: db.QueryTypes.SELECT
+        });
+
+        const rawSummary = summaryResult?.[0] || {};
+
+        const summary = {
+            belum_diterima: Number(rawSummary.belum_diterima || 0),
+            sudah_diterima: Number(rawSummary.sudah_diterima || 0),
+            total_data: Number(rawSummary.total_data || 0)
+        };
+
+        return {
+            total_data: totalData,
+            total_halaman: totalHalaman,
+            limit,
+            page,
+            list_data: listData,
+            summary
+        };
+    } catch (error) {
+        console.error('ERROR SERVICE GET DATA KREASI FAKTUR:', error);
         throw error;
     }
 };
@@ -4172,6 +4441,295 @@ exports.insertBayarFaktur = async (
     }
 };
 
+exports.insertPenerimaanLain = async (
+    payload,
+    files,
+    transaction
+) => {
+    try {
+
+        if (
+            !files ||
+            files.length === 0
+        ) {
+            throw new Error(
+                'File bukti pembayaran wajib diupload'
+            );
+        }
+
+        const jenisPembayaran =
+            String(
+                payload?.jenis_pembayaran || ''
+            ).toUpperCase();
+
+        if (
+            !payload?.metode_pembayaran
+        ) {
+            throw new Error(
+                'Metode pembayaran wajib diisi'
+            );
+        }
+
+        /*
+         * Upload bukti pembayaran
+         */
+        const uploadDocument =
+            await this.processUploadFile(
+                payload,
+                files,
+                transaction
+            );
+
+        const filePath =
+            uploadDocument?.[0]?.path
+                ? uploadDocument[0].path
+                    .replace(/\\/g, '/')
+                : '';
+
+        if (!filePath) {
+            throw new Error(
+                'File bukti pembayaran gagal disimpan'
+            );
+        }
+
+        const tanggalPembayaran =
+            payload?.tanggal_pembayaran
+                ? new Date(
+                    payload.tanggal_pembayaran
+                )
+                : new Date();
+
+        const pembayaranData = [];
+
+        if (jenisPembayaran === 'PENERIMAAN_LAIN') {
+            const pembayaran =
+                await model.d_penerimaan_lain.create(
+                    {
+                        penerimaan_lain_id:
+                            uuidv4(),
+
+                        document_number:
+                            payload?.document_number,
+
+                        nominal_bayar:
+                            payload?.nominal_bayar,
+                        sisa_penerimaan:
+                            payload?.nominal_bayar,
+
+                        tanggal_pembayaran:
+                            tanggalPembayaran,
+
+                        jenis_pembayaran: jenisPembayaran,
+
+                        metode_pembayaran:
+                            payload?.metode_pembayaran,
+
+                        created_by:
+                            payload?.created_by ||
+                            'SYSTEM',
+
+                        files:
+                            filePath,
+
+                        keterangan:
+                            payload?.keterangan ||
+                            null
+                    },
+                    {
+                        transaction,
+                        returning: true
+                    }
+                );
+
+            pembayaranData.push(
+                pembayaran
+            );
+        }
+
+        return {
+            total:
+                pembayaranData.length,
+
+            jenis_pembayaran:
+                jenisPembayaran,
+
+            metode_pembayaran:
+                payload?.metode_pembayaran,
+
+            data:
+                pembayaranData
+        };
+
+    } catch (error) {
+
+        console.error(
+            'ERROR SERVICE INSERT BAYAR FAKTUR:',
+            error
+        );
+
+        throw error;
+    }
+};
+
+exports.terimaFaktur = async (payload, transaction) => {
+    try {
+        const {
+            piutang_id,
+            billing_no,
+            no_billing,
+            status_terima_faktur,
+            diterima,
+            catatan,
+        } = payload;
+
+        /*
+         * =====================================================
+         * VALIDASI
+         * =====================================================
+         */
+
+        if (!piutang_id) {
+            throw new Error("piutang_id wajib diisi");
+        }
+
+        const statusDiterima = ["DITERIMA", "BELUM_DITERIMA"];
+
+        if (!statusDiterima.includes(status_terima_faktur)) {
+            throw new Error("Status penerimaan faktur tidak valid");
+        }
+
+        if (
+            status_terima_faktur === "BELUM_DITERIMA" &&
+            !String(catatan || "").trim()
+        ) {
+            throw new Error(
+                "Catatan wajib diisi jika faktur belum diterima"
+            );
+        }
+
+        /*
+         * =====================================================
+         * VALIDASI DATA PIUTANG
+         * =====================================================
+         */
+
+        const piutang = await model.d_piutang.findOne({
+            where: {
+                piutang_id,
+            },
+            transaction,
+        });
+
+        if (!piutang) {
+            throw new Error("Data Piutang tidak ditemukan");
+        }
+
+        if (Number(piutang.diterima) === 1) {
+            throw new Error(
+                "Faktur sudah diterima. Status penerimaan tidak dapat diubah lagi."
+            );
+        }
+
+        /*
+         * =====================================================
+         * KONVERSI STATUS
+         * =====================================================
+         *
+         * d_piutang.diterima:
+         * 1 = Faktur Diterima
+         * 0 = Faktur Belum Diterima
+         *
+         * d_status.kd_status:
+         * S = Faktur Diterima
+         * F = Faktur Belum Diterima
+         */
+
+        const nilaiDiterima =
+            status_terima_faktur === "DITERIMA" ? 1 : 0;
+
+        const kdStatus =
+            status_terima_faktur === "DITERIMA" ? "S" : "F";
+
+        const keterangan =
+            status_terima_faktur === "BELUM_DITERIMA"
+                ? String(catatan || "").trim()
+                : "";
+
+        /*
+         * =====================================================
+         * VALIDASI KONSISTENSI PAYLOAD
+         * =====================================================
+         */
+
+        if (
+            typeof diterima === "boolean" &&
+            diterima !== (nilaiDiterima === 1)
+        ) {
+            throw new Error(
+                "Status diterima tidak sesuai dengan status penerimaan faktur"
+            );
+        }
+
+        /*
+         * =====================================================
+         * UPDATE d_piutang
+         * =====================================================
+         */
+
+        await piutang.update(
+            {
+                diterima: nilaiDiterima,
+            },
+            {
+                transaction,
+            }
+        );
+
+        /*
+         * =====================================================
+         * INSERT HISTORY d_status
+         * =====================================================
+         */
+
+        const tanggalVerifikasi = new Date();
+
+        const history = await model.d_status.create(
+            {
+                foreign_id: piutang_id,
+                kegiatan: "PENERIMAAN_FAKTUR",
+                kd_status: kdStatus,
+                keterangan,
+                created_by: payload?.created_by || "SYSTEM",
+                created_at: tanggalVerifikasi,
+            },
+            {
+                transaction,
+            }
+        );
+
+        /*
+         * =====================================================
+         * RESPONSE
+         * =====================================================
+         */
+
+        return {
+            piutang_id,
+            billing_no: billing_no || no_billing || null,
+            diterima: nilaiDiterima,
+            kd_status: kdStatus,
+            status_terima_faktur,
+            tanggal_verifikasi: tanggalVerifikasi,
+            keterangan,
+            history,
+        };
+    } catch (error) {
+        console.error("ERROR SERVICE TERIMA FAKTUR:", error);
+        throw error;
+    }
+};
+
+
 exports.verifikasiTukarFaktur = async (
     payload,
     transaction
@@ -5114,6 +5672,7 @@ exports.verifikasiTukarFaktur = async (
 
 exports.getDataBayarFaktur = async (params) => {
     try {
+        const penerimaanLainId = params?.penerimaan_lain_id || null;
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value)
                 ? value
@@ -5239,6 +5798,30 @@ exports.getDataBayarFaktur = async (params) => {
             limit,
             offset
         };
+
+        /*
+ * =====================================================
+ * FILTER PENERIMAAN LAIN
+ * Mengambil billing berdasarkan d_pembayaran.penerimaan_lain_id
+ * =====================================================
+ */
+        if (
+            penerimaanLainId !== undefined &&
+            penerimaanLainId !== null &&
+            String(penerimaanLainId).trim() !== ''
+        ) {
+            condition += `
+        AND EXISTS (
+            SELECT 1
+            FROM public.d_pembayaran dp_penerimaan_lain
+            WHERE dp_penerimaan_lain.penerimaan_lain_id = :penerimaan_lain_id
+              AND BTRIM(COALESCE(dp_penerimaan_lain.no_billing, '')) =
+                  BTRIM(COALESCE(p.no_billing, ''))
+        )
+    `;
+
+            bind.penerimaan_lain_id = penerimaanLainId;
+        }
 
         /*
          * =====================================================
@@ -8359,45 +8942,29 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     };
 };
 
-exports.alokasiPenerimaanLain = async (payload) => {
+exports.alokasiPenerimaanLain = async (payload, transaction) => {
     try {
-        const pembayaranId = payload?.pembayaran_id;
+        const pembayaranId = payload?.penerimaan_lain_id;
         const noBilling = String(payload?.no_billing || "").trim();
 
         // Validasi input
         if (!pembayaranId) {
-            throw new Error("Pembayaran ID wajib diisi");
+            throw new Error("Penerimaan ID wajib diisi");
         }
 
         if (!noBilling) {
             throw new Error("No Billing wajib diisi");
         }
 
-        // 1. Cari pembayaran berdasarkan pembayaran_id
-        const pembayaran = await model.d_pembayaran.findOne({
-            where: {
-                pembayaran_id: pembayaranId,
-            },
-        });
-
-        if (!pembayaran) {
-            throw new Error("Data pembayaran tidak ditemukan");
-        }
-
-        // 2. Pastikan jenis pembayaran adalah PENERIMAAN_LAIN
-        if (
-            String(pembayaran.jenis_pembayaran || "").toUpperCase() !==
-            "PENERIMAAN_LAIN"
-        ) {
-            throw new Error(
-                "Alokasi hanya dapat dilakukan untuk Penerimaan Lain"
-            );
-        }
-
-        // 3. Cari piutang berdasarkan no_billing
         const piutang = await model.d_piutang.findOne({
             where: {
                 no_billing: noBilling,
+            },
+        });
+
+        const penerimaanLain = await model.d_penerimaan_lain.findOne({
+            where: {
+                penerimaan_lain_id: pembayaranId,
             },
         });
 
@@ -8416,11 +8983,53 @@ exports.alokasiPenerimaanLain = async (payload) => {
             );
         }
 
+        const pembayaran =
+            await model.d_pembayaran.create(
+                {
+                    pembayaran_id:
+                        uuidv4(),
+
+                    bill_to_party:
+                        piutang?.customer ||
+                        null,
+
+                    no_billing:
+                        noBilling ||
+                        null,
+
+                    nominal_bayar:
+                        parseFloat(piutang?.dpp) + parseFloat(piutang?.ppn),
+
+                    tanggal_pembayaran:
+                        penerimaanLain?.tanggal_pembayaran,
+
+                    metode_pembayaran:
+                        penerimaanLain?.metode_pembayaran,
+
+                    created_by:
+                        payload?.created_by ||
+                        'SYSTEM',
+
+                    created_at:
+                        new Date(),
+
+                    files:
+                        penerimaanLain?.files,
+
+                    keterangan:
+                        penerimaanLain?.document_number ||
+                        null
+                },
+                {
+                    transaction,
+                    returning: true
+                }
+            );
+
         // 5. Update data pembayaran
-        await pembayaran.update({
-            no_billing: noBilling,
-            bill_to_party: billingToParty,
-        });
+        await model.d_penerimaan_lain.update({
+            sisa_penerimaan: payload.sisa_penerimaan,
+        }, { where: { penerimaan_lain_id: pembayaranId } });
 
         return {
             pembayaran_id: pembayaran.pembayaran_id,
@@ -8465,3 +9074,633 @@ exports.getListNotification = async ({ user_id, page, limit }) => {
 
     return listNotification
 }
+
+const normalizeValues = (value) => {
+    const values = Array.isArray(value)
+        ? value
+        : value == null
+            ? []
+            : [value];
+
+    return values
+        .flatMap((item) => {
+            if (
+                typeof item === 'string' &&
+                item.includes(',')
+            ) {
+                return item.split(',');
+            }
+
+            return [item];
+        })
+        .filter(
+            (item) =>
+                item !== undefined &&
+                item !== null &&
+                String(item).trim() !== ''
+        )
+        .map((item) => String(item).trim())
+        .filter(Boolean);
+};
+
+const getValues = (params, ...keys) => {
+    for (const key of keys) {
+        if (params?.[key] !== undefined) {
+            return normalizeValues(params[key]);
+        }
+    }
+
+    return [];
+};
+
+// =====================================================
+// PERSIAPAN FILTER
+// =====================================================
+const prepareFilters = (params = {}) => {
+    const cabang = getValues(
+        params,
+        'cabang',
+        'cabang[]',
+        'sales_office',
+        'sales_office[]'
+    );
+
+    const principal = getValues(
+        params,
+        'principal',
+        'principal[]',
+        'principal_id',
+        'principal_id[]'
+    );
+
+    const channel = getValues(
+        params,
+        'channel',
+        'channel[]',
+        'channel_id',
+        'channel_id[]'
+    );
+
+    const customer = getValues(
+        params,
+        'customer',
+        'customer[]'
+    );
+
+    const produk = getValues(
+        params,
+        'produk',
+        'produk[]',
+        'material',
+        'material[]'
+    );
+
+    // Rentang tanggal dari frontend.
+    // Tetap mendukung nama parameter lama.
+    const tanggalMulai = String(
+        params.tanggal_mulai ||
+        params.start_date ||
+        params.startDate ||
+        ''
+    ).trim() || null;
+
+    const tanggalAkhir = String(
+        params.tanggal_akhir ||
+        params.end_date ||
+        params.endDate ||
+        params.tanggal ||
+        ''
+    ).trim() || null;
+
+    const notAll = (values) =>
+        values.length > 0 &&
+        !values.some(
+            (value) => value.toUpperCase() === 'ALL'
+        );
+
+    // Sequelize membutuhkan daftar tidak kosong untuk IN (:parameter).
+    // Flag *_all membuat filter dilewati jika tidak ada pilihan.
+    const actual = (values) =>
+        notAll(values)
+            ? values
+            : ['__NO_FILTER_MATCH__'];
+
+    return {
+        cabang: actual(cabang),
+        principal: actual(principal),
+        channel: actual(channel),
+        customer: actual(customer),
+        produk: actual(produk),
+
+        cabang_all: !notAll(cabang),
+        principal_all: !notAll(principal),
+        channel_all: !notAll(channel),
+        customer_all: !notAll(customer),
+        produk_all: !notAll(produk),
+
+        tanggal_mulai: tanggalMulai,
+        tanggal_akhir: tanggalAkhir,
+
+        // Kompatibilitas untuk query lama yang masih memakai :tanggal.
+        tanggal: tanggalAkhir
+    };
+};
+
+// =====================================================
+// EKSEKUSI QUERY
+// =====================================================
+const runSelect = async (
+    sql,
+    replacements = {}
+) => {
+    return db.query(sql, {
+        replacements,
+        type: db.QueryTypes.SELECT
+    });
+};
+
+const runDashboardQuery = async (
+    sql,
+    params
+) => {
+    const filters = prepareFilters(params);
+
+    return runSelect(sql, filters);
+};
+
+// =====================================================
+// 1. SUMMARY PIUTANG
+// =====================================================
+exports.getSummaryPiutangDashboard = async (params) => {
+    const rows = await runDashboardQuery(
+        query.getSummaryPiutangDashboard,
+        params
+    );
+
+    const row = rows?.[0] || {};
+
+    return {
+        total_piutang: Number(row.total_piutang || 0),
+        sudah_dibayar: Number(row.sudah_dibayar || 0),
+        outstanding: Number(row.outstanding || 0),
+
+        not_due_amount: Number(row.not_due_amount || 0),
+        due_soon_amount: Number(row.due_soon_amount || 0),
+        overdue_amount: Number(row.overdue_amount || 0),
+
+        paid: Number(row.paid || 0),
+        not_due: Number(row.not_due || 0),
+        due_soon: Number(row.due_soon || 0),
+        overdue: Number(row.overdue || 0)
+    };
+};
+
+// =====================================================
+// 2. TREND SALDO PIUTANG
+// =====================================================
+exports.getTrendSaldoPiutangDashboard = async (params) => {
+    return runDashboardQuery(
+        query.getTrendSaldoPiutangDashboard,
+        params
+    );
+};
+
+// =====================================================
+// 3. DETAIL PIUTANG
+// =====================================================
+exports.getDetailPiutangDashboard = async (params = {}) => {
+    try {
+        const filters = prepareFilters(params);
+
+        const page = Math.max(
+            1,
+            Number.parseInt(params.page, 10) || 1
+        );
+
+        const limit = Math.min(
+            100,
+            Math.max(
+                1,
+                Number.parseInt(params.limit, 10) || 10
+            )
+        );
+
+        const offset = (page - 1) * limit;
+
+        const replacements = {
+            ...filters,
+            limit,
+            offset
+        };
+
+        const [
+            listData,
+            countData,
+            summaryData
+        ] = await Promise.all([
+            runSelect(
+                query.getDetailPiutangDashboard,
+                replacements
+            ),
+
+            runSelect(
+                query.countDetailPiutangDashboard,
+                filters
+            ),
+
+            runSelect(
+                query.getSummaryDetailPiutangDashboard,
+                filters
+            )
+        ]);
+
+        const totalData = Number(
+            countData?.[0]?.total_data || 0
+        );
+
+        const summaryRow = summaryData?.[0] || {};
+
+        const aging = Array.from(
+            { length: 7 },
+            (_, index) =>
+                Number(summaryRow[`aging_${index}`] || 0)
+        );
+
+        const totalOutstanding = Number(
+            summaryRow.total_outstanding ??
+            aging.reduce(
+                (sum, value) => sum + value,
+                0
+            )
+        );
+
+        return {
+            list_data: Array.isArray(listData)
+                ? listData
+                : [],
+
+            total_data: totalData,
+            total_halaman: Math.ceil(totalData / limit),
+            page,
+            limit,
+
+            // Summary mencakup semua data sesuai filter,
+            // bukan hanya halaman yang sedang ditampilkan.
+            summary: {
+                aging,
+                aging_0: aging[0],
+                aging_1: aging[1],
+                aging_2: aging[2],
+                aging_3: aging[3],
+                aging_4: aging[4],
+                aging_5: aging[5],
+                aging_6: aging[6],
+                total_outstanding: totalOutstanding
+            }
+        };
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET DETAIL PIUTANG DASHBOARD:',
+            error
+        );
+
+        throw error;
+    }
+};
+
+// =====================================================
+// 4. SALES OPEN INVOICE
+// =====================================================
+exports.getSalesOpenInvoiceDashboard = async (params) => {
+    return runDashboardQuery(
+        query.getSalesOpenInvoiceDashboard,
+        params
+    );
+};
+
+// =====================================================
+// 5. ANALISIS PIUTANG
+// =====================================================
+exports.getAnalisisPiutangDashboard = async (params) => {
+    return runDashboardQuery(
+        query.getAnalisisPiutangDashboard,
+        params
+    );
+};
+
+// =====================================================
+// 6. COLLECTION PER CUSTOMER
+// =====================================================
+exports.getCollectionByCustomerDashboard = async (params) => {
+    return runDashboardQuery(
+        query.getCollectionByCustomerDashboard,
+        params
+    );
+};
+
+// =====================================================
+// 7. PERFORMA PIUTANG PER PRODUK
+// =====================================================
+exports.getPerformaPiutangProdukDashboard = async (params) => {
+    const filters = prepareFilters(params);
+
+    const condition = `
+        AND (
+            :principal_all = TRUE
+            OR dp.principle IN (:principal)
+        )
+
+        AND (
+            :produk_all = TRUE
+            OR dp.material IN (:produk)
+        )
+
+        AND (
+            :cabang_all = TRUE
+            OR dp.sales_office IN (:cabang)
+        )
+
+        AND (
+            :customer_all = TRUE
+            OR dp.bill_to_party IN (:customer)
+        )
+
+        AND (
+            :channel_all = TRUE
+            OR EXISTS (
+                SELECT 1
+                FROM public.d_piutang pi
+                WHERE pi.no_billing = dp.billing_no
+                  AND pi.channel_id IN (:channel)
+            )
+        )
+
+        AND (
+            :tanggal_mulai IS NULL
+            OR dp.posting_date >= CAST(:tanggal_mulai AS DATE)
+        )
+
+        AND (
+            :tanggal_akhir IS NULL
+            OR dp.posting_date <
+                CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+        )
+    `;
+
+    const sql =
+        query.getPerformaPiutangProdukDashboard.replace(
+            ':condition',
+            condition
+        );
+
+    return runSelect(sql, filters);
+};
+
+// =====================================================
+// 8. MASTER REFERENSI
+// Contoh jenis=cabang_id atau channel_id
+// Tidak menggunakan filter rentang tanggal.
+// =====================================================
+exports.getReferensiDashboard = async (params) => {
+    const jenis = String(
+        params?.jenis || ''
+    ).trim();
+
+    if (!jenis) {
+        throw new Error(
+            'Parameter jenis wajib diisi'
+        );
+    }
+
+    return runSelect(
+        query.getReferensiDashboard,
+        { jenis }
+    );
+};
+
+// =====================================================
+// 9. MASTER PRINCIPAL
+// Referensi dropdown: tetap menggunakan filter cabang.
+// =====================================================
+exports.getPrincipleDashboard = async (params) => {
+    const filters = prepareFilters(params);
+
+    return runSelect(
+        query.getPrincipleDashboard,
+        {
+            cabang: filters.cabang,
+            cabang_all: filters.cabang_all
+        }
+    );
+};
+
+// =====================================================
+// 10. MASTER CUSTOMER
+// Referensi dropdown: tetap menggunakan filter cabang.
+// =====================================================
+exports.getCustomerDashboard = async (params) => {
+    const filters = prepareFilters(params);
+
+    return runSelect(
+        query.getCustomerDashboard,
+        {
+            cabang: filters.cabang,
+            cabang_all: filters.cabang_all
+        }
+    );
+};
+
+// =====================================================
+// 11. MASTER PRODUK
+// Referensi dropdown: tetap menggunakan filter principal.
+// =====================================================
+exports.getProdukDashboard = async (params) => {
+    const filters = prepareFilters(params);
+
+    return runSelect(
+        query.getProdukDashboard,
+        {
+            principal: filters.principal,
+            principal_all: filters.principal_all
+        }
+    );
+};
+
+
+exports.getSaldoAkhirJatuhTempoDashboard = async (params) => {
+    try {
+        const normalizeFilterValues = (value) => {
+            const values = Array.isArray(value) ? value : [value];
+
+            return values
+                .filter((item) => item !== undefined && item !== null)
+                .flatMap((item) => String(item).split(','))
+                .map((item) => item.trim())
+                .filter(Boolean);
+        };
+
+        // FILTER DARI FRONTEND
+        const cabang = normalizeFilterValues(
+            params?.cabang ?? params?.['cabang[]']
+        );
+
+        const principles = normalizeFilterValues(
+            params?.principal ??
+            params?.principal_id ??
+            params?.['principal[]'] ??
+            params?.['principal_id[]']
+        );
+
+        const channels = normalizeFilterValues(
+            params?.channel ?? params?.['channel[]']
+        );
+
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.['customer[]']
+        );
+
+        const produk = normalizeFilterValues(
+            params?.produk ?? params?.['produk[]']
+        );
+
+        const tanggalMulai = String(
+            params?.tanggal_mulai || ''
+        ).trim();
+
+        const tanggalAkhir = String(
+            params?.tanggal_akhir || ''
+        ).trim();
+
+        let condition = '';
+
+        const bind = {};
+
+        // FILTER CABANG
+        if (
+            cabang.length &&
+            !cabang.some((item) => item.toUpperCase() === 'ALL')
+        ) {
+            condition += `
+                AND p.cabang IN (:cabang)
+            `;
+
+            bind.cabang = cabang;
+        }
+
+        // FILTER PRINCIPAL
+        if (
+            principles.length &&
+            !principles.some((item) => item.toUpperCase() === 'ALL')
+        ) {
+            condition += `
+                AND p.principle IN (:principles)
+            `;
+
+            bind.principles = principles;
+        }
+
+        // FILTER CHANNEL
+        if (
+            channels.length &&
+            !channels.some((item) => item.toUpperCase() === 'ALL')
+        ) {
+            condition += `
+                AND p.channel_id IN (:channels)
+            `;
+
+            bind.channels = channels;
+        }
+
+        // FILTER CUSTOMER
+        if (
+            customers.length &&
+            !customers.some((item) => item.toUpperCase() === 'ALL')
+        ) {
+            condition += `
+                AND p.customer IN (:customers)
+            `;
+
+            bind.customers = customers;
+        }
+
+        // FILTER TANGGAL MULAI
+        if (tanggalMulai) {
+            condition += `
+                AND p.posting_date >= CAST(:tanggal_mulai AS DATE)
+            `;
+
+            bind.tanggal_mulai = tanggalMulai;
+        }
+
+        // FILTER TANGGAL AKHIR
+        if (tanggalAkhir) {
+            condition += `
+                AND p.posting_date < (
+                    CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+                )
+            `;
+
+            bind.tanggal_akhir = tanggalAkhir;
+        }
+
+        /*
+         * FILTER PRODUK
+         *
+         * Belum diterapkan karena contoh struktur d_piutang
+         * yang diberikan belum menunjukkan kolom atau relasi produk.
+         * Jangan mengasumsikan kolom produk berada di d_piutang.
+         */
+
+        console.log(
+            {
+                cabang,
+                principles,
+                channels,
+                customers,
+                produk,
+                tanggalMulai,
+                tanggalAkhir
+            },
+            'PARAMS GET SALDO AKHIR JATUH TEMPO DASHBOARD'
+        );
+
+        // EKSEKUSI QUERY
+        const SQL_QUERY =
+            query.getSaldoAkhirJatuhTempoDashboard.replace(
+                /:condition/g,
+                condition
+            );
+
+        const result = await db.query(SQL_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+
+        // PASTIKAN KETIGA KATEGORI SELALU ADA
+        const categories = [
+            'Belum JTO',
+            'Segera JTO',
+            'Sudah JTO'
+        ];
+
+        const resultMap = new Map(
+            result.map((item) => [
+                String(item.name).trim().toUpperCase(),
+                Number(item.value) || 0
+            ])
+        );
+
+        return categories.map((name) => ({
+            name,
+            value: resultMap.get(name.toUpperCase()) || 0
+        }));
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET SALDO AKHIR JATUH TEMPO DASHBOARD:',
+            error
+        );
+
+        throw error;
+    }
+};

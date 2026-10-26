@@ -4466,6 +4466,10 @@ exports.D_PIUTANG = db.define('d_piutang',
             defaultValue: DataTypes.UUIDV4,
             primaryKey: true
         },
+        diterima: {
+            type: DataTypes.STRING,
+            field: 'diterima'
+        },
         no_faktur: {
             type: DataTypes.STRING,
             field: 'no_faktur'
@@ -5834,6 +5838,10 @@ exports.D_PEMBAYARAN = db.define('d_pembayaran',
             type: DataTypes.STRING,
             field: 'bill_to_party'
         },
+        penerimaan_lain_id: {
+            type: DataTypes.STRING,
+            field: 'penerimaan_lain_id'
+        },
         no_billing: {
             type: DataTypes.STRING,
             field: 'no_billing'
@@ -5857,6 +5865,64 @@ exports.D_PEMBAYARAN = db.define('d_pembayaran',
         jenis_pembayaran: {
             type: DataTypes.STRING,
             field: 'jenis_pembayaran'
+        },
+        created_by: {
+            type: DataTypes.STRING,
+            field: 'created_by'
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: 'created_at'
+        },
+        updated_by: {
+            type: DataTypes.STRING,
+            field: 'updated_by'
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: 'updated_at'
+        },
+        files: {
+            type: DataTypes.TEXT,
+            field: 'files'
+        },
+        keterangan: {
+            type: DataTypes.STRING,
+            field: 'keterangan'
+        },
+    }, {
+    schema: 'public',
+    freezeTableName: true,
+    timestamps: false
+}
+)
+
+exports.D_PENERIMAAN_LAIN = db.define('d_penerimaan_lain',
+    {
+        penerimaan_lain_id: {
+            type: DataTypes.UUID,
+            field: 'penerimaan_lain_id',
+            primaryKey: true,
+        },
+        nominal_bayar: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'nominal_bayar'
+        },
+        sisa_penerimaan: {
+            type: DataTypes.DECIMAL(20, 2),
+            field: 'sisa_penerimaan'
+        },
+        tanggal_pembayaran: {
+            type: DataTypes.DATEONLY,
+            field: 'tanggal_pembayaran'
+        },
+        metode_pembayaran: {
+            type: DataTypes.STRING,
+            field: 'metode_pembayaran'
+        },
+        document_number: {
+            type: DataTypes.STRING,
+            field: 'document_number'
         },
         created_by: {
             type: DataTypes.STRING,

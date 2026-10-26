@@ -18,6 +18,7 @@ router.get('/getReferensiByJenisGroup', authorization.doAuth, controller.main.ge
 // Get List Data
 router.get('/getDataPenjualan', authorization.doAuth, controller.main.getDataPenjualan);
 router.get('/getDataPiutang', authorization.doAuth, controller.main.getDataPiutang);
+router.get('/getDataKreasiFaktur', authorization.doAuth, controller.main.getDataKreasiFaktur);
 router.get('/getDataReportSales', authorization.doAuth, controller.main.getDataReportSales);
 router.get('/getDataPelanggan', authorization.doAuth, controller.main.getDataPelanggan);
 router.get('/getListPrinciple', authorization.doAuth, controller.main.getListPrinciple);
@@ -36,6 +37,83 @@ router.get('/getDataLaporan', authorization.doAuth, controller.main.getDataLapor
 router.get('/getDataKonfirmasiCustomer', controller.main.getDataKonfirmasiCustomer)
 router.get('/getDataPenerimaanLain', controller.main.getDataPenerimaanLain)
 router.get('/getListNotification', authorization.doAuth, controller.main.getListNotification);
+// =====================================================
+// DASHBOARD PIUTANG
+// =====================================================
+router.get(
+    '/getSummaryPiutangDashboard',
+    authorization.doAuth,
+    controller.main.getSummaryPiutangDashboard
+);
+
+router.get(
+    '/getTrendSaldoPiutangDashboard',
+    authorization.doAuth,
+    controller.main.getTrendSaldoPiutangDashboard
+);
+
+router.get(
+    '/getDetailPiutangDashboard',
+    authorization.doAuth,
+    controller.main.getDetailPiutangDashboard
+);
+
+router.get(
+    '/getSalesOpenInvoiceDashboard',
+    authorization.doAuth,
+    controller.main.getSalesOpenInvoiceDashboard
+);
+
+router.get(
+    '/getAnalisisPiutangDashboard',
+    authorization.doAuth,
+    controller.main.getAnalisisPiutangDashboard
+);
+
+router.get(
+    '/getCollectionByCustomerDashboard',
+    authorization.doAuth,
+    controller.main.getCollectionByCustomerDashboard
+);
+
+router.get(
+    '/getPerformaPiutangProdukDashboard',
+    authorization.doAuth,
+    controller.main.getPerformaPiutangProdukDashboard
+);
+
+// =====================================================
+// MASTER FILTER DASHBOARD
+// =====================================================
+router.get(
+    '/getReferensiDashboard',
+    authorization.doAuth,
+    controller.main.getReferensiDashboard
+);
+
+router.get(
+    '/getPrincipleDashboard',
+    authorization.doAuth,
+    controller.main.getPrincipleDashboard
+);
+
+router.get(
+    '/getCustomerDashboard',
+    authorization.doAuth,
+    controller.main.getCustomerDashboard
+);
+
+router.get(
+    '/getProdukDashboard',
+    authorization.doAuth,
+    controller.main.getProdukDashboard
+);
+
+router.get(
+    '/getSaldoAkhirJatuhTempoDashboard',
+    authorization.doAuth,
+    controller.main.getSaldoAkhirJatuhTempoDashboard
+);
 
 // Insert Data
 router.post('/insertPenjualanArray', authorization.doAuth, controller.main.insertPenjualanArray)
@@ -45,11 +123,13 @@ router.post('/insertUser', authorization.doAuth, controller.main.insertUser)
 router.post('/insertFakturPetugas', authorization.doAuth, controller.main.insertFakturPetugas)
 router.post('/insertTukarFaktur', authorization.doAuth, controller.main.insertTukarFaktur)
 router.post('/insertBayarFaktur', authorization.doAuth, controller.main.insertBayarFaktur)
+router.post('/insertPenerimaanLain', authorization.doAuth, controller.main.insertPenerimaanLain)
 router.post('/verifikasiTukarFaktur', authorization.doAuth, controller.main.verifikasiTukarFaktur)
 router.post('/verifikasiBayarFaktur', authorization.doAuth, controller.main.verifikasiBayarFaktur)
 router.post('/konfirmasiPiutang', authorization.doAuth, controller.main.konfirmasiPiutang)
 router.post('/konfirmasiCustomer', controller.main.konfirmasiCustomer)
 router.post('/alokasiPenerimaanLain', authorization.doAuth, controller.main.alokasiPenerimaanLain)
+router.post('/terimaFaktur', authorization.doAuth, controller.main.terimaFaktur)
 
 // UPDATE DATA
 router.put('/updateUser', authorization.doAuth, controller.main.updateUser)

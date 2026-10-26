@@ -291,6 +291,42 @@ exports.getDataPiutang = async (req, res) => {
     }
 }
 
+exports.getDataKreasiFaktur = async (req, res) => {
+    try {
+        const params = {
+            ...req.query
+        }
+
+        console.log(
+            params,
+            'params getDataKreasiFaktur'
+        )
+
+        const result =
+            await serviceMain.getDataKreasiFaktur(
+                params
+            )
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        )
+
+    } catch (error) {
+        console.log(
+            error,
+            "ERROR GET DATA KREASI FAKTUR <<<<<<<<<"
+        )
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        )
+    }
+}
+
 exports.getDataReportSales = async (req, res) => {
     try {
         const params = {
@@ -972,6 +1008,132 @@ exports.insertBayarFaktur = async (req, res) => {
     }
 };
 
+exports.insertPenerimaanLain = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const payload = JSON.parse(
+            req.body.payload || '{}'
+        );
+
+        const {
+            nip,
+            nama,
+            role_user_id
+        } = req.user;
+
+        const files = req?.files?.lampiran
+            ? (
+                Array.isArray(req.files.lampiran)
+                    ? req.files.lampiran
+                    : [req.files.lampiran]
+            )
+            : [];
+
+        Object.assign(
+            payload,
+            {
+                created_by: `${nip} - ${nama}`,
+                role_pembuat_id: role_user_id,
+                dataUser: req.user
+            }
+        );
+
+        const result =
+            await serviceMain.insertPenerimaanLain(
+                payload,
+                files,
+                transaction
+            );
+
+        await transaction.commit();
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR INSERT BAYAR FAKTUR'
+        );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
+
+exports.terimaFaktur = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const payload = req.body || {};
+        const { nip, nama, role_user_id } = req.user;
+
+        Object.assign(payload, {
+            created_by: `${nip} - ${nama}`,
+            role_pembuat_id: role_user_id,
+            dataUser: req.user
+        });
+
+        const result = await serviceMain.terimaFaktur(
+            payload,
+            transaction
+        );
+
+        await transaction.commit();
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR VERIFIKASI TUKAR FAKTUR <<<<<<<<<'
+        );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(
+                {},
+                error?.message
+            )
+        );
+    }
+};
+
 exports.verifikasiTukarFaktur = async (req, res) => {
     let transaction;
 
@@ -1125,15 +1287,24 @@ exports.konfirmasiCustomer = async (req, res) => {
 };
 
 exports.alokasiPenerimaanLain = async (req, res) => {
-
+    let transaction
     try {
-
+        transaction = await db.transaction();
         const payload = req.body || {};
+        const { nip, nama, role_user_id } = req.user;
+
+        Object.assign(payload, {
+            created_by: `${nip} - ${nama}`,
+            role_pembuat_id: role_user_id,
+            dataUser: req.user
+        });
 
         const result = await serviceMain.alokasiPenerimaanLain(
-            payload
+            payload,
+            transaction
         );
 
+        await transaction.commit();
         res.status(
             statusCode.success
         ).json(
@@ -1146,6 +1317,13 @@ exports.alokasiPenerimaanLain = async (req, res) => {
             error,
             'ERROR ALOKASI PENERIMAAN LAIN <<<<<<<<<'
         );
+
+        if (
+            transaction &&
+            !transaction.finished
+        ) {
+            await transaction.rollback();
+        }
 
         res.status(
             statusCode.error
@@ -1514,3 +1692,44 @@ exports.getListNotification = async (req, res) => {
         res.status(statusCode.error).json(errorMessage(error))
     }
 }
+
+const dashboardHandlers = [
+    'getSummaryPiutangDashboard',
+    'getTrendSaldoPiutangDashboard',
+    'getDetailPiutangDashboard',
+    'getSalesOpenInvoiceDashboard',
+    'getAnalisisPiutangDashboard',
+    'getCollectionByCustomerDashboard',
+    'getPerformaPiutangProdukDashboard',
+    'getReferensiDashboard',
+    'getPrincipleDashboard',
+    'getCustomerDashboard',
+    'getProdukDashboard',
+    'getSaldoAkhirJatuhTempoDashboard'
+];
+
+dashboardHandlers.forEach((handlerName) => {
+    exports[handlerName] = async (req, res) => {
+        try {
+            const params = {
+                ...req.query
+            };
+
+            const result = await serviceMain[handlerName](params);
+
+            return res
+                .status(statusCode.success)
+                .json(successMessage(result));
+
+        } catch (error) {
+            console.error(
+                `ERROR ${handlerName}:`,
+                error
+            );
+
+            return res
+                .status(statusCode.error)
+                .json(errorMessage(error));
+        }
+    };
+});
