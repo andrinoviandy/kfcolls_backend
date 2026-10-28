@@ -8291,6 +8291,658 @@ const formatRupiah = (value) =>
         maximumFractionDigits: 0,
     }).format(Number(value) || 0);
 
+// exports.konfirmasiPiutang = async (payload = {}, transaction) => {
+//     const {
+//         id,
+//         piutang_id,
+//         piutang_ids,
+//         no_billing,
+//         customer_id,
+//         customer,
+//         nama_customer,
+//         media_email,
+//         email_customer,
+//         created_by,
+//     } = payload;
+
+//     const emailPenerima = String(email_customer || "").trim();
+
+//     if (!transaction) {
+//         throw new Error("Transaksi database wajib tersedia.");
+//     }
+
+//     // ==================================================
+//     // 1. VALIDASI ARRAY BILLING
+//     // ==================================================
+
+//     const piutangIds = Array.isArray(piutang_ids)
+//         ? piutang_ids
+//             .map((value) => String(value ?? "").trim())
+//             .filter(Boolean)
+//         : [piutang_id ?? id]
+//             .filter((value) => value !== undefined && value !== null && value !== "")
+//             .map(String);
+
+//     const billingNumbers = Array.isArray(no_billing)
+//         ? no_billing
+//             .map((value) => String(value ?? "").trim())
+//             .filter(Boolean)
+//         : [no_billing]
+//             .filter(Boolean)
+//             .map((value) => String(value).trim());
+
+//     if (!piutangIds.length || !billingNumbers.length) {
+//         throw new Error(
+//             "ID piutang dan nomor billing wajib diisi."
+//         );
+//     }
+
+//     if (piutangIds.length !== billingNumbers.length) {
+//         throw new Error(
+//             "Jumlah ID piutang tidak sama dengan jumlah nomor billing."
+//         );
+//     }
+
+//     // Hindari ID ganda agar tidak mencatat billing berulang.
+//     if (new Set(piutangIds).size !== piutangIds.length) {
+//         throw new Error("Terdapat ID piutang yang duplikat.");
+//     }
+
+//     // ==================================================
+//     // 2. AMBIL SEMUA DATA PIUTANG
+//     // ==================================================
+
+//     const dataPiutangList = await model.d_piutang.findAll({
+//         where: {
+//             piutang_id: piutangIds,
+//         },
+//         transaction,
+//     });
+
+//     if (dataPiutangList.length !== piutangIds.length) {
+//         throw new Error(
+//             "Ada data piutang yang tidak ditemukan."
+//         );
+//     }
+
+//     // Urutkan kembali mengikuti urutan payload dari frontend.
+//     const byId = new Map(
+//         dataPiutangList.map((item) => [
+//             String(item.piutang_id),
+//             item,
+//         ])
+//     );
+
+//     const orderedRows = piutangIds.map((idValue) =>
+//         byId.get(String(idValue))
+//     );
+
+//     if (orderedRows.some((item) => !item)) {
+//         throw new Error("Data piutang tidak lengkap.");
+//     }
+
+//     // ==================================================
+//     // 3. VALIDASI CUSTOMER
+//     // ==================================================
+
+//     const firstPiutang = orderedRows[0];
+
+//     const nama =
+//         nama_customer ||
+//         firstPiutang.nama_customer ||
+//         firstPiutang.customer_name ||
+//         "-";
+
+//     const kodeCustomer =
+//         customer ||
+//         firstPiutang.customer ||
+//         firstPiutang.customer_id ||
+//         firstPiutang.kode_customer ||
+//         "-";
+
+//     const customerKey = String(kodeCustomer).trim();
+
+//     const mixedCustomer = orderedRows.some((item) => {
+//         const key = String(
+//             item.customer ??
+//             item.customer_id ??
+//             item.kode_customer ??
+//             ""
+//         ).trim();
+
+//         return (
+//             key &&
+//             customerKey !== "-" &&
+//             key !== customerKey
+//         );
+//     });
+
+//     if (mixedCustomer) {
+//         throw new Error(
+//             "Semua billing harus berasal dari customer yang sama."
+//         );
+//     }
+
+//     // ==================================================
+//     // 4. SIAPKAN RINCIAN BILLING
+//     // ==================================================
+
+//     const rows = orderedRows.map((item, index) => {
+//         const dpp = Number(item.dpp || 0);
+//         const ppn = Number(item.ppn || 0);
+
+//         const lcAmount = Number(
+//             item.lc_amount ??
+//             item.nominal_tagihan ??
+//             item.total_invoice ??
+//             (dpp + ppn)
+//         );
+
+//         const partialPayment = Number(
+//             item.partial_payment ??
+//             item.jumlah_bayar ??
+//             item.total_bayar ??
+//             0
+//         );
+
+//         const balance = Number(
+//             item.balance ??
+//             item.sisa_piutang ??
+//             item.outstanding ??
+//             Math.max(lcAmount - partialPayment, 0)
+//         );
+
+//         const docDate =
+//             item.doc_date ??
+//             item.posting_date ??
+//             item.tanggal_invoice ??
+//             null;
+
+//         const docDateFormatted = docDate
+//             ? new Intl.DateTimeFormat("id-ID", {
+//                 day: "2-digit",
+//                 month: "2-digit",
+//                 year: "numeric",
+//                 timeZone: "Asia/Jakarta",
+//             }).format(new Date(docDate))
+//             : "-";
+
+//         return {
+//             id: String(item.piutang_id),
+//             noBilling: billingNumbers[index],
+//             lcAmount,
+//             partialPayment,
+//             balance,
+//             docDateFormatted,
+//         };
+//     });
+
+//     const totalLcAmount = rows.reduce(
+//         (sum, item) => sum + item.lcAmount,
+//         0
+//     );
+
+//     const totalPartialPayment = rows.reduce(
+//         (sum, item) => sum + item.partialPayment,
+//         0
+//     );
+
+//     const totalBalance = rows.reduce(
+//         (sum, item) => sum + item.balance,
+//         0
+//     );
+
+//     const waktuPercobaan = new Date();
+
+//     let flagEmail = "F";
+//     let keterangan = "";
+//     let messageId = null;
+
+//     // ==================================================
+//     // 5. KIRIM SATU EMAIL UNTUK SEMUA BILLING
+//     // ==================================================
+
+//     const k_konfirmasi_id = uuidv4();
+
+//     try {
+//         if (media_email !== true) {
+//             throw new Error(
+//                 "Media pengiriman email tidak diaktifkan."
+//             );
+//         }
+
+//         if (!emailPenerima) {
+//             throw new Error(
+//                 "Email penerima wajib diisi."
+//             );
+//         }
+
+//         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+//         if (!emailRegex.test(emailPenerima)) {
+//             throw new Error(
+//                 "Format email penerima tidak valid."
+//             );
+//         }
+
+//         if (
+//             !process.env.SMTP_USER ||
+//             !process.env.SMTP_PASS
+//         ) {
+//             throw new Error(
+//                 "Konfigurasi SMTP belum lengkap."
+//             );
+//         }
+
+//         const subject =
+//             `Permintaan Konfirmasi Piutang Pelanggan - ${nama}`;
+
+//         const tanggalSurat = new Intl.DateTimeFormat(
+//             "id-ID",
+//             {
+//                 day: "2-digit",
+//                 month: "long",
+//                 year: "numeric",
+//                 timeZone: "Asia/Jakarta",
+//             }
+//         ).format(new Date());
+
+//         // ==================================================
+//         // LOGO EMAIL
+//         // Variabel fs, logoHeaderPath, logoFixPath,
+//         // dan escapeHtml harus tersedia di file service.
+//         // ==================================================
+
+//         const headerLogoHtml = `
+//             <table role="presentation"
+//                 cellpadding="0"
+//                 cellspacing="0"
+//                 style="border-collapse:collapse;margin-left:auto;">
+//                 <tr>
+//                     ${fs.existsSync(logoHeaderPath)
+//                 ? `
+//                                 <td style="vertical-align:middle;padding-left:10px;">
+//                                     <img
+//                                         src="cid:logoKimiaFarmaHeader"
+//                                         alt="Kimia Farma"
+//                                         style="display:block;width:auto;height:30px;max-width:120px;border:0;"
+//                                     />
+//                                 </td>
+//                             `
+//                 : ""
+//             }
+//                     ${fs.existsSync(logoFixPath)
+//                 ? `
+//                                 <td style="vertical-align:middle;padding-left:10px;">
+//                                     <img
+//                                         src="cid:logoFixHeader"
+//                                         alt="Logo Fix"
+//                                         style="display:block;width:auto;height:30px;max-width:120px;border:0;"
+//                                     />
+//                                 </td>
+//                             `
+//                 : ""
+//             }
+//                 </tr>
+//             </table>
+//         `;
+
+//         // ==================================================
+//         // BARIS TABEL BILLING
+//         // ==================================================
+
+//         const detailRowsHtml = rows.map((row) => `
+//             <tr>
+//                 <td style="padding:9px 6px;border:1px solid #d1d5db;">
+//                     ${escapeHtml(row.noBilling)}
+//                 </td>
+//                 <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:center;">
+//                     ${escapeHtml(row.docDateFormatted)}
+//                 </td>
+//                 <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+//                     ${escapeHtml(formatRupiah(row.lcAmount))}
+//                 </td>
+//                 <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+//                     ${escapeHtml(formatRupiah(row.partialPayment))}
+//                 </td>
+//                 <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+//                     ${escapeHtml(formatRupiah(row.balance))}
+//                 </td>
+//             </tr>
+//         `).join("");
+
+//         // ==================================================
+//         // HTML EMAIL
+//         // ==================================================
+
+//         const html = `
+//             <!DOCTYPE html>
+//             <html lang="id">
+//             <head>
+//                 <meta charset="UTF-8">
+//                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+//                 <title>${escapeHtml(subject)}</title>
+//             </head>
+//             <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+//                 <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #d1d5db;padding:32px;box-sizing:border-box;">
+
+//                     <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+//                         ${headerLogoHtml}
+//                     </div>
+
+//                     <p style="margin:0 0 8px;">
+//                         ${escapeHtml(tanggalSurat)}
+//                     </p>
+
+//                     <p style="margin:18px 0 4px;">
+//                         Kepada Yth.:
+//                     </p>
+
+//                     <p style="margin:0;font-weight:bold;">
+//                         ${escapeHtml(nama)}
+//                     </p>
+
+//                     <p style="margin:2px 0 0;">
+//                         Up. Bagian Keuangan / Penagihan
+//                     </p>
+
+//                     <h2 style="text-align:center;font-size:17px;letter-spacing:.5px;margin:30px 0 24px;text-decoration:underline;">
+//                         PERMINTAAN KONFIRMASI PIUTANG PELANGGAN
+//                     </h2>
+
+//                     <p style="margin:0 0 14px;">
+//                         Dengan hormat,
+//                     </p>
+
+//                     <p style="line-height:1.7;margin:0 0 14px;">
+//                         Bersama email ini kami sampaikan rincian tagihan atas nama
+//                         <strong>${escapeHtml(nama)}</strong>, per tanggal
+//                         ${escapeHtml(tanggalSurat)}, dengan total saldo piutang sebesar
+//                         <strong>${escapeHtml(formatRupiah(totalBalance))}</strong>.
+//                     </p>
+
+//                     <p style="line-height:1.7;margin:0 0 14px;">
+//                         Demi memastikan keakuratan data, mohon bantuan Bapak/Ibu
+//                         untuk melakukan rekonsiliasi terhadap tagihan tersebut dengan
+//                         catatan yang Bapak/Ibu miliki. Apabila terdapat perbedaan atau
+//                         ketidaksesuaian, kami sangat mengharapkan informasi dari Bapak/Ibu.
+//                     </p>
+
+//                     <p style="line-height:1.7;margin:0 0 14px;">
+//                         Untuk keperluan tersebut, Bapak/Ibu dapat menghubungi pihak
+//                         terkait di PT Kimia Farma Trading Distribution. Mohon cantumkan
+//                         catatan atau informasi pendukung apabila terdapat perbedaan
+//                         pada rincian transaksi di bawah ini.
+//                     </p>
+
+//                     <p style="line-height:1.7;margin:0 0 18px;">
+//                         Mengingat pentingnya konfirmasi ini bagi kelengkapan data
+//                         piutang kami, kami mengharapkan tanggapan paling lambat
+//                         14 (empat belas) hari kalender setelah tanggal email ini.
+//                         Apabila kami tidak menerima konfirmasi dalam jangka waktu
+//                         tersebut, data tagihan akan dianggap sesuai dengan catatan Bapak/Ibu.
+//                     </p>
+
+//                     <h3 style="text-align:center;font-size:14px;letter-spacing:1px;margin:26px 0 14px;">
+//                         LAMPIRAN PERINCIAN TAGIHAN
+//                     </h3>
+
+//                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+//                         style="width:100%;border-collapse:collapse;font-size:12px;">
+
+//                         <tr>
+//                             <td colspan="5" style="padding:7px;border:1px solid #d1d5db;background:#f8fafc;">
+//                                 <strong>Customer:</strong> ${escapeHtml(kodeCustomer)}
+//                                 &nbsp;&nbsp;
+//                                 <strong>Name:</strong> ${escapeHtml(nama)}
+//                             </td>
+//                         </tr>
+
+//                         <tr style="background:#e5e7eb;">
+//                             <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:left;">
+//                                 Bill. Doc.
+//                             </th>
+//                             <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:center;">
+//                                 Doc. Date
+//                             </th>
+//                             <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;">
+//                                 LC Amount
+//                             </th>
+//                             <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;">
+//                                 Partial Payment
+//                             </th>
+//                             <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;">
+//                                 Balance
+//                             </th>
+//                         </tr>
+
+//                         ${detailRowsHtml}
+
+//                         <tr style="font-weight:bold;background:#f8fafc;">
+//                             <td colspan="2" style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;">
+//                                 Total
+//                             </td>
+//                             <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+//                                 ${escapeHtml(formatRupiah(totalLcAmount))}
+//                             </td>
+//                             <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+//                                 ${escapeHtml(formatRupiah(totalPartialPayment))}
+//                             </td>
+//                             <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+//                                 ${escapeHtml(formatRupiah(totalBalance))}
+//                             </td>
+//                         </tr>
+//                     </table>
+
+//                     <div style="margin:22px 0;padding:16px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:6px;">
+//                         <p style="margin:0 0 10px;line-height:1.6;font-weight:bold;color:#1e3a8a;">
+//                             Silakan melakukan konfirmasi piutang melalui tautan berikut:
+//                         </p>
+//                         <a href="https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}"
+//                            target="_blank"
+//                            rel="noopener noreferrer"
+//                            style="color:#1d4ed8;overflow-wrap:anywhere;line-height:1.7;">
+//                             https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}
+//                         </a>
+//                     </div>
+
+//                     <p style="line-height:1.7;margin:0 0 14px;">
+//                         Terima kasih atas perhatian dan kerja sama Bapak/Ibu.
+//                     </p>
+
+//                     <p style="font-size:11px;line-height:1.6;color:#64748b;border-top:1px solid #e5e7eb;padding-top:14px;margin:26px 0 0;">
+//                         Email ini dihasilkan secara elektronik dan tidak memerlukan tanda tangan fisik.
+//                         Email ini ditujukan untuk keperluan konfirmasi piutang.
+//                     </p>
+//                 </div>
+//             </body>
+//             </html>
+//         `;
+//         // ==================================================
+//         // VERSI TEXT EMAIL
+//         // ==================================================
+
+//         const text = [
+//             tanggalSurat,
+//             "",
+//             "Kepada Yth.:",
+//             nama,
+//             "Up. Bagian Keuangan / Penagihan",
+//             "",
+//             "PERMINTAAN KONFIRMASI PIUTANG PELANGGAN",
+//             "",
+//             "Dengan hormat,",
+//             `Bersama email ini kami sampaikan rincian tagihan atas nama ${nama}, dengan total saldo piutang sebesar ${formatRupiah(totalBalance)}.`,
+//             "",
+//             "LAMPIRAN PERINCIAN TAGIHAN",
+//             `Customer: ${kodeCustomer}`,
+//             `Name: ${nama}`,
+//             "",
+//             "Bill. Doc. | Doc. Date | LC Amount | Partial Payment | Balance",
+//             ...rows.map(
+//                 (row) =>
+//                     `${row.noBilling} | ${row.docDateFormatted} | ${formatRupiah(row.lcAmount)} | ${formatRupiah(row.partialPayment)} | ${formatRupiah(row.balance)}`
+//             ),
+//             "",
+//             `Total LC Amount: ${formatRupiah(totalLcAmount)}`,
+//             `Total Partial Payment: ${formatRupiah(totalPartialPayment)}`,
+//             `Total Balance: ${formatRupiah(totalBalance)}`,
+//             "",
+//             "Silakan melakukan konfirmasi piutang melalui tautan berikut:",
+//             "https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=12345",
+//             "",
+//             "Terima kasih atas perhatian dan kerja sama Bapak/Ibu.",
+//         ].join("\n");
+
+//         // ==================================================
+//         // ATTACHMENT LOGO
+//         // ==================================================
+
+//         const attachments = [];
+
+//         if (fs.existsSync(logoHeaderPath)) {
+//             attachments.push({
+//                 filename: "logo_kfcolls.png",
+//                 path: logoHeaderPath,
+//                 cid: "logoKimiaFarmaHeader",
+//                 contentDisposition: "inline",
+//             });
+//         }
+
+//         if (fs.existsSync(logoFixPath)) {
+//             attachments.push({
+//                 filename: "LOGO_FIX.png",
+//                 path: logoFixPath,
+//                 cid: "logoFixHeader",
+//                 contentDisposition: "inline",
+//             });
+//         }
+
+//         // ==================================================
+//         // KIRIM EMAIL SATU KALI
+//         // ==================================================
+
+//         const info = await transporter.sendMail({
+//             from: {
+//                 name:
+//                     process.env.SMTP_FROM_NAME ||
+//                     "Konfirmasi Piutang",
+//                 address: process.env.SMTP_USER,
+//             },
+//             to: emailPenerima,
+//             subject,
+//             text,
+//             html,
+//             attachments,
+//         });
+
+//         flagEmail = "S";
+//         messageId = info.messageId;
+
+//         keterangan =
+//             "Email konfirmasi piutang berhasil dikirim.";
+
+//     } catch (error) {
+//         flagEmail = "F";
+
+//         keterangan =
+//             `Gagal mengirim email: ${error.message}`;
+
+//         console.error(
+//             "[KONFIRMASI PIUTANG] Gagal:",
+//             error.message
+//         );
+//     }
+
+//     // ==================================================
+//     // 6. SIMPAN LOG UNTUK SETIAP BILLING
+//     // ==================================================
+
+//     const logKonfirmasi = [];
+
+//     if (flagEmail === "S") {
+//         await model.k_konfirmasi.create({
+//             k_konfirmasi_id: k_konfirmasi_id,
+//             tgl_kirim_konfirmasi: waktuPercobaan,
+//             keterangan: email_customer,
+//             created_by: created_by
+//         }, {
+//             transaction,
+//         })
+//         for (const row of rows) {
+//             // Nonaktifkan log konfirmasi sebelumnya untuk billing ini.
+//             await model.k_piutang.update(
+//                 {
+//                     flag_aktif: "T",
+//                 },
+//                 {
+//                     where: {
+//                         piutang_id: row.id,
+//                         flag_aktif: "Y",
+//                     },
+//                     transaction,
+//                 }
+//             );
+
+//             // Buat log baru untuk masing-masing billing.
+//             const log = await model.k_piutang.create(
+//                 {
+//                     k_piutang_id: uuidv4(),
+//                     k_konfirmasi_id: k_konfirmasi_id,
+//                     piutang_id: row.id,
+//                     tgl_kirim_konfirmasi: waktuPercobaan,
+//                     keterangan,
+//                     created_by: created_by || null,
+//                     created_at: new Date(),
+//                     flag_wa: "N",
+//                     flag_email: flagEmail,
+//                     flag_aktif: "Y",
+//                     wa: null,
+//                     email: emailPenerima || null,
+//                 },
+//                 {
+//                     transaction,
+//                 }
+//             );
+
+//             logKonfirmasi.push(log);
+//         }
+//     }
+
+//     // ==================================================
+//     // 7. RESPONSE
+//     // ==================================================
+
+//     return {
+//         status: flagEmail === "S",
+//         success: flagEmail === "S",
+//         message: keterangan,
+//         flag_email: flagEmail,
+//         email: emailPenerima || null,
+
+//         jumlah_billing: rows.length,
+
+//         no_billing: rows.map(
+//             (row) => row.noBilling
+//         ),
+
+//         piutang_ids: rows.map(
+//             (row) => row.id
+//         ),
+
+//         total_lc_amount: totalLcAmount,
+//         total_partial_payment: totalPartialPayment,
+//         total_balance: totalBalance,
+
+//         messageId,
+
+//         k_piutang_ids: logKonfirmasi.map(
+//             (item) => item.k_piutang_id
+//         ),
+//     };
+// };
+
+
 exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     const {
         id,
@@ -8320,7 +8972,12 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             .map((value) => String(value ?? "").trim())
             .filter(Boolean)
         : [piutang_id ?? id]
-            .filter((value) => value !== undefined && value !== null && value !== "")
+            .filter(
+                (value) =>
+                    value !== undefined &&
+                    value !== null &&
+                    value !== ""
+            )
             .map(String);
 
     const billingNumbers = Array.isArray(no_billing)
@@ -8461,10 +9118,28 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         const docDateFormatted = docDate
             ? new Intl.DateTimeFormat("id-ID", {
                 day: "2-digit",
-                month: "2-digit",
+                month: "long",
                 year: "numeric",
                 timeZone: "Asia/Jakarta",
             }).format(new Date(docDate))
+            : "-";
+
+        // Tanggal jatuh tempo untuk menghitung piutang overdue.
+        const dueDate =
+            item.due_date ??
+            item.net_due_date ??
+            item.tanggal_jatuh_tempo ??
+            item.jatuh_tempo ??
+            item.dueDate ??
+            null;
+
+        const dueDateFormatted = dueDate
+            ? new Intl.DateTimeFormat("id-ID", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+                timeZone: "Asia/Jakarta",
+            }).format(new Date(dueDate))
             : "-";
 
         return {
@@ -8473,9 +9148,16 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             lcAmount,
             partialPayment,
             balance,
+            docDate,
             docDateFormatted,
+            dueDate,
+            dueDateFormatted,
         };
     });
+
+    // ==================================================
+    // 5. HITUNG TOTAL PIUTANG
+    // ==================================================
 
     const totalLcAmount = rows.reduce(
         (sum, item) => sum + item.lcAmount,
@@ -8492,6 +9174,32 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         0
     );
 
+    // Total piutang jatuh tempo:
+    // saldo yang tanggal jatuh temponya sudah terlewati.
+    const tanggalHariIni = new Date();
+    tanggalHariIni.setHours(0, 0, 0, 0);
+
+    const totalPiutangJatuhTempo = rows.reduce(
+        (sum, item) => {
+            if (!item.dueDate) {
+                return sum;
+            }
+
+            const tanggalJatuhTempo = new Date(item.dueDate);
+
+            if (Number.isNaN(tanggalJatuhTempo.getTime())) {
+                return sum;
+            }
+
+            tanggalJatuhTempo.setHours(0, 0, 0, 0);
+
+            return tanggalJatuhTempo < tanggalHariIni
+                ? sum + item.balance
+                : sum;
+        },
+        0
+    );
+
     const waktuPercobaan = new Date();
 
     let flagEmail = "F";
@@ -8499,10 +9207,14 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     let messageId = null;
 
     // ==================================================
-    // 5. KIRIM SATU EMAIL UNTUK SEMUA BILLING
+    // 6. SIAPKAN ID KONFIRMASI
     // ==================================================
 
     const k_konfirmasi_id = uuidv4();
+
+    // ==================================================
+    // 7. KIRIM SATU EMAIL UNTUK SEMUA BILLING
+    // ==================================================
 
     try {
         if (media_email !== true) {
@@ -8534,8 +9246,11 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             );
         }
 
-        const subject =
-            `Permintaan Konfirmasi Piutang Pelanggan - ${nama}`;
+        // ==================================================
+        // 8. SUBJECT DAN TANGGAL SURAT
+        // ==================================================
+
+        const subject = `Konfirmasi Piutang - ${nama}`;
 
         const tanggalSurat = new Intl.DateTimeFormat(
             "id-ID",
@@ -8547,17 +9262,21 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             }
         ).format(new Date());
 
+        const tanggalSuratDenganKota = `Jakarta, ${tanggalSurat}`;
+
         // ==================================================
-        // LOGO EMAIL
+        // 9. LOGO EMAIL
         // Variabel fs, logoHeaderPath, logoFixPath,
         // dan escapeHtml harus tersedia di file service.
         // ==================================================
 
         const headerLogoHtml = `
-            <table role="presentation"
+            <table
+                role="presentation"
                 cellpadding="0"
                 cellspacing="0"
-                style="border-collapse:collapse;margin-left:auto;">
+                style="border-collapse:collapse;margin-left:auto;"
+            >
                 <tr>
                     ${fs.existsSync(logoHeaderPath)
                 ? `
@@ -8571,6 +9290,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
                             `
                 : ""
             }
+
                     ${fs.existsSync(logoFixPath)
                 ? `
                                 <td style="vertical-align:middle;padding-left:10px;">
@@ -8588,7 +9308,8 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         `;
 
         // ==================================================
-        // BARIS TABEL BILLING
+        // 10. BARIS TABEL RINCIAN FAKTUR
+        // Lampiran rincian tetap ditampilkan di email.
         // ==================================================
 
         const detailRowsHtml = rows.map((row) => `
@@ -8596,15 +9317,23 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
                 <td style="padding:9px 6px;border:1px solid #d1d5db;">
                     ${escapeHtml(row.noBilling)}
                 </td>
+
                 <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:center;">
                     ${escapeHtml(row.docDateFormatted)}
                 </td>
+
+                <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:center;">
+                    ${escapeHtml(row.dueDateFormatted)}
+                </td>
+
                 <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
                     ${escapeHtml(formatRupiah(row.lcAmount))}
                 </td>
+
                 <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
                     ${escapeHtml(formatRupiah(row.partialPayment))}
                 </td>
+
                 <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
                     ${escapeHtml(formatRupiah(row.balance))}
                 </td>
@@ -8612,7 +9341,40 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         `).join("");
 
         // ==================================================
-        // HTML EMAIL
+        // 11. FORMAT RINGKASAN PIUTANG
+        // ==================================================
+
+        const ringkasanPiutangHtml = `
+            <table
+                role="presentation"
+                cellpadding="0"
+                cellspacing="0"
+                style="width:100%;border-collapse:collapse;margin:18px 0;font-size:14px;"
+            >
+                <tr>
+                    <td style="padding:5px 0;width:240px;">
+                        Total Saldo Piutang
+                    </td>
+                    <td style="padding:5px 0;width:15px;">:</td>
+                    <td style="padding:5px 0;font-weight:bold;">
+                        ${escapeHtml(formatRupiah(totalBalance))}
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:5px 0;">
+                        Total Piutang Jatuh Tempo
+                    </td>
+                    <td style="padding:5px 0;">:</td>
+                    <td style="padding:5px 0;font-weight:bold;">
+                        ${escapeHtml(formatRupiah(totalPiutangJatuhTempo))}
+                    </td>
+                </tr>
+            </table>
+        `;
+
+        // ==================================================
+        // 12. HTML EMAIL
         // ==================================================
 
         const html = `
@@ -8620,182 +9382,283 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             <html lang="id">
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta
+                    name="viewport"
+                    content="width=device-width, initial-scale=1.0"
+                >
                 <title>${escapeHtml(subject)}</title>
             </head>
-            <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
-                <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #d1d5db;padding:32px;box-sizing:border-box;">
 
-                    <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+            <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+                <div style="max-width:800px;margin:0 auto;background:#ffffff;border:1px solid #d1d5db;padding:32px;box-sizing:border-box;">
+
+                    <!-- LOGO -->
+                    <div style="text-align:right;margin-bottom:24px;">
                         ${headerLogoHtml}
                     </div>
 
-                    <p style="margin:0 0 8px;">
-                        ${escapeHtml(tanggalSurat)}
+                    <!-- TANGGAL SURAT -->
+                    <p style="margin:0 0 24px;text-align:right;">
+                        ${escapeHtml(tanggalSuratDenganKota)}
                     </p>
 
-                    <p style="margin:18px 0 4px;">
-                        Kepada Yth.:
+                    <!-- TUJUAN SURAT -->
+                    <p style="margin:0 0 4px;">
+                        Kepada Yth.,
                     </p>
 
-                    <p style="margin:0;font-weight:bold;">
+                    <p style="margin:0 0 4px;">
+                        Pimpinan
+                    </p>
+
+                    <p style="margin:0 0 4px;font-weight:bold;">
                         ${escapeHtml(nama)}
                     </p>
 
-                    <p style="margin:2px 0 0;">
-                        Up. Bagian Keuangan / Penagihan
+                    <p style="margin:0 0 24px;">
+                        di tempat
                     </p>
 
-                    <h2 style="text-align:center;font-size:17px;letter-spacing:.5px;margin:30px 0 24px;text-decoration:underline;">
-                        PERMINTAAN KONFIRMASI PIUTANG PELANGGAN
-                    </h2>
+                    <!-- PERIHAL -->
+                    <!-- PERIHAL RATA TENGAH -->
+                    <p style="text-align:center;margin:24px 0;font-weight:bold;">
+                        Perihal: Konfirmasi Piutang
+                    </p>
 
+                    <!-- PEMBUKA SURAT -->
                     <p style="margin:0 0 14px;">
                         Dengan hormat,
                     </p>
 
-                    <p style="line-height:1.7;margin:0 0 14px;">
-                        Bersama email ini kami sampaikan rincian tagihan atas nama
-                        <strong>${escapeHtml(nama)}</strong>, per tanggal
-                        ${escapeHtml(tanggalSurat)}, dengan total saldo piutang sebesar
-                        <strong>${escapeHtml(formatRupiah(totalBalance))}</strong>.
+                    <p style="line-height:1.8;text-align:justify;margin:0 0 16px;">
+                        Teriring salam dan do’a untuk Bapak/Ibu, semoga
+                        senantiasa diberikan kesehatan dan kemudahan di dalam
+                        menjalankan aktivitas sehari-hari, serta ucapan terima
+                        kasih atas kepercayaan dan kerjasama yang telah terjalin
+                        selama ini.
                     </p>
 
-                    <p style="line-height:1.7;margin:0 0 14px;">
-                        Demi memastikan keakuratan data, mohon bantuan Bapak/Ibu
-                        untuk melakukan rekonsiliasi terhadap tagihan tersebut dengan
-                        catatan yang Bapak/Ibu miliki. Apabila terdapat perbedaan atau
-                        ketidaksesuaian, kami sangat mengharapkan informasi dari Bapak/Ibu.
+                    <p style="line-height:1.8;text-align:justify;margin:0 0 14px;">
+                        Selanjutnya, sehubungan dengan kerjasama tersebut,
+                        bersama ini kami beritahukan bahwa saat ini piutang
+                        dagang
+                        <strong>${escapeHtml(nama)}</strong>
+                        per tanggal
+                        <strong>${escapeHtml(tanggalSurat)}</strong>
+                        adalah sebagai berikut:
                     </p>
 
-                    <p style="line-height:1.7;margin:0 0 14px;">
-                        Untuk keperluan tersebut, Bapak/Ibu dapat menghubungi pihak
-                        terkait di PT Kimia Farma Trading Distribution. Mohon cantumkan
-                        catatan atau informasi pendukung apabila terdapat perbedaan
-                        pada rincian transaksi di bawah ini.
+                    <!-- RINGKASAN PIUTANG -->
+                    ${ringkasanPiutangHtml}
+
+                    <p style="line-height:1.8;text-align:justify;margin:0 0 16px;">
+                        Kami lampirkan rincian piutang tersebut, mohon untuk
+                        dapat dilakukan peninjauan dan pemeriksaan atas data
+                        tersebut. Kemudian, mohon agar dibuatkan catatan dan
+                        ditandatangani sesuai format terlampir.
                     </p>
 
-                    <p style="line-height:1.7;margin:0 0 18px;">
-                        Mengingat pentingnya konfirmasi ini bagi kelengkapan data
-                        piutang kami, kami mengharapkan tanggapan paling lambat
-                        14 (empat belas) hari kalender setelah tanggal email ini.
-                        Apabila kami tidak menerima konfirmasi dalam jangka waktu
-                        tersebut, data tagihan akan dianggap sesuai dengan catatan Bapak/Ibu.
+                    <p style="line-height:1.8;text-align:justify;margin:0 0 24px;">
+                        Demikian pemberitahuan ini disampaikan. Atas perhatian
+                        dan kerjasama yang baik, kami ucapkan terima kasih.
                     </p>
 
-                    <h3 style="text-align:center;font-size:14px;letter-spacing:1px;margin:26px 0 14px;">
-                        LAMPIRAN PERINCIAN TAGIHAN
+                    <!-- TANDA TANGAN -->
+                    <div style="margin-top:28px;margin-bottom:28px;">
+                        <p style="margin:0 0 8px;">
+                            Hormat kami,
+                        </p>
+
+                        <p style="margin:0 0 4px;font-weight:bold;">
+                            PT Kimia Farma Trading &amp; Distribution
+                        </p>
+
+                        <div style="height:64px;"></div>
+
+                        <p style="margin:0;font-weight:bold;text-decoration:underline;">
+                            Soni Odang Sonjaya
+                        </p>
+
+                        <p style="margin:4px 0 0;">
+                            Direktur Keuangan, Manajemen Risiko &amp; SDM
+                        </p>
+                    </div>
+
+                    <!-- PEMISAH LAMPIRAN -->
+                    <div style="border-top:2px solid #1f2937;margin:30px 0 20px;"></div>
+
+                    <h3 style="font-size:16px;text-align:center;margin:0 0 6px;">
+                        LAMPIRAN RINCIAN PIUTANG
                     </h3>
 
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                        style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <p style="font-size:12px;text-align:center;color:#64748b;margin:0 0 18px;">
+                        Rincian faktur pelanggan per ${escapeHtml(tanggalSurat)}
+                    </p>
 
+                    <!-- IDENTITAS CUSTOMER -->
+                    <table
+                        role="presentation"
+                        width="100%"
+                        cellpadding="0"
+                        cellspacing="0"
+                        style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;"
+                    >
                         <tr>
-                            <td colspan="5" style="padding:7px;border:1px solid #d1d5db;background:#f8fafc;">
-                                <strong>Customer:</strong> ${escapeHtml(kodeCustomer)}
-                                &nbsp;&nbsp;
-                                <strong>Name:</strong> ${escapeHtml(nama)}
+                            <td style="padding:8px;border:1px solid #d1d5db;background:#f8fafc;">
+                                <strong>Kode Customer:</strong>
+                                ${escapeHtml(kodeCustomer)}
                             </td>
-                        </tr>
 
-                        <tr style="background:#e5e7eb;">
-                            <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:left;">
-                                Bill. Doc.
-                            </th>
-                            <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:center;">
-                                Doc. Date
-                            </th>
-                            <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;">
-                                LC Amount
-                            </th>
-                            <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;">
-                                Partial Payment
-                            </th>
-                            <th style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;">
-                                Balance
-                            </th>
-                        </tr>
-
-                        ${detailRowsHtml}
-
-                        <tr style="font-weight:bold;background:#f8fafc;">
-                            <td colspan="2" style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;">
-                                Total
-                            </td>
-                            <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
-                                ${escapeHtml(formatRupiah(totalLcAmount))}
-                            </td>
-                            <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
-                                ${escapeHtml(formatRupiah(totalPartialPayment))}
-                            </td>
-                            <td style="padding:9px 6px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
-                                ${escapeHtml(formatRupiah(totalBalance))}
+                            <td style="padding:8px;border:1px solid #d1d5db;background:#f8fafc;">
+                                <strong>Nama Customer:</strong>
+                                ${escapeHtml(nama)}
                             </td>
                         </tr>
                     </table>
 
-                    <div style="margin:22px 0;padding:16px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:6px;">
+                    <!-- TABEL RINCIAN FAKTUR -->
+                    <table
+                        role="presentation"
+                        width="100%"
+                        cellpadding="0"
+                        cellspacing="0"
+                        style="width:100%;border-collapse:collapse;font-size:11px;"
+                    >
+                        <thead>
+                            <tr style="background:#e5e7eb;">
+                                <th style="padding:8px 5px;border:1px solid #d1d5db;text-align:left;">
+                                    No. Billing
+                                </th>
+
+                                <th style="padding:8px 5px;border:1px solid #d1d5db;text-align:center;">
+                                    Tanggal Faktur
+                                </th>
+
+                                <th style="padding:8px 5px;border:1px solid #d1d5db;text-align:center;">
+                                    Jatuh Tempo
+                                </th>
+
+                                <th style="padding:8px 5px;border:1px solid #d1d5db;text-align:right;">
+                                    Nominal Tagihan
+                                </th>
+
+                                <th style="padding:8px 5px;border:1px solid #d1d5db;text-align:right;">
+                                    Pembayaran
+                                </th>
+
+                                <th style="padding:8px 5px;border:1px solid #d1d5db;text-align:right;">
+                                    Sisa Piutang
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            ${detailRowsHtml}
+
+                            <tr style="font-weight:bold;background:#f8fafc;">
+                                <td
+                                    colspan="3"
+                                    style="padding:8px 5px;border:1px solid #d1d5db;text-align:right;"
+                                >
+                                    Total
+                                </td>
+
+                                <td style="padding:8px 5px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+                                    ${escapeHtml(formatRupiah(totalLcAmount))}
+                                </td>
+
+                                <td style="padding:8px 5px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+                                    ${escapeHtml(formatRupiah(totalPartialPayment))}
+                                </td>
+
+                                <td style="padding:8px 5px;border:1px solid #d1d5db;text-align:right;white-space:nowrap;">
+                                    ${escapeHtml(formatRupiah(totalBalance))}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- TAUTAN KONFIRMASI -->
+                    <div style="margin:24px 0;padding:16px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:6px;">
                         <p style="margin:0 0 10px;line-height:1.6;font-weight:bold;color:#1e3a8a;">
                             Silakan melakukan konfirmasi piutang melalui tautan berikut:
                         </p>
-                        <a href="https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           style="color:#1d4ed8;overflow-wrap:anywhere;line-height:1.7;">
-                            https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}
+
+                        <a
+                            href="https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${encodeURIComponent(k_konfirmasi_id)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style="color:#1d4ed8;overflow-wrap:anywhere;line-height:1.7;"
+                        >
+                            https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${encodeURIComponent(k_konfirmasi_id)}
                         </a>
                     </div>
 
-                    <p style="line-height:1.7;margin:0 0 14px;">
-                        Terima kasih atas perhatian dan kerja sama Bapak/Ibu.
+                    <p style="font-size:11px;line-height:1.6;color:#64748b;border-top:1px solid #e5e7eb;padding-top:14px;margin:26px 0 0;">
+                        Email ini dibuat secara elektronik untuk keperluan konfirmasi piutang.
                     </p>
 
-                    <p style="font-size:11px;line-height:1.6;color:#64748b;border-top:1px solid #e5e7eb;padding-top:14px;margin:26px 0 0;">
-                        Email ini dihasilkan secara elektronik dan tidak memerlukan tanda tangan fisik.
-                        Email ini ditujukan untuk keperluan konfirmasi piutang.
-                    </p>
                 </div>
             </body>
             </html>
         `;
+
         // ==================================================
-        // VERSI TEXT EMAIL
+        // 13. VERSI TEXT EMAIL
         // ==================================================
 
         const text = [
-            tanggalSurat,
+            tanggalSuratDenganKota,
             "",
-            "Kepada Yth.:",
+            "Kepada Yth.,",
+            "Pimpinan",
             nama,
-            "Up. Bagian Keuangan / Penagihan",
+            "di tempat",
             "",
-            "PERMINTAAN KONFIRMASI PIUTANG PELANGGAN",
+            "Perihal : Konfirmasi Piutang",
             "",
             "Dengan hormat,",
-            `Bersama email ini kami sampaikan rincian tagihan atas nama ${nama}, dengan total saldo piutang sebesar ${formatRupiah(totalBalance)}.`,
             "",
-            "LAMPIRAN PERINCIAN TAGIHAN",
-            `Customer: ${kodeCustomer}`,
-            `Name: ${nama}`,
+            "Teriring salam dan do’a untuk Bapak/Ibu, semoga senantiasa diberikan kesehatan dan kemudahan di dalam menjalankan aktivitas sehari-hari, serta ucapan terima kasih atas kepercayaan dan kerjasama yang telah terjalin selama ini.",
             "",
-            "Bill. Doc. | Doc. Date | LC Amount | Partial Payment | Balance",
+            `Selanjutnya, sehubungan dengan kerjasama tersebut, bersama ini kami beritahukan bahwa saat ini piutang dagang ${nama} per tanggal ${tanggalSurat} adalah sebagai berikut:`,
+            "",
+            `Total Saldo Piutang       : ${formatRupiah(totalBalance)}`,
+            `Total Piutang Jatuh Tempo : ${formatRupiah(totalPiutangJatuhTempo)}`,
+            "",
+            "Kami lampirkan rincian piutang tersebut, mohon untuk dapat dilakukan peninjauan dan pemeriksaan atas data tersebut. Kemudian, mohon agar dibuatkan catatan dan ditandatangani sesuai format terlampir.",
+            "",
+            "Demikian pemberitahuan ini disampaikan. Atas perhatian dan kerjasama yang baik, kami ucapkan terima kasih.",
+            "",
+            "Hormat kami,",
+            "PT Kimia Farma Trading & Distribution",
+            "",
+            "",
+            "Soni Odang Sonjaya",
+            "Direktur Keuangan, Manajemen Risiko & SDM",
+            "",
+            "LAMPIRAN RINCIAN PIUTANG",
+            `Kode Customer: ${kodeCustomer}`,
+            `Nama Customer: ${nama}`,
+            "",
+            "No. Billing | Tanggal Faktur | Jatuh Tempo | Nominal Tagihan | Pembayaran | Sisa Piutang",
             ...rows.map(
                 (row) =>
-                    `${row.noBilling} | ${row.docDateFormatted} | ${formatRupiah(row.lcAmount)} | ${formatRupiah(row.partialPayment)} | ${formatRupiah(row.balance)}`
+                    `${row.noBilling} | ${row.docDateFormatted} | ${row.dueDateFormatted} | ${formatRupiah(row.lcAmount)} | ${formatRupiah(row.partialPayment)} | ${formatRupiah(row.balance)}`
             ),
             "",
-            `Total LC Amount: ${formatRupiah(totalLcAmount)}`,
-            `Total Partial Payment: ${formatRupiah(totalPartialPayment)}`,
-            `Total Balance: ${formatRupiah(totalBalance)}`,
+            `Total Nominal Tagihan: ${formatRupiah(totalLcAmount)}`,
+            `Total Pembayaran: ${formatRupiah(totalPartialPayment)}`,
+            `Total Sisa Piutang: ${formatRupiah(totalBalance)}`,
             "",
             "Silakan melakukan konfirmasi piutang melalui tautan berikut:",
-            "https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=12345",
+            `https://kfcolls-dev.kftd.co.id/konfirmasi-customer?status=${k_konfirmasi_id}`,
             "",
-            "Terima kasih atas perhatian dan kerja sama Bapak/Ibu.",
+            "PT Kimia Farma Trading & Distribution",
         ].join("\n");
 
         // ==================================================
-        // ATTACHMENT LOGO
+        // 14. ATTACHMENT LOGO
         // ==================================================
 
         const attachments = [];
@@ -8819,7 +9682,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         }
 
         // ==================================================
-        // KIRIM EMAIL SATU KALI
+        // 15. KIRIM EMAIL
         // ==================================================
 
         const info = await transporter.sendMail({
@@ -8855,20 +9718,24 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     }
 
     // ==================================================
-    // 6. SIMPAN LOG UNTUK SETIAP BILLING
+    // 16. SIMPAN LOG UNTUK SETIAP BILLING
     // ==================================================
 
     const logKonfirmasi = [];
 
     if (flagEmail === "S") {
-        await model.k_konfirmasi.create({
-            k_konfirmasi_id: k_konfirmasi_id,
-            tgl_kirim_konfirmasi: waktuPercobaan,
-            keterangan: email_customer,
-            created_by: created_by
-        }, {
-            transaction,
-        })
+        await model.k_konfirmasi.create(
+            {
+                k_konfirmasi_id: k_konfirmasi_id,
+                tgl_kirim_konfirmasi: waktuPercobaan,
+                keterangan: emailPenerima,
+                created_by: created_by,
+            },
+            {
+                transaction,
+            }
+        );
+
         for (const row of rows) {
             // Nonaktifkan log konfirmasi sebelumnya untuk billing ini.
             await model.k_piutang.update(
@@ -8910,7 +9777,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     }
 
     // ==================================================
-    // 7. RESPONSE
+    // 17. RESPONSE
     // ==================================================
 
     return {
@@ -8933,8 +9800,14 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         total_lc_amount: totalLcAmount,
         total_partial_payment: totalPartialPayment,
         total_balance: totalBalance,
+        total_piutang_jatuh_tempo: totalPiutangJatuhTempo,
 
         messageId,
+
+        k_konfirmasi_id:
+            flagEmail === "S"
+                ? k_konfirmasi_id
+                : null,
 
         k_piutang_ids: logKonfirmasi.map(
             (item) => item.k_piutang_id
