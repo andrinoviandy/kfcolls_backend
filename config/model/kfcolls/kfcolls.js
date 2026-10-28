@@ -6011,6 +6011,10 @@ exports.K_PIUTANG = db.define(
             type: DataTypes.STRING,
             field: 'email',
         },
+        surat_jawaban: {
+            type: DataTypes.TEXT,
+            field: 'surat_jawaban',
+        },
     },
     {
         schema: 'public',

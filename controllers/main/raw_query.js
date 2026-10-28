@@ -22018,6 +22018,7 @@ query.getDataKonfirmasiPiutang = `
         kp.flag_email AS konfirmasi_flag_email,
         kp.email AS konfirmasi_email,
         kp.wa AS konfirmasi_wa,
+        kp.jawaban,
         CASE
             WHEN kp.k_piutang_id IS NULL
                 THEN 'BELUM_DIKIRIM'
@@ -22053,7 +22054,8 @@ query.getDataKonfirmasiPiutang = `
             k.email,
             k.flag_aktif,
             k.created_by,
-            k.created_at
+            k.created_at,
+            CONCAT('${LINK_DOK}', k.surat_jawaban) AS jawaban 
         FROM public.k_piutang k
         WHERE k.piutang_id = p.piutang_id AND k.flag_aktif = 'Y'
         ORDER BY
@@ -22664,7 +22666,8 @@ query.getDataKonfirmasiCustomer = `
             AS total_piutang,
 
         p.created_at AS tanggal_data_piutang,
-        TO_CHAR(kp.tgl_rencana_pembayaran, 'DD/MM/YYYY') AS tgl_rencana_pembayaran  
+        TO_CHAR(kp.tgl_rencana_pembayaran, 'DD/MM/YYYY') AS tgl_rencana_pembayaran,
+        CONCAT('${LINK_DOK}', kp.surat_jawaban) AS jawaban 
 
     FROM public.k_konfirmasi kk
 

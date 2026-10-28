@@ -1240,29 +1240,155 @@ exports.verifikasiBayarFaktur = async (req, res) => {
     }
 };
 
+// exports.konfirmasiCustomer = async (req, res) => {
+//     let transaction;
+
+//     try {
+//         transaction = await db.transaction();
+
+//         const payload = req.body || {};
+
+//         const result = await serviceMain.konfirmasiCustomer(
+//             payload,
+//             transaction
+//         );
+
+//         await transaction.commit();
+
+//         res.status(
+//             statusCode.success
+//         ).json(
+//             successMessage(result)
+//         );
+
+//     } catch (error) {
+
+//         console.log(
+//             error,
+//             'ERROR KONFIRMASI CUSTOMER <<<<<<<<<'
+//         );
+
+//         if (
+//             transaction &&
+//             !transaction.finished
+//         ) {
+//             await transaction.rollback();
+//         }
+
+//         res.status(
+//             statusCode.error
+//         ).json(
+//             errorMessage(
+//                 {},
+//                 error?.message
+//             )
+//         );
+//     }
+// };
+
 exports.konfirmasiCustomer = async (req, res) => {
     let transaction;
 
     try {
         transaction = await db.transaction();
 
-        const payload = req.body || {};
+        /*
+         * =====================================================
+         * AMBIL PAYLOAD
+         * =====================================================
+         *
+         * Mendukung:
+         * 1. FormData dengan field satu per satu.
+         * 2. FormData dengan field payload berupa JSON.
+         */
+
+        let payload = {};
+
+        if (req.body?.payload) {
+            payload = JSON.parse(req.body.payload || '{}');
+        } else {
+            payload = {
+                ...(req.body || {})
+            };
+        }
+
+        /*
+         * =====================================================
+         * NORMALISASI K_PIUTANG_ID
+         * =====================================================
+         *
+         * FormData dari frontend mengirim array sebagai JSON string.
+         */
+
+        if (typeof payload.k_piutang_id === 'string') {
+            try {
+                payload.k_piutang_id = JSON.parse(
+                    payload.k_piutang_id
+                );
+            } catch (error) {
+                throw new Error(
+                    'Format k_piutang_id tidak valid'
+                );
+            }
+        }
+
+        /*
+         * =====================================================
+         * DATA USER
+         * =====================================================
+         */
+
+        const {
+            nip,
+            nama,
+            role_user_id
+        } = req.user || {};
+
+        Object.assign(payload, {
+            created_by: nip && nama
+                ? `${nip} - ${nama}`
+                : payload.created_by || '',
+
+            role_pembuat_id: role_user_id || null,
+
+            dataUser: req.user || null
+        });
+
+        /*
+         * =====================================================
+         * AMBIL FILE SURAT JAWABAN
+         * =====================================================
+         */
+
+        const files = req?.files?.surat_jawaban
+            ? (
+                Array.isArray(req.files.surat_jawaban)
+                    ? req.files.surat_jawaban
+                    : [req.files.surat_jawaban]
+            )
+            : [];
+
+        /*
+         * =====================================================
+         * PANGGIL SERVICE
+         * =====================================================
+         */
 
         const result = await serviceMain.konfirmasiCustomer(
             payload,
+            files,
             transaction
         );
 
         await transaction.commit();
 
-        res.status(
+        return res.status(
             statusCode.success
         ).json(
             successMessage(result)
         );
 
     } catch (error) {
-
         console.log(
             error,
             'ERROR KONFIRMASI CUSTOMER <<<<<<<<<'
@@ -1275,7 +1401,7 @@ exports.konfirmasiCustomer = async (req, res) => {
             await transaction.rollback();
         }
 
-        res.status(
+        return res.status(
             statusCode.error
         ).json(
             errorMessage(
