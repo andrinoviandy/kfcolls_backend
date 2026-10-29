@@ -232,6 +232,98 @@ exports.uploadPenjualanExcel = async (req, res) => {
     }
 };
 
+
+exports.uploadMasterTarget = async (req, res) => {
+    let transaction;
+    const startTime = Date.now();
+
+    console.log(
+        `[UPLOAD MASTER TARGET] Mulai: ${new Date().toISOString()}`
+    );
+
+    try {
+        const file = Array.isArray(req?.files?.file)
+            ? req.files.file[0]
+            : req?.files?.file;
+
+        if (!file) {
+            return res.status(statusCode.bad).json(
+                errorMessage("File Excel wajib diunggah.")
+            );
+        }
+
+        console.log("[UPLOAD MASTER TARGET] File:", {
+            name: file.name,
+            sizeMB: (file.size / (1024 * 1024)).toFixed(2),
+        });
+
+        if (!/\.(xlsx|xls)$/i.test(file.name)) {
+            return res.status(statusCode.bad).json(
+                errorMessage("Format file harus .xlsx atau .xls.")
+            );
+        }
+
+        transaction = await db.transaction();
+
+        console.log(
+            "[UPLOAD MASTER TARGET] Transaksi database dibuat"
+        );
+
+        const result = await serviceMain.uploadMasterTarget(
+            file,
+            req?.user?.nama,
+            transaction
+        );
+
+        console.log("[UPLOAD MASTER TARGET] Service selesai:", {
+            durationSeconds: (
+                (Date.now() - startTime) /
+                1000
+            ).toFixed(2),
+            total: result.total,
+            success: result.success,
+            failed: result.failed,
+        });
+
+        await transaction.commit();
+        transaction = null;
+
+        console.log("[UPLOAD MASTER TARGET] Commit berhasil");
+
+        return res.status(statusCode.success).json(
+            successMessage(result)
+        );
+    } catch (error) {
+        if (transaction && !transaction.finished) {
+            try {
+                await transaction.rollback();
+
+                console.log(
+                    "[UPLOAD MASTER TARGET] Rollback berhasil"
+                );
+            } catch (rollbackError) {
+                console.error(
+                    "[UPLOAD MASTER TARGET] Rollback gagal:",
+                    rollbackError
+                );
+            }
+        }
+
+        console.error("[UPLOAD MASTER TARGET] Gagal:", {
+            durationSeconds: (
+                (Date.now() - startTime) /
+                1000
+            ).toFixed(2),
+            message: error.message,
+            stack: error.stack,
+        });
+
+        return res.status(statusCode.bad).json(
+            errorMessage(error.message)
+        );
+    }
+};
+
 exports.getDataPenjualan = async (req, res) => {
     try {
         const params = { ...req.query }
@@ -247,6 +339,27 @@ exports.getDataPenjualan = async (req, res) => {
         console.log(
             error,
             "ERROR GET DATA PENJUALAN <<<<<<<<<"
+        )
+
+        res.status(statusCode.error).json(
+            errorMessage(error)
+        )
+    }
+}
+
+exports.getDataMasterTarget = async (req, res) => {
+    try {
+        const params = { ...req.query }
+
+        const result = await serviceMain.getDataMasterTarget(params)
+
+        res.status(statusCode.success).json(
+            successMessage(result)
+        )
+    } catch (error) {
+        console.log(
+            error,
+            "ERROR GET DATA MASTER TARGET <<<<<<<<<"
         )
 
         res.status(statusCode.error).json(
@@ -933,6 +1046,41 @@ exports.insertTukarFaktur = async (req, res) => {
             )
         );
     }
+};
+
+exports.insertFakturKembali = async (req, res) => {
+    try {
+        // Ambil payload dari frontend
+        let payload = req.body || {};
+
+        const { nip, nama, role_user_id } = req.user;
+
+        // Informasi user yang melakukan update
+        payload = {
+            ...payload,
+            updated_by: `${nip} - ${nama}`,
+            role_pembuat_id: role_user_id,
+            dataUser: req.user
+        };
+
+        // Tanpa transaction dan tanpa upload file
+        const result = await serviceMain.insertFakturKembali(payload);
+
+        return res.status(statusCode.success).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+        console.error(
+            'ERROR INSERT FAKTUR KEMBALI:',
+            error
+        );
+
+        return res.status(statusCode.error).json(
+            errorMessage({}, error?.message)
+        );
+    }
+
 };
 
 exports.insertBayarFaktur = async (req, res) => {
@@ -1819,6 +1967,18 @@ exports.getListNotification = async (req, res) => {
     }
 }
 
+exports.historyPenugasan = async (req, res) => {
+    try {
+        const params = { ...req.query }
+        params.user_id = req?.user?.user_id
+        const result = await serviceMain.historyPenugasan(params)
+        res.status(statusCode.success).json(successMessage(result))
+    } catch (error) {
+        console.log(error, "ERROR <<<<<<<<<")
+        res.status(statusCode.error).json(errorMessage(error))
+    }
+}
+
 const dashboardHandlers = [
     'getSummaryPiutangDashboard',
     'getTrendSaldoPiutangDashboard',
@@ -1832,7 +1992,7 @@ const dashboardHandlers = [
     'getCustomerDashboard',
     'getProdukDashboard',
     'getSaldoAkhirJatuhTempoDashboard',
-    'getAgingPiutangDashboard'
+    'getAgingPiutangDashboard',
 ];
 
 dashboardHandlers.forEach((handlerName) => {

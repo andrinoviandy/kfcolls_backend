@@ -4452,10 +4452,10 @@ exports.D_COD = db.define('d_cod',
             field: 'updated_by'
         }
     }, {
-        schema: 'public',
-        freezeTableName: true,
-        timestamps: false
-    }
+    schema: 'public',
+    freezeTableName: true,
+    timestamps: false
+}
 )
 
 exports.D_PIUTANG = db.define('d_piutang',
@@ -4559,10 +4559,10 @@ exports.D_PIUTANG = db.define('d_piutang',
             field: 'channel_id'
         },
     }, {
-        schema: 'public',
-        freezeTableName: true,
-        timestamps: false
-    }
+    schema: 'public',
+    freezeTableName: true,
+    timestamps: false
+}
 )
 
 exports.D_PENJUALAN = db.define(
@@ -5729,10 +5729,10 @@ exports.D_FAKTUR_PETUGAS = db.define('d_faktur_petugas',
             field: 'updated_by'
         }
     }, {
-        schema: 'public',
-        freezeTableName: true,
-        timestamps: false
-    }
+    schema: 'public',
+    freezeTableName: true,
+    timestamps: false
+}
 )
 
 
@@ -6080,6 +6080,129 @@ exports.K_KONFIRMASI = db.define(
     },
     {
         schema: 'public',
+        freezeTableName: true,
+        timestamps: false,
+    }
+);
+
+exports.M_TARGET = db.define(
+    "m_target",
+    {
+        id: {
+            type: DataTypes.BIGINT,
+            field: "id",
+            primaryKey: true,
+            autoIncrement: true,
+        },
+        periode: {
+            type: DataTypes.DATE,
+            field: "periode",
+        },
+        company_code: {
+            type: DataTypes.STRING,
+            field: "company_code",
+        },
+        plant: {
+            type: DataTypes.STRING,
+            field: "plant",
+        },
+        profit_center_desc: {
+            type: DataTypes.STRING(255),
+            field: "profit_center_desc",
+        },
+        document_no: {
+            type: DataTypes.STRING(50),
+            field: "document_no",
+        },
+        posting_date: {
+            type: DataTypes.DATE,
+            field: "posting_date",
+        },
+        document_type: {
+            type: DataTypes.STRING,
+            field: "document_type",
+        },
+        billing_no: {
+            type: DataTypes.STRING(50),
+            field: "billing_no",
+        },
+        customer_no: {
+            type: DataTypes.STRING(50),
+            field: "customer_no",
+        },
+        customer_name: {
+            type: DataTypes.STRING(255),
+            field: "customer_name",
+        },
+        lini_i: {
+            type: DataTypes.STRING(100),
+            field: "lini_i",
+        },
+        lini_ii: {
+            type: DataTypes.STRING(100),
+            field: "lini_ii",
+        },
+        document_date: {
+            type: DataTypes.DATEONLY,
+            field: "document_date",
+        },
+        amount: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "amount",
+        },
+        net_due_date: {
+            type: DataTypes.DATEONLY,
+            field: "net_due_date",
+        },
+        text_information: {
+            type: DataTypes.TEXT,
+            field: "text_information",
+        },
+        top: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "top",
+        },
+        aging_standar: {
+            type: DataTypes.STRING,
+            field: "aging_standar",
+        },
+        nilai_aging_periode: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "nilai_aging_periode",
+        },
+        aging_top: {
+            type: DataTypes.STRING,
+            field: "aging_top",
+        },
+        nilai_aging_top_periode: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "nilai_aging_top_periode",
+        },
+        ket_target_cabang: {
+            type: DataTypes.TEXT,
+            field: "ket_target_cabang",
+        },
+        target_cabang: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "target_cabang",
+        },
+        is_active: {
+            type: DataTypes.INTEGER,
+            field: "is_active",
+            allowNull: false,
+            defaultValue: 1,
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: "created_at",
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: "updated_at",
+        },
+    },
+    {
+        schema: "public",
         freezeTableName: true,
         timestamps: false,
     }

@@ -35,5 +35,6 @@ model.d_pembayaran = n2n.D_PEMBAYARAN
 model.d_penerimaan_lain = n2n.D_PENERIMAAN_LAIN
 model.k_piutang = n2n.K_PIUTANG
 model.k_konfirmasi = n2n.K_KONFIRMASI
+model.m_target = n2n.M_TARGET
 
 module.exports = model

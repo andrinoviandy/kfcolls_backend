@@ -16,6 +16,7 @@ router.get('/getSubReferensiByJenis', swagger.getSubReferensiByJenis, controller
 router.get('/getReferensiByJenisGroup', authorization.doAuth, controller.main.getReferensiByJenisGroup)
 
 // Get List Data
+router.get('/getDataMasterTarget', authorization.doAuth, controller.main.getDataMasterTarget);
 router.get('/getDataPenjualan', authorization.doAuth, controller.main.getDataPenjualan);
 router.get('/getDataPiutang', authorization.doAuth, controller.main.getDataPiutang);
 router.get('/getDataKreasiFaktur', authorization.doAuth, controller.main.getDataKreasiFaktur);
@@ -120,10 +121,16 @@ router.get(
     authorization.doAuth,
     controller.main.getAgingPiutangDashboard
 );
+router.get(
+    '/historyPenugasan',
+    authorization.doAuth,
+    controller.main.historyPenugasan
+);
 
 // Insert Data
 router.post('/insertPenjualanArray', authorization.doAuth, controller.main.insertPenjualanArray)
 router.post('/uploadPenjualanExcel', authorization.doAuth, controller.main.uploadPenjualanExcel)
+router.post('/uploadMasterTarget', authorization.doAuth, controller.main.uploadMasterTarget)
 router.post('/insertDataCod', authorization.doAuth, controller.main.insertDataCod)
 router.post('/insertUser', authorization.doAuth, controller.main.insertUser)
 router.post('/insertFakturPetugas', authorization.doAuth, controller.main.insertFakturPetugas)
@@ -136,6 +143,7 @@ router.post('/konfirmasiPiutang', authorization.doAuth, controller.main.konfirma
 router.post('/konfirmasiCustomer', controller.main.konfirmasiCustomer)
 router.post('/alokasiPenerimaanLain', authorization.doAuth, controller.main.alokasiPenerimaanLain)
 router.post('/terimaFaktur', authorization.doAuth, controller.main.terimaFaktur)
+router.post('/insertFakturKembali', authorization.doAuth, controller.main.insertFakturKembali)
 
 // UPDATE DATA
 router.put('/updateUser', authorization.doAuth, controller.main.updateUser)

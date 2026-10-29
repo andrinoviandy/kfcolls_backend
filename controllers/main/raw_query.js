@@ -17148,6 +17148,20 @@ OFFSET (:page - 1) * :limit
 FETCH NEXT :limit ROWS ONLY;
 `;
 
+query.historyPenugasan = `
+SELECT 
+    a.is_active,
+    TO_CHAR(a.assigned_at, 'DD/MM/YYYY HH24:MM:SI') AS assigned_at,
+    b.nama,
+    a.alasan_pengembalian as alasan  
+FROM d_faktur_petugas a 
+    LEFT JOIN m_user b ON b.nip = a.nip 
+WHERE 
+    a.piutang_id = :piutang_id 
+    AND a.kegiatan = :kegiatan 
+ORDER BY a.assigned_at DESC
+`;
+
 query.getOmset = `
 SELECT 
     COALESCE(dp.realisasi_omset, 0) AS omset,

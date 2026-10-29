@@ -1123,6 +1123,512 @@ exports.uploadPenjualanExcel = async (
 };
 
 
+const MASTER_TARGET_HEADERS = [
+    "periode",
+    "company_code",
+    "plant",
+    "Profit Center Desc.",
+    "document_no",
+    "posting_date",
+    "document_type",
+    "billing_no",
+    "customer_no",
+    "customer name",
+    "Lini I",
+    "LINI II",
+    "document_date",
+    "amount",
+    "net_due_date",
+    "text_information",
+    "TOP",
+    "AGING STANDAR",
+    "30/09/2026",
+    "AGING TOP",
+    "30/09/2026",
+    "Ket Target Cabang",
+    "TARGET CABANG",
+];
+
+const MASTER_TARGET_FIELDS = [
+    "periode",
+    "company_code",
+    "plant",
+    "profit_center_desc",
+    "document_no",
+    "posting_date",
+    "document_type",
+    "billing_no",
+    "customer_no",
+    "customer_name",
+    "lini_i",
+    "lini_ii",
+    "document_date",
+    "amount",
+    "net_due_date",
+    "text_information",
+    "top",
+    "aging_standar",
+    "nilai_aging_periode",
+    "aging_top",
+    "nilai_aging_top_periode",
+    "ket_target_cabang",
+    "target_cabang",
+];
+
+const MASTER_TARGET_DATE_FIELDS = new Set([
+    "posting_date",
+    "periode",
+    "document_date",
+    "net_due_date",
+]);
+
+const MASTER_TARGET_NUMERIC_FIELDS = new Set([
+    "amount",
+    "top",
+    "nilai_aging_periode",
+    "nilai_aging_top_periode",
+    "target_cabang",
+]);
+
+const normalizeMasterTargetHeader = (value) =>
+    String(value ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+const parseMasterTargetDate = (value) => {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+
+    if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) {
+            return null;
+        }
+
+        return [
+            value.getFullYear(),
+            String(value.getMonth() + 1).padStart(2, "0"),
+            String(value.getDate()).padStart(2, "0"),
+        ].join("-");
+    }
+
+    if (typeof value === "number") {
+        const parsed = XLSX.SSF.parse_date_code(value);
+
+        if (!parsed) return null;
+
+        return [
+            parsed.y,
+            String(parsed.m).padStart(2, "0"),
+            String(parsed.d).padStart(2, "0"),
+        ].join("-");
+    }
+
+    const text = String(value).trim();
+
+    let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+
+    if (match) {
+        return [
+            match[1],
+            String(match[2]).padStart(2, "0"),
+            String(match[3]).padStart(2, "0"),
+        ].join("-");
+    }
+
+    match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+
+    if (match) {
+        return [
+            match[3],
+            String(match[2]).padStart(2, "0"),
+            String(match[1]).padStart(2, "0"),
+        ].join("-");
+    }
+
+    return null;
+};
+
+const parseMasterTargetNumber = (value, field) => {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+
+    if (typeof value === "number") {
+        if (!Number.isFinite(value)) {
+            throw new Error(`Nilai ${field} tidak valid.`);
+        }
+
+        return value;
+    }
+
+    let text = String(value).trim();
+
+    if (!text) return null;
+
+    if (text.includes(",") && text.includes(".")) {
+        if (text.lastIndexOf(",") > text.lastIndexOf(".")) {
+            text = text.replace(/\./g, "").replace(",", ".");
+        } else {
+            text = text.replace(/,/g, "");
+        }
+    } else if (text.includes(",")) {
+        text = text.replace(",", ".");
+    }
+
+    const number = Number(text);
+
+    if (!Number.isFinite(number)) {
+        throw new Error(
+            `Nilai numerik ${field} tidak valid: ${value}`
+        );
+    }
+
+    return number;
+};
+
+exports.uploadMasterTarget = async (
+    file,
+    createdBy,
+    transaction
+) => {
+    if (!file?.name) {
+        throw new Error("File Excel wajib diunggah.");
+    }
+
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+        throw new Error("Format file harus .xlsx atau .xls.");
+    }
+
+    if (!file.tempFilePath) {
+        throw new Error(
+            "File sementara tidak ditemukan. Pastikan express-fileupload menggunakan useTempFiles: true."
+        );
+    }
+
+    if (!fs.existsSync(file.tempFilePath)) {
+        throw new Error("File Excel sementara tidak ditemukan.");
+    }
+
+    if (!transaction) {
+        throw new Error("Transaksi database tidak tersedia.");
+    }
+
+    const worker = new Worker(
+        path.join(
+            __dirname,
+            "../workers/masterTargetExcel.worker.js"
+        ),
+        {
+            workerData: {
+                filePath: file.tempFilePath,
+                batchSize: 1000,
+            },
+        }
+    );
+
+    const result = {
+        total: 0,
+        success: 0,
+        failed: 0,
+        data_error: [],
+    };
+
+    const maxErrorPreview = 100;
+    const validRows = [];
+
+    let headersValidated = false;
+    let workerFinished = false;
+
+    const addError = (excelRow, message) => {
+        result.failed += 1;
+
+        if (result.data_error.length < maxErrorPreview) {
+            result.data_error.push({
+                row: excelRow,
+                message,
+            });
+        }
+    };
+
+    const processRows = (rows) => {
+        for (const entry of rows) {
+            const values = entry?.values;
+            const excelRow = entry?.excelRow;
+
+            if (
+                !Array.isArray(values) ||
+                !values.some(
+                    (value) => String(value ?? "").trim() !== ""
+                )
+            ) {
+                continue;
+            }
+
+            result.total += 1;
+
+            try {
+                const item = {};
+
+                MASTER_TARGET_FIELDS.forEach((field, index) => {
+                    let value = values[index];
+
+                    if (
+                        value === null ||
+                        value === undefined ||
+                        value === ""
+                    ) {
+                        item[field] = null;
+                        return;
+                    }
+
+                    if (MASTER_TARGET_DATE_FIELDS.has(field)) {
+                        const parsedDate = parseMasterTargetDate(value);
+
+                        if (!parsedDate) {
+                            throw new Error(
+                                `${field} tidak valid pada baris ${excelRow}.`
+                            );
+                        }
+
+                        item[field] = parsedDate;
+                        return;
+                    }
+
+                    if (MASTER_TARGET_NUMERIC_FIELDS.has(field)) {
+                        item[field] = parseMasterTargetNumber(
+                            value,
+                            field
+                        );
+                        return;
+                    }
+
+                    item[field] = String(value).trim();
+                });
+
+                if (
+                    !item.document_no ||
+                    !String(item.document_no).trim()
+                ) {
+                    throw new Error(
+                        `document_no wajib diisi pada baris ${excelRow}.`
+                    );
+                }
+
+                item.document_no = String(item.document_no).trim();
+                item.is_active = 1;
+
+                // Sesuaikan nama kolom audit jika model kamu menggunakannya.
+                // if (createdBy) {
+                //     item.created_by = createdBy;
+                // }
+
+                validRows.push({
+                    item,
+                    excelRow,
+                });
+            } catch (error) {
+                addError(
+                    excelRow,
+                    error.message ||
+                    `Gagal memproses baris ${excelRow}.`
+                );
+            }
+        }
+    };
+
+    try {
+        await new Promise((resolve, reject) => {
+            let settled = false;
+
+            const cleanup = () => {
+                worker.removeAllListeners("message");
+                worker.removeAllListeners("error");
+                worker.removeAllListeners("exit");
+            };
+
+            const finishError = (error) => {
+                if (settled) return;
+
+                settled = true;
+                cleanup();
+                reject(error);
+            };
+
+            const finishSuccess = () => {
+                if (settled) return;
+
+                settled = true;
+                cleanup();
+                resolve();
+            };
+
+            worker.on("message", async (message) => {
+                try {
+                    if (message.type === "HEADERS") {
+                        const actualHeaders = (
+                            message.headers || []
+                        ).map(normalizeMasterTargetHeader);
+
+                        const expectedHeaders =
+                            MASTER_TARGET_HEADERS.map(
+                                normalizeMasterTargetHeader
+                            );
+
+                        const valid =
+                            actualHeaders.length ===
+                            expectedHeaders.length &&
+                            expectedHeaders.every(
+                                (header, index) =>
+                                    actualHeaders[index] === header
+                            );
+
+                        if (!valid) {
+                            worker.postMessage({ type: "CANCEL" });
+
+                            finishError(
+                                new Error(
+                                    "Header Excel tidak sesuai template Master Target. " +
+                                    "Pastikan 23 kolom dan urutannya sesuai template."
+                                )
+                            );
+
+                            return;
+                        }
+
+                        headersValidated = true;
+
+                        worker.postMessage({ type: "ACK" });
+                        return;
+                    }
+
+                    if (message.type === "BATCH") {
+                        if (!headersValidated) {
+                            throw new Error(
+                                "Header Excel belum divalidasi."
+                            );
+                        }
+
+                        processRows(message.rows || []);
+
+                        worker.postMessage({ type: "ACK" });
+                        return;
+                    }
+
+                    if (message.type === "DONE") {
+                        workerFinished = true;
+
+                        if (!headersValidated) {
+                            throw new Error(
+                                "Header Excel tidak berhasil divalidasi."
+                            );
+                        }
+
+                        if (validRows.length === 0) {
+                            throw new Error(
+                                result.total === 0
+                                    ? "Excel hanya berisi header atau tidak memiliki baris data."
+                                    : `Tidak ada data valid untuk disimpan. Total baris diperiksa: ${result.total}, total error: ${result.failed}.`
+                            );
+                        }
+
+                        const targetModel = model.m_target;
+
+                        if (!targetModel) {
+                            throw new Error(
+                                "Model aging_piutang tidak ditemukan."
+                            );
+                        }
+
+                        // Nonaktifkan semua data lama untuk dokumen
+                        // yang akan digantikan oleh data valid baru.
+                        const documentNumbers = [
+                            ...new Set(
+                                validRows.map(
+                                    ({ item }) => item.document_no
+                                )
+                            ),
+                        ];
+
+                        await targetModel.update(
+                            { is_active: 0 },
+                            {
+                                where: {
+                                    document_no: documentNumbers,
+                                    is_active: 1,
+                                },
+                                transaction,
+                            }
+                        );
+
+                        // Insert data baru setelah seluruh dokumen lama
+                        // yang relevan dinonaktifkan.
+                        const insertBatchSize = 500;
+
+                        for (
+                            let index = 0;
+                            index < validRows.length;
+                            index += insertBatchSize
+                        ) {
+                            const batch = validRows.slice(
+                                index,
+                                index + insertBatchSize
+                            );
+
+                            await targetModel.bulkCreate(
+                                batch.map(({ item }) => item),
+                                {
+                                    transaction,
+                                    validate: true,
+                                }
+                            );
+
+                            result.success += batch.length;
+                        }
+
+                        result.failed = result.total - result.success;
+
+                        finishSuccess();
+                    }
+
+                    if (message.type === "ERROR") {
+                        finishError(
+                            new Error(
+                                message.message ||
+                                "Worker gagal membaca Excel."
+                            )
+                        );
+                    }
+                } catch (error) {
+                    worker.postMessage({ type: "CANCEL" });
+                    finishError(error);
+                }
+            });
+
+            worker.once("error", finishError);
+
+            worker.once("exit", (code) => {
+                if (code !== 0 && !workerFinished) {
+                    finishError(
+                        new Error(
+                            `Worker Master Target berhenti dengan kode ${code}.`
+                        )
+                    );
+                }
+            });
+        });
+
+        return {
+            ...result,
+            errors: result.data_error,
+        };
+    } catch (error) {
+        await worker.terminate().catch(() => { });
+        throw error;
+    }
+};
+
 exports.getDataPenjualan = async (params) => {
     try {
         // =====================================================
@@ -1439,6 +1945,366 @@ exports.getDataPenjualan = async (params) => {
     } catch (error) {
         console.error(
             'ERROR SERVICE GET DATA PENJUALAN:',
+            error
+        );
+
+        throw error;
+    }
+};
+
+
+exports.getDataMasterTarget = async (params = {}) => {
+    try {
+        // =====================================================
+        // HELPER NORMALIZE FILTER
+        // Mendukung nilai tunggal maupun array
+        // =====================================================
+        const normalizeFilterValues = (value) => {
+            const values = Array.isArray(value)
+                ? value
+                : [value];
+
+            return values
+                .filter(
+                    (item) =>
+                        item !== undefined &&
+                        item !== null
+                )
+                .map((item) => String(item).trim())
+                .filter(Boolean);
+        };
+
+        // =====================================================
+        // PAGINATION
+        // =====================================================
+        const page = Math.max(
+            Number(params?.page) || 1,
+            1
+        );
+
+        const limit = Math.min(
+            Math.max(Number(params?.limit) || 10, 1),
+            500
+        );
+
+        const offset = (page - 1) * limit;
+
+        // =====================================================
+        // PARAMETER FILTER
+        // =====================================================
+        const keyword = String(
+            params?.keyword || ''
+        ).trim();
+
+        // Frontend mengirim format YYYY-MM
+        // Contoh: 2026-09
+        const periode = String(
+            params?.periode || ''
+        ).trim();
+
+        const companyCodes = normalizeFilterValues(
+            params?.company_code ??
+            params?.['company_code[]']
+        );
+
+        const plants = normalizeFilterValues(
+            params?.plant ??
+            params?.['plant[]']
+        );
+
+        const customerNumbers = normalizeFilterValues(
+            params?.customer_no ??
+            params?.['customer_no[]']
+        );
+
+        const liniI = normalizeFilterValues(
+            params?.lini_i ??
+            params?.['lini_i[]']
+        );
+
+        const liniII = normalizeFilterValues(
+            params?.lini_ii ??
+            params?.['lini_ii[]']
+        );
+
+        // =====================================================
+        // WHERE CONDITION
+        // Data langsung dari m_target, tanpa JOIN
+        // =====================================================
+        let condition = `
+            WHERE COALESCE(is_active, 1) = 1
+        `;
+
+        const replacements = {
+            limit,
+            offset,
+        };
+
+        // =====================================================
+        // KEYWORD SEARCH
+        // =====================================================
+        if (keyword) {
+            condition += `
+                AND (
+                    COALESCE(document_no::TEXT, '') ILIKE :keyword
+                    OR COALESCE(billing_no::TEXT, '') ILIKE :keyword
+                    OR COALESCE(customer_no::TEXT, '') ILIKE :keyword
+                    OR COALESCE(customer_name, '') ILIKE :keyword
+                    OR COALESCE(company_code, '') ILIKE :keyword
+                    OR COALESCE(plant::TEXT, '') ILIKE :keyword
+                    OR COALESCE(profit_center_desc, '') ILIKE :keyword
+                    OR COALESCE(lini_i, '') ILIKE :keyword
+                    OR COALESCE(lini_ii, '') ILIKE :keyword
+                    OR COALESCE(text_information, '') ILIKE :keyword
+                    OR COALESCE(ket_target_cabang, '') ILIKE :keyword
+                )
+            `;
+
+            replacements.keyword = `%${keyword}%`;
+        }
+
+        // =====================================================
+        // FILTER PERIODE
+        // Format frontend: YYYY-MM
+        // Contoh: 2026-09
+        // Database: kolom periode bertipe DATE
+        // =====================================================
+        if (
+            periode &&
+            periode.toUpperCase() !== 'ALL'
+        ) {
+            // Validasi format periode
+            if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periode)) {
+                throw new Error(
+                    'Format periode tidak valid. Gunakan format YYYY-MM.'
+                );
+            }
+
+            const [tahun, bulan] = periode
+                .split('-')
+                .map(Number);
+
+            const tanggalAwal =
+                `${tahun}-${String(bulan).padStart(2, '0')}-01`;
+
+            const bulanBerikutnya =
+                bulan === 12 ? 1 : bulan + 1;
+
+            const tahunBerikutnya =
+                bulan === 12 ? tahun + 1 : tahun;
+
+            const tanggalAkhir =
+                `${tahunBerikutnya}-${String(bulanBerikutnya).padStart(2, '0')}-01`;
+
+            condition += `
+                AND periode >= CAST(:periode_start AS DATE)
+                AND periode < CAST(:periode_end AS DATE)
+            `;
+
+            replacements.periode_start = tanggalAwal;
+            replacements.periode_end = tanggalAkhir;
+        }
+
+        // =====================================================
+        // FILTER COMPANY CODE
+        // =====================================================
+        if (
+            companyCodes.length &&
+            !companyCodes.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND company_code IN (:companyCodes)
+            `;
+
+            replacements.companyCodes = companyCodes;
+        }
+
+        // =====================================================
+        // FILTER PLANT
+        // =====================================================
+        if (
+            plants.length &&
+            !plants.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND plant::TEXT IN (:plants)
+            `;
+
+            replacements.plants = plants;
+        }
+
+        // =====================================================
+        // FILTER CUSTOMER
+        // =====================================================
+        if (
+            customerNumbers.length &&
+            !customerNumbers.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND customer_no IN (:customerNumbers)
+            `;
+
+            replacements.customerNumbers = customerNumbers;
+        }
+
+        // =====================================================
+        // FILTER LINI I
+        // =====================================================
+        if (
+            liniI.length &&
+            !liniI.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND lini_i IN (:liniI)
+            `;
+
+            replacements.liniI = liniI;
+        }
+
+        // =====================================================
+        // FILTER LINI II
+        // =====================================================
+        if (
+            liniII.length &&
+            !liniII.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND lini_ii IN (:liniII)
+            `;
+
+            replacements.liniII = liniII;
+        }
+
+        // =====================================================
+        // FILTER TANGGAL POSTING
+        // start_date dan end_date dari frontend
+        // end_date mencakup seluruh tanggal yang dipilih
+        // =====================================================
+        const startDate = String(
+            params?.start_date || ''
+        ).trim();
+
+        const endDate = String(
+            params?.end_date || ''
+        ).trim();
+
+        if (startDate) {
+            condition += `
+                AND posting_date >= CAST(:start_date AS DATE)
+            `;
+
+            replacements.start_date = startDate;
+        }
+
+        if (endDate) {
+            condition += `
+                AND posting_date < (
+                    CAST(:end_date AS DATE) + INTERVAL '1 day'
+                )
+            `;
+
+            replacements.end_date = endDate;
+        }
+
+        // =====================================================
+        // 1. GET TOTAL DATA
+        // =====================================================
+        const countQuery = `
+            SELECT
+                COUNT(*)::INTEGER AS total
+            FROM public.m_target
+            ${condition}
+        `;
+
+        const countResult = await db.query(
+            countQuery,
+            {
+                replacements,
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        const totalData = Number(
+            countResult?.[0]?.total || 0
+        );
+
+        const totalHalaman = Math.ceil(
+            totalData / limit
+        );
+
+        // =====================================================
+        // 2. GET LIST DATA
+        // =====================================================
+        const listQuery = `
+            SELECT
+                id,
+                periode,
+                company_code,
+                plant,
+                profit_center_desc,
+                document_no,
+                posting_date,
+                document_type,
+                billing_no,
+                customer_no,
+                customer_name,
+                lini_i,
+                lini_ii,
+                document_date,
+                amount,
+                net_due_date,
+                text_information,
+                top,
+                aging_standar,
+                nilai_aging_periode,
+                aging_top,
+                nilai_aging_top_periode,
+                ket_target_cabang,
+                target_cabang,
+                is_active,
+                created_at,
+                updated_at
+            FROM public.m_target
+            ${condition}
+            ORDER BY
+                posting_date DESC NULLS LAST,
+                id DESC
+            LIMIT :limit
+            OFFSET :offset
+        `;
+
+        const listData = await db.query(
+            listQuery,
+            {
+                replacements,
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        // =====================================================
+        // RETURN
+        // =====================================================
+        return {
+            total_data: totalData,
+            total_halaman: totalHalaman,
+            page,
+            limit,
+            list_data: listData,
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET DATA MASTER TARGET:',
             error
         );
 
@@ -4093,6 +4959,104 @@ exports.getDataVerifikasiPembayaran = async (params) => {
 // };
 
 
+exports.insertFakturKembali = async (payload) => {
+    try {
+        /*
+         * Ambil faktur_petugas_id dari frontend.
+         *
+         * Format utama:
+         * {
+         *   faktur_petugas_id: [101, 102, 103]
+         * }
+         *
+         * Mendukung juga format:
+         * {
+         *   faktur: [
+         *     { faktur_petugas_id: 101 },
+         *     { faktur_petugas_id: 102 }
+         *   ]
+         * }
+         */
+
+        let fakturPetugasIds = [];
+
+        if (Array.isArray(payload?.faktur_petugas_id)) {
+            fakturPetugasIds = payload.faktur_petugas_id;
+        } else if (payload?.faktur_petugas_id) {
+            fakturPetugasIds = [payload.faktur_petugas_id];
+        } else if (Array.isArray(payload?.faktur)) {
+            fakturPetugasIds = payload.faktur.map(
+                (item) => item?.faktur_petugas_id
+            );
+        }
+
+        // Hilangkan ID kosong
+        fakturPetugasIds = fakturPetugasIds.filter(
+            (id) =>
+                id !== undefined &&
+                id !== null &&
+                String(id).trim() !== ''
+        );
+
+        if (fakturPetugasIds.length === 0) {
+            throw new Error(
+                'faktur_petugas_id wajib diisi'
+            );
+        }
+
+        // Hilangkan ID duplikat
+        fakturPetugasIds = [
+            ...new Set(fakturPetugasIds.map(String))
+        ];
+
+        /*
+         * Update data d_faktur_petugas.
+         *
+         * is_active  = T
+         * kd_status  = K
+         * updated_by = user yang melakukan update
+         * updated_at = waktu update
+         */
+
+        const [totalUpdated] =
+            await model.d_faktur_petugas.update(
+                {
+                    is_active: 'T',
+                    kd_status: 'K',
+                    alasan_pengembalian: payload?.alasan,
+                    updated_by: payload?.updated_by || 'SYSTEM',
+                    updated_at: new Date()
+                },
+                {
+                    where: {
+                        faktur_petugas_id: fakturPetugasIds,
+                        kegiatan: payload?.kegiatan
+                    }
+                }
+            );
+
+        if (!totalUpdated || totalUpdated === 0) {
+            throw new Error(
+                'Data faktur petugas tidak ditemukan atau tidak ada data yang berhasil diperbarui'
+            );
+        }
+
+        return {
+            total: totalUpdated,
+            faktur_petugas_id: fakturPetugasIds,
+            message: 'Faktur Kembali berhasil diproses'
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE INSERT FAKTUR KEMBALI:',
+            error
+        );
+
+        throw error;
+    }
+};
+
 exports.insertTukarFaktur = async (payload, files, transaction) => {
     try {
         if (
@@ -4157,8 +5121,8 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
 
         const accuracy =
             koordinat?.accuracy !== undefined &&
-            koordinat?.accuracy !== null &&
-            koordinat?.accuracy !== ''
+                koordinat?.accuracy !== null &&
+                koordinat?.accuracy !== ''
                 ? Number(koordinat.accuracy)
                 : null;
 
@@ -10603,6 +11567,22 @@ exports.getListNotification = async ({ user_id, page, limit }) => {
     })
 
     return listNotification
+}
+
+exports.historyPenugasan = async ({ piutang_id, kegiatan }) => {
+    const QUERY = query.historyPenugasan
+
+    const bindList = {
+        piutang_id: String(piutang_id),
+        kegiatan: String(kegiatan)
+    }
+
+    const listData = await db.query(QUERY, {
+        replacements: bindList,
+        type: db.QueryTypes.SELECT,
+    })
+
+    return listData
 }
 
 const normalizeValues = (value) => {
