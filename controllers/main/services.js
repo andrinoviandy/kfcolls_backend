@@ -8757,17 +8757,14 @@ exports.getDataLaporan = async (params) => {
         const page = Math.max(1, Number(params?.page) || 1);
         const limit = Math.max(1, Number(params?.limit) || 10);
         const offset = (page - 1) * limit;
-
         const keyword = String(params?.keyword || '').trim();
 
         const salesOffices = normalizeFilterValues(
             params?.sales_office ?? params?.['sales_office[]']
         );
-
         const customers = normalizeFilterValues(
             params?.customer ?? params?.['customer[]']
         );
-
         const principles = normalizeFilterValues(
             params?.principle ?? params?.['principle[]']
         );
@@ -8779,9 +8776,7 @@ exports.getDataLaporan = async (params) => {
         let condition = '';
         const filterBind = {};
 
-        // =====================================================
         // FILTER KEYWORD
-        // =====================================================
         if (keyword) {
             condition += `
                 AND (
@@ -8798,8 +8793,8 @@ exports.getDataLaporan = async (params) => {
                     OR p.dpp::text ILIKE :keyword
                     OR p.ppn::text ILIKE :keyword
                     OR p.pph::text ILIKE :keyword
-                    OR p.total_dibayar::text ILIKE :keyword
-                    OR p.saldo_piutang::text ILIKE :keyword
+                    OR p.total_dibayar_hitung::text ILIKE :keyword
+                    OR p.saldo_piutang_hitung::text ILIKE :keyword
                     OR p.aging::text ILIKE :keyword
 
                     OR EXISTS (
@@ -8808,7 +8803,6 @@ exports.getDataLaporan = async (params) => {
                         WHERE mc_keyword.kode_customer = p.customer
                             AND mc_keyword.name ILIKE :keyword
                     )
-
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_referensi mr_keyword
@@ -8816,7 +8810,6 @@ exports.getDataLaporan = async (params) => {
                             AND mr_keyword.jns_ref = 'cabang_id'
                             AND mr_keyword.ur_ref ILIKE :keyword
                     )
-
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_principle mp_keyword
@@ -8825,137 +8818,67 @@ exports.getDataLaporan = async (params) => {
                     )
                 )
             `;
-
             filterBind.keyword = `%${keyword}%`;
         }
 
-        // =====================================================
         // FILTER CABANG / SALES OFFICE
-        // =====================================================
-        if (
-            salesOffices.length > 0 &&
-            !salesOffices.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
-        ) {
-            condition += `
-                AND p.cabang IN (:sales_offices)
-            `;
-
+        if (salesOffices.length > 0 && !salesOffices.some((item) => item.toUpperCase() === 'ALL')) {
+            condition += ` AND p.cabang IN (:sales_offices) `;
             filterBind.sales_offices = salesOffices;
         }
 
-        // =====================================================
         // FILTER CUSTOMER
-        // =====================================================
-        if (
-            customers.length > 0 &&
-            !customers.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
-        ) {
-            condition += `
-                AND p.customer IN (:customers)
-            `;
-
+        if (customers.length > 0 && !customers.some((item) => item.toUpperCase() === 'ALL')) {
+            condition += ` AND p.customer IN (:customers) `;
             filterBind.customers = customers;
         }
 
-        // =====================================================
         // FILTER STATUS PIUTANG
-        // Menggunakan status yang tersimpan di d_piutang.
-        // =====================================================
         if (status && status.toUpperCase() !== 'ALL') {
             condition += `
-                AND UPPER(COALESCE(p.status_piutang, ''))
-                    = UPPER(:status)
+                AND UPPER(COALESCE(p.status_piutang, '')) = UPPER(:status)
             `;
-
             filterBind.status = status;
         }
 
-        // =====================================================
         // FILTER PRINCIPLE
-        // =====================================================
-        if (
-            principles.length > 0 &&
-            !principles.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
-        ) {
-            condition += `
-                AND p.principle IN (:principles)
-            `;
-
+        if (principles.length > 0 && !principles.some((item) => item.toUpperCase() === 'ALL')) {
+            condition += ` AND p.principle IN (:principles) `;
             filterBind.principles = principles;
         }
 
-        // =====================================================
         // FILTER TANGGAL MULAI
-        // =====================================================
         if (startDate) {
-            condition += `
-                AND p.posting_date >= CAST(:start_date AS DATE)
-            `;
-
+            condition += ` AND p.posting_date >= CAST(:start_date AS DATE) `;
             filterBind.start_date = startDate;
         }
 
-        // =====================================================
-        // FILTER TANGGAL SELESAI
-        // Jika posting_date bertipe timestamp, semua jam pada
-        // tanggal akhir tetap ikut terhitung.
-        // =====================================================
+        // FILTER TANGGAL SELESAI (inklusif untuk satu hari penuh)
         if (endDate) {
             condition += `
-                AND p.posting_date <
-                    CAST(:end_date AS DATE) + INTERVAL '1 day'
+                AND p.posting_date < CAST(:end_date AS DATE) + INTERVAL '1 day'
             `;
-
             filterBind.end_date = endDate;
         }
 
-        // =====================================================
-        // 1. GET LIST DATA
-        // =====================================================
-        const listQuery = query.getDataLaporan.replace(
-            /:condition/g,
-            condition
-        );
-
+        // GET LIST DATA
+        const listQuery = query.getDataLaporan.replace(/:condition/g, condition);
         const listData = await db.query(listQuery, {
-            replacements: {
-                ...filterBind,
-                limit,
-                offset
-            },
+            replacements: { ...filterBind, limit, offset },
             type: db.QueryTypes.SELECT
         });
 
-        // =====================================================
-        // 2. GET TOTAL DATA
-        // =====================================================
-        const countQuery = query.countDataLaporan.replace(
-            /:condition/g,
-            condition
-        );
-
+        // GET TOTAL DATA
+        const countQuery = query.countDataLaporan.replace(/:condition/g, condition);
         const countData = await db.query(countQuery, {
             replacements: filterBind,
             type: db.QueryTypes.SELECT
         });
-
         const totalData = Number(countData?.[0]?.total || 0);
         const totalHalaman = Math.ceil(totalData / limit);
 
-        // =====================================================
-        // 3. GET SUMMARY
-        // =====================================================
-        const summaryQuery = query.summaryDataLaporan.replace(
-            /:condition/g,
-            condition
-        );
-
+        // GET SUMMARY
+        const summaryQuery = query.summaryDataLaporan.replace(/:condition/g, condition);
         const summaryResult = await db.query(summaryQuery, {
             replacements: filterBind,
             type: db.QueryTypes.SELECT
@@ -8975,9 +8898,6 @@ exports.getDataLaporan = async (params) => {
             total_data: 0
         };
 
-        // =====================================================
-        // RETURN
-        // =====================================================
         return {
             total_data: totalData,
             total_halaman: totalHalaman,
@@ -8991,7 +8911,6 @@ exports.getDataLaporan = async (params) => {
         throw error;
     }
 };
-
 
 const escapeHtml = (value = "") =>
     String(value ?? "")

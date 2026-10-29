@@ -22073,7 +22073,11 @@ query.getDataKonfirmasiPiutang = `
             k.flag_aktif,
             k.created_by,
             k.created_at,
-            CONCAT('${LINK_DOK}', k.surat_jawaban) AS jawaban 
+            CASE
+                WHEN NULLIF(TRIM(k.surat_jawaban), '') IS NOT NULL
+                    THEN CONCAT('${LINK_DOK}', k.surat_jawaban)
+                ELSE NULL
+            END AS jawaban  
         FROM public.k_piutang k
         WHERE k.piutang_id = p.piutang_id AND k.flag_aktif = 'Y'
         ORDER BY
@@ -22326,6 +22330,7 @@ query.getDataLaporan = `
         ) ds ON TRUE
         GROUP BY dp.no_billing
     ),
+
     cod_totals AS (
         SELECT
             dc.no_billing,
@@ -22333,24 +22338,34 @@ query.getDataLaporan = `
         FROM public.d_cod dc
         GROUP BY dc.no_billing
     ),
+
     piutang_data AS (
         SELECT
             p.*,
+
             COALESCE(ps.total_dibayar, 0)
-                + COALESCE(ct.total_cod, 0) AS total_dibayar,
+                + COALESCE(ct.total_cod, 0) AS total_dibayar_hitung,
+
             (
                 COALESCE(p.dpp, 0)
                 + COALESCE(p.ppn, 0)
                 - COALESCE(ps.total_dibayar, 0)
                 - COALESCE(ct.total_cod, 0)
-            ) AS saldo_piutang
+            ) AS saldo_piutang_hitung
+
         FROM public.d_piutang p
+
         LEFT JOIN payment_status ps
             ON ps.no_billing = p.no_billing
+
         LEFT JOIN cod_totals ct
             ON ct.no_billing = p.no_billing
     )
+
     SELECT
+        -- =============================================
+        -- DATA UTAMA PIUTANG
+        -- =============================================
         p.piutang_id,
         p.no_faktur,
         p.no_billing,
@@ -22368,17 +22383,24 @@ query.getDataLaporan = `
         p.dpp,
         p.ppn,
         p.pph,
-        p.total_dibayar AS dibayar,
-        p.saldo_piutang AS outstanding,
+
+        -- Pembayaran dan saldo piutang hasil perhitungan
+        p.total_dibayar_hitung AS dibayar,
+        p.saldo_piutang_hitung AS outstanding,
+
         p.aging,
         p.status_piutang,
 
+        -- =============================================
+        -- DATA PENUGASAN TUKAR FAKTUR
+        -- =============================================
         fp_tukar.faktur_petugas_id AS tukar_faktur_petugas_id,
         fp_tukar.nip AS tukar_faktur_nip,
         mu_tukar.nama AS tukar_faktur_nama,
         fp_tukar.assigned_at AS tukar_faktur_assigned_at,
 
         tf.tukar_faktur_id,
+
         CASE
             WHEN tf.tukar_faktur_id IS NULL
                 THEN 'Belum Tukar Faktur'
@@ -22389,16 +22411,80 @@ query.getDataLaporan = `
             ELSE 'Menunggu Verifikasi'
         END AS status_tukar_faktur,
 
+        -- =============================================
+        -- DATA PENUGASAN PENAGIHAN
+        -- =============================================
         fp_penagihan.faktur_petugas_id AS penagihan_petugas_id,
         fp_penagihan.nip AS penagihan_nip,
         mu_penagihan.nama AS penagihan_nama,
         fp_penagihan.assigned_at AS penagihan_assigned_at,
 
+        -- =============================================
+        -- STATUS LUNAS
+        -- Menggunakan saldo hasil perhitungan
+        -- =============================================
         CASE
-            WHEN p.saldo_piutang <= 0 THEN 'Sudah Lunas'
+            WHEN p.saldo_piutang_hitung <= 0
+                THEN 'Sudah Lunas'
             ELSE 'Belum Lunas'
         END AS status_lunas,
 
+        -- =============================================
+        -- DATA PENGIRIMAN NOTIFIKASI KONFIRMASI
+        -- =============================================
+        kp.k_piutang_id,
+
+        CASE
+            WHEN kp.k_piutang_id IS NULL
+                THEN 'BELUM_DIKIRIM'
+            ELSE 'SUDAH_DIKIRIM'
+        END AS status_pengiriman_konfirmasi,
+
+        kp.tgl_kirim_konfirmasi,
+        kp.tgl_rencana_pembayaran,
+
+        kp.created_by AS konfirmasi_created_by,
+        kp.created_at AS konfirmasi_created_at,
+
+        kp.flag_wa AS konfirmasi_flag_wa,
+        kp.flag_email AS konfirmasi_flag_email,
+
+        kp.email AS konfirmasi_email,
+        kp.wa AS konfirmasi_wa,
+
+        -- Surat jawaban menggunakan LINK_DOK
+        kp.jawaban,
+
+        -- =============================================
+        -- STATUS DAN CATATAN KONFIRMASI TERAKHIR
+        -- =============================================
+        ds_konfirmasi.kd_status AS status_konfirmasi,
+
+        TO_CHAR(
+            ds_konfirmasi.created_at,
+            'YYYY-MM-DD HH24:MI:SS'
+        ) AS status_konfirmasi_date,
+
+        ds_konfirmasi.keterangan AS status_catatan,
+
+        CASE
+            WHEN ds_konfirmasi.kd_status = 'OTO'
+                THEN 'OTO'
+            WHEN ds_konfirmasi.kd_status = 'STJ'
+                THEN 'STJ'
+            WHEN ds_konfirmasi.kd_status = 'TLK'
+                THEN 'TLK'
+            WHEN ds_konfirmasi.kd_status = 'MK'
+                THEN 'MK'
+            ELSE COALESCE(
+                ds_konfirmasi.kd_status::TEXT,
+                '-'
+            )
+        END AS kode_singkat_status,
+
+        -- =============================================
+        -- AUDIT DATA PIUTANG
+        -- =============================================
         p.created_by,
         p.created_at,
         p.updated_by,
@@ -22406,6 +22492,9 @@ query.getDataLaporan = `
 
     FROM piutang_data p
 
+    -- =============================================
+    -- PENUGASAN TUKAR FAKTUR TERAKHIR
+    -- =============================================
     LEFT JOIN LATERAL (
         SELECT
             fp.faktur_petugas_id,
@@ -22426,6 +22515,9 @@ query.getDataLaporan = `
     LEFT JOIN public.m_user mu_tukar
         ON mu_tukar.nip = fp_tukar.nip
 
+    -- =============================================
+    -- DATA TUKAR FAKTUR TERAKHIR
+    -- =============================================
     LEFT JOIN LATERAL (
         SELECT
             tf1.tukar_faktur_id,
@@ -22438,6 +22530,9 @@ query.getDataLaporan = `
         LIMIT 1
     ) tf ON TRUE
 
+    -- =============================================
+    -- PENUGASAN PENAGIHAN TERAKHIR
+    -- =============================================
     LEFT JOIN LATERAL (
         SELECT
             fp.faktur_petugas_id,
@@ -22457,6 +22552,9 @@ query.getDataLaporan = `
     LEFT JOIN public.m_user mu_penagihan
         ON mu_penagihan.nip = fp_penagihan.nip
 
+    -- =============================================
+    -- DATA MASTER CUSTOMER, CABANG, PRINCIPLE
+    -- =============================================
     LEFT JOIN public.m_customer mc
         ON mc.kode_customer = p.customer
 
@@ -22466,6 +22564,58 @@ query.getDataLaporan = `
 
     LEFT JOIN public.m_principle mp
         ON mp.principle = p.principle
+
+    -- =============================================
+    -- DATA KONFIRMASI TERAKHIR YANG AKTIF
+    -- =============================================
+    LEFT JOIN LATERAL (
+        SELECT
+            k.k_piutang_id,
+            k.piutang_id,
+            k.tgl_kirim_konfirmasi,
+            k.tgl_rencana_pembayaran,
+            k.flag_wa,
+            k.wa,
+            k.flag_email,
+            k.email,
+            k.flag_aktif,
+            k.created_by,
+            k.created_at,
+
+            k.surat_jawaban AS surat_jawaban,
+            CASE
+                WHEN NULLIF(TRIM(k.surat_jawaban), '') IS NOT NULL
+                    THEN CONCAT('${LINK_DOK}', k.surat_jawaban)
+                ELSE NULL
+            END AS jawaban
+
+        FROM public.k_piutang k
+
+        WHERE k.piutang_id = p.piutang_id
+            AND k.flag_aktif = 'Y'
+
+        ORDER BY
+            k.created_at DESC NULLS LAST,
+            k.k_piutang_id DESC
+
+        LIMIT 1
+    ) kp ON TRUE
+
+    -- =============================================
+    -- STATUS KONFIRMASI TERAKHIR
+    -- =============================================
+    LEFT JOIN LATERAL (
+        SELECT
+            s.kd_status,
+            s.created_at,
+            s.keterangan
+        FROM public.d_status s
+        WHERE s.kegiatan = 'KONFIRMASI_CUSTOMER'
+            AND s.foreign_id = kp.k_piutang_id
+        ORDER BY
+            s.created_at DESC NULLS LAST
+        LIMIT 1
+    ) ds_konfirmasi ON TRUE
 
     WHERE 1 = 1
         :condition
@@ -22514,11 +22664,11 @@ query.countDataLaporan = `
         SELECT
             p.*,
             COALESCE(ps.total_dibayar, 0)
-                + COALESCE(ct.total_cod, 0) AS total_dibayar,
+                + COALESCE(ct.total_cod, 0) AS total_dibayar_hitung,
             COALESCE(p.dpp, 0)
                 + COALESCE(p.ppn, 0)
                 - COALESCE(ps.total_dibayar, 0)
-                - COALESCE(ct.total_cod, 0) AS saldo_piutang
+                - COALESCE(ct.total_cod, 0) AS saldo_piutang_hitung
         FROM public.d_piutang p
         LEFT JOIN payment_status ps
             ON ps.no_billing = p.no_billing
@@ -22566,11 +22716,11 @@ query.summaryDataLaporan = `
         SELECT
             p.*,
             COALESCE(ps.total_dibayar, 0)
-                + COALESCE(ct.total_cod, 0) AS total_dibayar,
+                + COALESCE(ct.total_cod, 0) AS total_dibayar_hitung,
             COALESCE(p.dpp, 0)
                 + COALESCE(p.ppn, 0)
                 - COALESCE(ps.total_dibayar, 0)
-                - COALESCE(ct.total_cod, 0) AS saldo_piutang,
+                - COALESCE(ct.total_cod, 0) AS saldo_piutang_hitung,
             CASE
                 WHEN (
                     COALESCE(p.dpp, 0)
@@ -22595,46 +22745,46 @@ query.summaryDataLaporan = `
             0
         ) AS total_piutang,
 
-        COALESCE(SUM(p.total_dibayar), 0) AS sudah_dibayar,
+        COALESCE(SUM(p.total_dibayar_hitung), 0) AS sudah_dibayar,
 
-        COALESCE(SUM(p.saldo_piutang), 0) AS outstanding,
+        COALESCE(SUM(p.saldo_piutang_hitung), 0) AS outstanding,
 
         COUNT(*) FILTER (
-            WHERE p.saldo_piutang > 0
+            WHERE p.saldo_piutang_hitung > 0
         ) AS outstanding_count,
 
         COUNT(*) FILTER (
-            WHERE p.saldo_piutang > 0
+            WHERE p.saldo_piutang_hitung > 0
         ) AS belum_lunas_count,
 
         COUNT(*) FILTER (
-            WHERE p.saldo_piutang <= 0
+            WHERE p.saldo_piutang_hitung <= 0
         ) AS lunas_count,
 
         COALESCE(
-            SUM(p.saldo_piutang) FILTER (
+            SUM(p.saldo_piutang_hitung) FILTER (
                 WHERE p.status_laporan = 'DUE_SOON'
-                    AND p.saldo_piutang > 0
+                    AND p.saldo_piutang_hitung > 0
             ),
             0
         ) AS akan_jatuh_tempo_amount,
 
         COUNT(*) FILTER (
             WHERE p.status_laporan = 'DUE_SOON'
-                AND p.saldo_piutang > 0
+                AND p.saldo_piutang_hitung > 0
         ) AS akan_jatuh_tempo_count,
 
         COALESCE(
-            SUM(p.saldo_piutang) FILTER (
+            SUM(p.saldo_piutang_hitung) FILTER (
                 WHERE p.status_laporan = 'OVERDUE'
-                    AND p.saldo_piutang > 0
+                    AND p.saldo_piutang_hitung > 0
             ),
             0
         ) AS sudah_jatuh_tempo_amount,
 
         COUNT(*) FILTER (
             WHERE p.status_laporan = 'OVERDUE'
-                AND p.saldo_piutang > 0
+                AND p.saldo_piutang_hitung > 0
         ) AS sudah_jatuh_tempo_count,
 
         COUNT(*) AS total_data
