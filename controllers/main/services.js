@@ -2677,7 +2677,7 @@ exports.insertFakturPetugas = async (payload, transaction) => {
             await model.d_faktur_petugas.count({
                 where: {
                     piutang_id: payload.piutang_id,
-                    nip: payload.nip,
+                    // nip: payload.nip,
                     kegiatan,
                     is_active: 'Y'
                 },
@@ -2685,9 +2685,18 @@ exports.insertFakturPetugas = async (payload, transaction) => {
             });
 
         if (checkAssignment > 0) {
-            throw new Error(
-                `Piutang sudah ditugaskan kepada petugas untuk kegiatan ${kegiatan}!`
-            );
+            await model.d_faktur_petugas.update({
+                is_active: 'T'
+            }, {
+                where: {
+                    piutang_id: payload.piutang_id,
+                    kegiatan,
+                    is_active: 'Y'
+                }
+            })
+            // throw new Error(
+            //     `Piutang sudah ditugaskan kepada petugas untuk kegiatan ${kegiatan}!`
+            // );
         }
     }
 
@@ -3948,9 +3957,144 @@ exports.getDataVerifikasiPembayaran = async (params) => {
     }
 };
 
+// exports.insertTukarFaktur = async (payload, files, transaction) => {
+//     try {
+
+//         if (
+//             !Array.isArray(payload?.faktur) ||
+//             payload.faktur.length === 0
+//         ) {
+//             throw new Error('Data faktur wajib diisi');
+//         }
+
+//         if (!files || files.length === 0) {
+//             throw new Error('File bukti tukar faktur wajib diupload');
+//         }
+
+//         const piutangIds = payload.faktur
+//             .map((item) => item?.piutang_id)
+//             .filter(Boolean);
+
+//         if (piutangIds.length === 0) {
+//             throw new Error('piutang_id wajib diisi');
+//         }
+
+//         /*
+//          * Cek duplicate piutang di dalam payload
+//          */
+//         const uniquePiutangIds = [...new Set(piutangIds)];
+
+//         if (
+//             uniquePiutangIds.length !== piutangIds.length
+//         ) {
+//             throw new Error(
+//                 'Terdapat piutang yang sama dalam proses Tukar Faktur'
+//             );
+//         }
+
+//         /*
+//          * Cek apakah piutang sudah pernah
+//          * melakukan proses Tukar Faktur
+//          */
+//         const existingData =
+//             await model.d_tukar_faktur.findAll({
+//                 where: {
+//                     piutang_id: uniquePiutangIds
+//                 },
+//                 transaction
+//             });
+
+//         if (
+//             existingData &&
+//             existingData.length > 0
+//         ) {
+//             throw new Error(
+//                 `Terdapat ${existingData.length} piutang yang sudah melakukan proses Tukar Faktur`
+//             );
+//         }
+
+//         /*
+//          * Upload 1 file untuk seluruh faktur
+//          */
+//         const uploadDocument =
+//             await this.processUploadFile(
+//                 payload,
+//                 files,
+//                 transaction
+//             );
+
+//         const createdAt = new Date();
+
+//         const dataInsert = payload.faktur.map((item) => ({
+//             tukar_faktur_id:
+//                 uuidv4(),
+
+//             faktur_petugas_id:
+//                 item.faktur_petugas_id,
+
+//             piutang_id:
+//                 item.piutang_id,
+
+//             files:
+//                 uploadDocument[0]?.path !== null ? uploadDocument[0]?.path.replace(/\\/g, '/') : "",
+
+//             created_by:
+//                 payload?.created_by ||
+//                 'SYSTEM',
+
+//             created_at:
+//                 createdAt
+//         }));
+
+//         /*
+//          * Insert banyak data sekaligus
+//          */
+//         const tukarFaktur =
+//             await model.d_tukar_faktur.bulkCreate(
+//                 dataInsert,
+//                 {
+//                     transaction,
+//                     returning: true
+//                 }
+//             );
+
+//         if (tukarFaktur) {
+//             const userToNotif = await model.m_role_user.findAll({ where: { cabang_id: payload?.dataUser?.cabang_id, role_id: '03' }, returning: true })
+//             const payNotif = {
+//                 notifikasi_id: uuidv4(),
+//                 no_billing: payload?.no_faktur,
+//                 // username: payload?.nip,
+//                 title: 'Penukaran Faktur',
+//                 body: `Sales Telah Melakukan Tukar Faktur Pada Faktur Ini`,
+//                 created_by: payload?.created_by || '',
+//                 kegiatan: 'SALES_TUKAR_FAKTUR',
+//                 user: [...new Set(userToNotif.map(a => a.user_id))]
+//             }
+//             await this.insertNotifikasi(payNotif, transaction)
+//         }
+
+//         return {
+//             total:
+//                 tukarFaktur.length,
+
+//             data:
+//                 tukarFaktur
+//         };
+
+//     } catch (error) {
+
+//         console.error(
+//             'ERROR SERVICE INSERT TUKAR FAKTUR:',
+//             error
+//         );
+
+//         throw error;
+//     }
+// };
+
+
 exports.insertTukarFaktur = async (payload, files, transaction) => {
     try {
-
         if (
             !Array.isArray(payload?.faktur) ||
             payload.faktur.length === 0
@@ -3968,6 +4112,74 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
 
         if (piutangIds.length === 0) {
             throw new Error('piutang_id wajib diisi');
+        }
+
+        /*
+         * Validasi koordinat dari frontend
+         */
+        const latitude = Number(payload?.latitude);
+        const longitude = Number(payload?.longitude);
+
+        if (
+            payload?.latitude === undefined ||
+            payload?.latitude === null ||
+            payload?.latitude === '' ||
+            payload?.longitude === undefined ||
+            payload?.longitude === null ||
+            payload?.longitude === '' ||
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude) ||
+            latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180
+        ) {
+            throw new Error(
+                'Latitude dan longitude lokasi tidak valid'
+            );
+        }
+
+        /*
+         * Informasi tambahan koordinat dan alamat
+         */
+        const koordinat = payload?.koordinat || {};
+
+        // Ambil alamat dari payload utama atau objek koordinat
+        const alamatRaw =
+            payload?.alamat ??
+            koordinat?.alamat ??
+            '';
+
+        const alamat =
+            typeof alamatRaw === 'string'
+                ? alamatRaw.trim() || null
+                : null;
+
+        const accuracy =
+            koordinat?.accuracy !== undefined &&
+            koordinat?.accuracy !== null &&
+            koordinat?.accuracy !== ''
+                ? Number(koordinat.accuracy)
+                : null;
+
+        if (
+            accuracy !== null &&
+            (!Number.isFinite(accuracy) || accuracy < 0)
+        ) {
+            throw new Error('Akurasi koordinat tidak valid');
+        }
+
+        const capturedAt = koordinat?.captured_at
+            ? new Date(koordinat.captured_at)
+            : null;
+
+        if (
+            capturedAt &&
+            Number.isNaN(capturedAt.getTime())
+        ) {
+            throw new Error(
+                'Waktu pengambilan koordinat tidak valid'
+            );
         }
 
         /*
@@ -3995,10 +4207,7 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
                 transaction
             });
 
-        if (
-            existingData &&
-            existingData.length > 0
-        ) {
+        if (existingData && existingData.length > 0) {
             throw new Error(
                 `Terdapat ${existingData.length} piutang yang sudah melakukan proses Tukar Faktur`
             );
@@ -4016,9 +4225,11 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
 
         const createdAt = new Date();
 
+        /*
+         * Insert data faktur beserta koordinat dan alamat lokasi
+         */
         const dataInsert = payload.faktur.map((item) => ({
-            tukar_faktur_id:
-                uuidv4(),
+            tukar_faktur_id: uuidv4(),
 
             faktur_petugas_id:
                 item.faktur_petugas_id,
@@ -4027,14 +4238,25 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
                 item.piutang_id,
 
             files:
-                uploadDocument[0]?.path !== null ? uploadDocument[0]?.path.replace(/\\/g, '/') : "",
+                uploadDocument[0]?.path != null
+                    ? uploadDocument[0].path.replace(/\\/g, '/')
+                    : '',
+
+            // Koordinat lokasi dari frontend
+            latitude: latitude,
+            longitude: longitude,
+
+            // Alamat hasil reverse geocoding
+            alamat_lokasi: alamat,
+
+            // Informasi akurasi dan waktu pengambilan lokasi
+            accuracy: accuracy,
+            captured_at: capturedAt,
 
             created_by:
-                payload?.created_by ||
-                'SYSTEM',
+                payload?.created_by || 'SYSTEM',
 
-            created_at:
-                createdAt
+            created_at: createdAt
         }));
 
         /*
@@ -4049,31 +4271,46 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
                 }
             );
 
-        if (tukarFaktur) {
-            const userToNotif = await model.m_role_user.findAll({ where: { cabang_id: payload?.dataUser?.cabang_id, role_id: '03' }, returning: true })
+        /*
+         * Notifikasi
+         */
+        if (tukarFaktur && tukarFaktur.length > 0) {
+            const userToNotif =
+                await model.m_role_user.findAll({
+                    where: {
+                        cabang_id: payload?.dataUser?.cabang_id,
+                        role_id: '03'
+                    },
+                    transaction,
+                    returning: true
+                });
+
             const payNotif = {
                 notifikasi_id: uuidv4(),
                 no_billing: payload?.no_faktur,
-                // username: payload?.nip,
                 title: 'Penukaran Faktur',
-                body: `Sales Telah Melakukan Tukar Faktur Pada Faktur Ini`,
+                body: 'Sales Telah Melakukan Tukar Faktur Pada Faktur Ini',
                 created_by: payload?.created_by || '',
                 kegiatan: 'SALES_TUKAR_FAKTUR',
-                user: [...new Set(userToNotif.map(a => a.user_id))]
-            }
-            await this.insertNotifikasi(payNotif, transaction)
+                user: [
+                    ...new Set(
+                        userToNotif.map((a) => a.user_id)
+                    )
+                ]
+            };
+
+            await this.insertNotifikasi(
+                payNotif,
+                transaction
+            );
         }
 
         return {
-            total:
-                tukarFaktur.length,
-
-            data:
-                tukarFaktur
+            total: tukarFaktur.length,
+            data: tukarFaktur
         };
 
     } catch (error) {
-
         console.error(
             'ERROR SERVICE INSERT TUKAR FAKTUR:',
             error

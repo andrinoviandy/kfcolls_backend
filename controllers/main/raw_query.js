@@ -19293,7 +19293,11 @@ query.getDataTukarFaktur = `
 
         fp.faktur_petugas_id,
         fp.nip AS nip_petugas,
-        mu.nama AS petugas
+        mu.nama AS petugas,
+        tf.latitude,
+        tf.longitude,
+        tf.accuracy,
+        tf.captured_at
 
     FROM public.d_piutang p
 
@@ -19308,7 +19312,11 @@ query.getDataTukarFaktur = `
             tf.created_by,
             tf.created_at,
             tf.updated_by,
-            tf.updated_at
+            tf.updated_at,
+            tf.latitude,
+            tf.longitude,
+            tf.accuracy,
+            tf.captured_at 
         FROM public.d_tukar_faktur tf
         WHERE tf.piutang_id = p.piutang_id
         ORDER BY
@@ -19939,7 +19947,12 @@ query.getDataVerifikasiTukarFaktur = `
         p.created_by,
         p.created_at,
         p.updated_by,
-        p.updated_at
+        p.updated_at,
+        tf.latitude,
+        tf.longitude,
+        tf.accuracy,
+        tf.alamat_lokasi,
+        tf.captured_at 
 
     FROM public.d_piutang p
 
@@ -19951,7 +19964,12 @@ query.getDataVerifikasiTukarFaktur = `
             tf.created_by,
             tf.created_at,
             tf.updated_by,
-            tf.updated_at
+            tf.updated_at,
+            tf.latitude,
+            tf.longitude,
+            tf.accuracy,
+            tf.alamat_lokasi,
+            tf.captured_at 
         FROM public.d_tukar_faktur tf
         WHERE tf.piutang_id = p.piutang_id
         ORDER BY

@@ -5735,7 +5735,9 @@ exports.D_FAKTUR_PETUGAS = db.define('d_faktur_petugas',
     }
 )
 
-exports.D_TUKAR_FAKTUR = db.define('d_tukar_faktur',
+
+exports.D_TUKAR_FAKTUR = db.define(
+    'd_tukar_faktur',
     {
         tukar_faktur_id: {
             type: DataTypes.UUID,
@@ -5755,6 +5757,33 @@ exports.D_TUKAR_FAKTUR = db.define('d_tukar_faktur',
             type: DataTypes.TEXT,
             field: 'files'
         },
+        alamat_lokasi: {
+            type: DataTypes.TEXT,
+            field: 'alamat_lokasi'
+        },
+
+        // Koordinat lokasi dari frontend
+        latitude: {
+            type: DataTypes.STRING,
+            field: 'latitude',
+            allowNull: true
+        },
+        longitude: {
+            type: DataTypes.STRING,
+            field: 'longitude',
+            allowNull: true
+        },
+        accuracy: {
+            type: DataTypes.INTEGER,
+            field: 'accuracy',
+            allowNull: true
+        },
+        captured_at: {
+            type: DataTypes.DATE,
+            field: 'captured_at',
+            allowNull: true
+        },
+
         created_at: {
             type: DataTypes.DATE,
             field: 'created_at'
@@ -5775,12 +5804,13 @@ exports.D_TUKAR_FAKTUR = db.define('d_tukar_faktur',
             type: DataTypes.STRING,
             field: 'flag_aktif'
         }
-    }, {
+    },
+    {
         schema: 'public',
         freezeTableName: true,
         timestamps: false
     }
-)
+);
 
 exports.D_STATUS = db.define('d_status', {
     status_id: {
