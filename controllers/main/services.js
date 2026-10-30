@@ -6871,9 +6871,12 @@ exports.verifikasiTukarFaktur = async (
 //     }
 // };
 
+
 exports.getDataBayarFaktur = async (params) => {
     try {
-        const penerimaanLainId = params?.penerimaan_lain_id || null;
+        const penerimaanLainId =
+            params?.penerimaan_lain_id || null;
+
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value)
                 ? value
@@ -6965,10 +6968,11 @@ exports.getDataBayarFaktur = async (params) => {
          * STATUS VERIFIKASI
          * =====================================================
          */
-        const statusVerifikasiValues = normalizeFilterValues(
-            params?.status_verifikasi ??
-            params?.['status_verifikasi[]']
-        ).map((item) => item.toUpperCase());
+        const statusVerifikasiValues =
+            normalizeFilterValues(
+                params?.status_verifikasi ??
+                params?.['status_verifikasi[]']
+            ).map((item) => item.toUpperCase());
 
         /*
          * =====================================================
@@ -6993,35 +6997,55 @@ exports.getDataBayarFaktur = async (params) => {
         /*
          * =====================================================
          * BIND
+         *
+         * PENTING:
+         * start_date dan end_date selalu dikirim.
+         *
+         * Jika tidak ada filter tanggal,
+         * nilainya NULL agar query LATERAL
+         * tetap dapat dijalankan.
          * =====================================================
          */
         const bind = {
             limit,
-            offset
+            offset,
+
+            start_date: startDate || null,
+            end_date: endDate || null
         };
 
         /*
- * =====================================================
- * FILTER PENERIMAAN LAIN
- * Mengambil billing berdasarkan d_pembayaran.penerimaan_lain_id
- * =====================================================
- */
+         * =====================================================
+         * FILTER PENERIMAAN LAIN
+         * =====================================================
+         */
         if (
             penerimaanLainId !== undefined &&
             penerimaanLainId !== null &&
             String(penerimaanLainId).trim() !== ''
         ) {
             condition += `
-        AND EXISTS (
-            SELECT 1
-            FROM public.d_pembayaran dp_penerimaan_lain
-            WHERE dp_penerimaan_lain.penerimaan_lain_id = :penerimaan_lain_id
-              AND BTRIM(COALESCE(dp_penerimaan_lain.no_billing, '')) =
-                  BTRIM(COALESCE(p.no_billing, ''))
-        )
-    `;
+                AND EXISTS (
+                    SELECT 1
+                    FROM public.d_pembayaran dp_penerimaan_lain
 
-            bind.penerimaan_lain_id = penerimaanLainId;
+                    WHERE dp_penerimaan_lain.penerimaan_lain_id =
+                          :penerimaan_lain_id
+
+                      AND BTRIM(
+                            COALESCE(
+                                dp_penerimaan_lain.no_billing,
+                                ''
+                            )
+                          ) =
+                          BTRIM(
+                            COALESCE(p.no_billing, '')
+                          )
+                )
+            `;
+
+            bind.penerimaan_lain_id =
+                penerimaanLainId;
         }
 
         /*
@@ -7113,14 +7137,17 @@ exports.getDataBayarFaktur = async (params) => {
             'SUDAH_DIBAYAR'
         ];
 
-        const filteredStatusValues = statusValues.filter(
-            (item) => item !== 'ALL'
-        );
+        const filteredStatusValues =
+            statusValues.filter(
+                (item) => item !== 'ALL'
+            );
 
         if (filteredStatusValues.length) {
-            const invalidStatus = filteredStatusValues.find(
-                (item) => !allowedStatus.includes(item)
-            );
+            const invalidStatus =
+                filteredStatusValues.find(
+                    (item) =>
+                        !allowedStatus.includes(item)
+                );
 
             if (invalidStatus) {
                 throw new Error(
@@ -7134,7 +7161,9 @@ exports.getDataBayarFaktur = async (params) => {
              * BELUM DIBAYAR
              */
             if (
-                filteredStatusValues.includes('BELUM_DIBAYAR')
+                filteredStatusValues.includes(
+                    'BELUM_DIBAYAR'
+                )
             ) {
                 statusConditions.push(`
                     (
@@ -7151,7 +7180,9 @@ exports.getDataBayarFaktur = async (params) => {
             /*
              * PARTIAL
              */
-            if (filteredStatusValues.includes('PARTIAL')) {
+            if (
+                filteredStatusValues.includes('PARTIAL')
+            ) {
                 statusConditions.push(`
                     (
                         COALESCE(
@@ -7171,7 +7202,9 @@ exports.getDataBayarFaktur = async (params) => {
              * SUDAH DIBAYAR
              */
             if (
-                filteredStatusValues.includes('SUDAH_DIBAYAR')
+                filteredStatusValues.includes(
+                    'SUDAH_DIBAYAR'
+                )
             ) {
                 statusConditions.push(`
                     (
@@ -7243,7 +7276,9 @@ exports.getDataBayarFaktur = async (params) => {
              * VERIFIED
              */
             if (
-                filteredVerificationValues.includes('VERIFIED')
+                filteredVerificationValues.includes(
+                    'VERIFIED'
+                )
             ) {
                 verificationConditions.push(`
                     (
@@ -7279,19 +7314,21 @@ exports.getDataBayarFaktur = async (params) => {
         /*
          * =====================================================
          * FILTER TANGGAL AWAL
+         *
+         * Filter data utama berdasarkan posting_date.
          * =====================================================
          */
         if (startDate) {
             condition += `
-                AND p.posting_date >= :start_date
+                AND p.posting_date >= CAST(:start_date AS DATE)
             `;
-
-            bind.start_date = startDate;
         }
 
         /*
          * =====================================================
          * FILTER TANGGAL AKHIR
+         *
+         * Inklusif sampai tanggal end_date.
          * =====================================================
          */
         if (endDate) {
@@ -7301,8 +7338,6 @@ exports.getDataBayarFaktur = async (params) => {
                     + INTERVAL '1 day'
                 )
             `;
-
-            bind.end_date = endDate;
         }
 
         /*
@@ -7320,7 +7355,7 @@ exports.getDataBayarFaktur = async (params) => {
             listQuery,
             {
                 replacements: bind,
-                type: db.QueryTypes.SELECT,
+                type: db.QueryTypes.SELECT
                 // logging: console.log
             }
         );
@@ -7395,9 +7430,10 @@ exports.getDataBayarFaktur = async (params) => {
          */
         const listDataWithHistory = await Promise.all(
             (listData || []).map(async (item) => {
-                const h_pembayaran = await getHistoryPembayaran(
-                    item?.no_billing
-                );
+                const h_pembayaran =
+                    await getHistoryPembayaran(
+                        item?.no_billing
+                    );
 
                 return {
                     ...item,

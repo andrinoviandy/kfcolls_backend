@@ -20150,6 +20150,7 @@ query.summaryDataVerifikasiTukarFaktur = `
         :condition
 `;
 
+
 query.getDataBayarFaktur = `
     SELECT
         p.piutang_id,
@@ -20181,24 +20182,79 @@ query.getDataBayarFaktur = `
         /*
          * NOMINAL BILLING
          */
-        (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)) AS nominal_tagihan,
+        (
+            COALESCE(p.dpp, 0) +
+            COALESCE(p.ppn, 0)
+        ) AS nominal_tagihan,
 
         /*
          * COLLECTIONS
          *
-         * COLLECTIONS = total nominal_bayar dari d_pembayaran
+         * Total nominal pembayaran terverifikasi.
          */
-        COALESCE(pay.total_nominal_bayar_verified, 0) AS collections,
-        COALESCE(pay.total_nominal_bayar_waiting, 0) AS collections_menunggu_verifikasi,
-        COALESCE(pay.total_nominal_bayar_unverified, 0) AS collections_tidak_terverifikasi,
-        COALESCE(pay.total_nominal_bayar_verified, 0) AS collections_terverifikasi,
+        COALESCE(
+            pay.total_nominal_bayar_verified,
+            0
+        ) AS collections,
+
+        COALESCE(
+            pay.total_nominal_bayar_waiting,
+            0
+        ) AS collections_menunggu_verifikasi,
+
+        COALESCE(
+            pay.total_nominal_bayar_unverified,
+            0
+        ) AS collections_tidak_terverifikasi,
+
+        COALESCE(
+            pay.total_nominal_bayar_verified,
+            0
+        ) AS collections_terverifikasi,
+
+        /*
+         * COLLECTIONS BULAN INI
+         *
+         * SUM(d_pembayaran.nominal_bayar)
+         * Hanya pembayaran yang sudah terverifikasi.
+         *
+         * Filter berdasarkan:
+         * d_pembayaran.tanggal_pembayaran
+         *
+         * Mengikuti start_date dan end_date.
+         */
+        COALESCE(
+            collection_bulan_ini.total_collections_bulan_ini,
+            0
+        ) AS collections_bulan_ini,
+
+        /*
+         * TARGET BULAN INI
+         *
+         * SUM(m_target.target_cabang)
+         *
+         * Relasi:
+         * p.no_billing = m_target.billing_no
+         *
+         * Filter berdasarkan m_target.periode.
+         * Periode merupakan tanggal akhir bulan.
+         */
+        COALESCE(
+            target_bulan_ini.total_target_bulan_ini,
+            0
+        ) AS target_bulan_ini,
 
         /*
          * SALDO PIUTANG
          *
          * TOTAL INVOICE (DPP + PPN) - COLLECTIONS
          */
-        GREATEST(0, COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0) - COALESCE(pay.total_nominal_bayar_verified, 0)) AS saldo_piutang,
+        GREATEST(
+            0,
+            COALESCE(p.dpp, 0) +
+            COALESCE(p.ppn, 0) -
+            COALESCE(pay.total_nominal_bayar_verified, 0)
+        ) AS saldo_piutang,
 
         /*
          * DATA PETUGAS
@@ -20225,24 +20281,34 @@ query.getDataBayarFaktur = `
 
         /*
          * STATUS PEMBAYARAN
-         *
-         * collections = total pembayaran dari d_pembayaran
          */
         CASE
-            WHEN (
-                COALESCE(pay.total_nominal_bayar_verified, 0)
+            WHEN COALESCE(
+                pay.total_nominal_bayar_verified,
+                0
             ) <= 0
                 THEN 'BELUM_DIBAYAR'
 
-            WHEN (
-                COALESCE(pay.total_nominal_bayar_verified, 0)
-            ) < (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0))
+            WHEN COALESCE(
+                pay.total_nominal_bayar_verified,
+                0
+            ) < (
+                COALESCE(p.dpp, 0) +
+                COALESCE(p.ppn, 0)
+            )
                 THEN 'PARTIAL'
 
-            WHEN (
-                COALESCE(pay.total_nominal_bayar_verified, 0)
-            ) >= (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0))
-                AND (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)) > 0
+            WHEN COALESCE(
+                pay.total_nominal_bayar_verified,
+                0
+            ) >= (
+                COALESCE(p.dpp, 0) +
+                COALESCE(p.ppn, 0)
+            )
+            AND (
+                COALESCE(p.dpp, 0) +
+                COALESCE(p.ppn, 0)
+            ) > 0
                 THEN 'SUDAH_DIBAYAR'
 
             ELSE 'BELUM_DIBAYAR'
@@ -20252,20 +20318,32 @@ query.getDataBayarFaktur = `
          * LABEL STATUS PEMBAYARAN
          */
         CASE
-            WHEN (
-                COALESCE(pay.total_nominal_bayar_verified, 0)
+            WHEN COALESCE(
+                pay.total_nominal_bayar_verified,
+                0
             ) <= 0
                 THEN 'Belum Dibayar'
 
-            WHEN (
-                COALESCE(pay.total_nominal_bayar_verified, 0)
-            ) < (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0))
+            WHEN COALESCE(
+                pay.total_nominal_bayar_verified,
+                0
+            ) < (
+                COALESCE(p.dpp, 0) +
+                COALESCE(p.ppn, 0)
+            )
                 THEN 'Partial Payment'
 
-            WHEN (
-                COALESCE(pay.total_nominal_bayar_verified, 0)
-            ) >= (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0))
-                AND (COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)) > 0
+            WHEN COALESCE(
+                pay.total_nominal_bayar_verified,
+                0
+            ) >= (
+                COALESCE(p.dpp, 0) +
+                COALESCE(p.ppn, 0)
+            )
+            AND (
+                COALESCE(p.dpp, 0) +
+                COALESCE(p.ppn, 0)
+            ) > 0
                 THEN 'Sudah Dibayar'
 
             ELSE 'Belum Dibayar'
@@ -20316,10 +20394,7 @@ query.getDataBayarFaktur = `
     LEFT JOIN LATERAL (
         SELECT
             SUM(
-                COALESCE(
-                    dc.nominal_billing,
-                    0
-                )
+                COALESCE(dc.nominal_billing, 0)
             ) AS total_nominal_billing
 
         FROM public.d_cod dc
@@ -20332,57 +20407,195 @@ query.getDataBayarFaktur = `
      *
      * Mengambil seluruh pembayaran berdasarkan no_billing.
      * Status verifikasi diperiksa terpisah.
+     *
+     * Perhitungan lama tetap dipertahankan.
      */
     LEFT JOIN LATERAL (
         SELECT
-            SUM(COALESCE(dp.nominal_bayar, 0)) AS total_nominal_bayar,
-
-            /* Pembayaran yang sudah diverifikasi: memiliki status S */
             SUM(
-                CASE WHEN EXISTS (
-                    SELECT 1
-                    FROM public.d_status ds
-                    WHERE ds.foreign_id = dp.pembayaran_id
-                      AND ds.kegiatan = 'PENAGIHAN'
-                      AND ds.kd_status = 'S'
-                ) THEN COALESCE(dp.nominal_bayar, 0) ELSE 0 END
+                COALESCE(dp.nominal_bayar, 0)
+            ) AS total_nominal_bayar,
+
+            /*
+             * PEMBAYARAN TERVERIFIKASI
+             */
+            SUM(
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                            AND ds.kd_status = 'S'
+                    )
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
             ) AS total_nominal_bayar_verified,
 
-            /* Menunggu verifikasi: belum memiliki record status PENAGIHAN sama sekali */
+            /*
+             * MENUNGGU VERIFIKASI
+             */
             SUM(
-                CASE WHEN NOT EXISTS (
-                    SELECT 1
-                    FROM public.d_status ds
-                    WHERE ds.foreign_id = dp.pembayaran_id
-                      AND ds.kegiatan = 'PENAGIHAN'
-                ) THEN COALESCE(dp.nominal_bayar, 0) ELSE 0 END
+                CASE
+                    WHEN NOT EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                    )
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
             ) AS total_nominal_bayar_waiting,
 
-            /* Tidak terverifikasi: memiliki status PENAGIHAN, tetapi tidak memiliki status S (misalnya ditolak) */
+            /*
+             * TIDAK TERVERIFIKASI
+             */
             SUM(
-                CASE WHEN NOT EXISTS (
-                    SELECT 1
-                    FROM public.d_status ds
-                    WHERE ds.foreign_id = dp.pembayaran_id
-                      AND ds.kegiatan = 'PENAGIHAN'
-                      AND ds.kd_status = 'S'
-                ) AND EXISTS (
-                    SELECT 1
-                    FROM public.d_status ds
-                    WHERE ds.foreign_id = dp.pembayaran_id
-                      AND ds.kegiatan = 'PENAGIHAN'
-                ) THEN COALESCE(dp.nominal_bayar, 0) ELSE 0 END
+                CASE
+                    WHEN NOT EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                            AND ds.kd_status = 'S'
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM public.d_status ds
+                        WHERE ds.foreign_id = dp.pembayaran_id
+                            AND ds.kegiatan = 'PENAGIHAN'
+                    )
+                    THEN COALESCE(dp.nominal_bayar, 0)
+                    ELSE 0
+                END
             ) AS total_nominal_bayar_unverified
 
         FROM public.d_pembayaran dp
-        WHERE BTRIM(COALESCE(dp.no_billing, '')) = BTRIM(COALESCE(p.no_billing, ''))
+
+        WHERE BTRIM(COALESCE(dp.no_billing, '')) =
+              BTRIM(COALESCE(p.no_billing, ''))
+
     ) pay ON TRUE
+
+    /*
+     * COLLECTIONS BULAN INI
+     *
+     * SUM(nominal_bayar)
+     * Hanya pembayaran yang sudah terverifikasi.
+     *
+     * Filter tanggal:
+     * tanggal_pembayaran
+     *
+     * start_date dan end_date menggunakan tanggal aktual.
+     */
+    LEFT JOIN LATERAL (
+        SELECT
+            SUM(
+                COALESCE(dp.nominal_bayar, 0)
+            ) AS total_collections_bulan_ini
+
+        FROM public.d_pembayaran dp
+
+        WHERE BTRIM(COALESCE(dp.no_billing, '')) =
+              BTRIM(COALESCE(p.no_billing, ''))
+
+            AND EXISTS (
+                SELECT 1
+                FROM public.d_status ds
+                WHERE ds.foreign_id = dp.pembayaran_id
+                    AND ds.kegiatan = 'PENAGIHAN'
+                    AND ds.kd_status = 'S'
+            )
+
+            /*
+             * FILTER TANGGAL AWAL
+             */
+            AND (
+                :start_date IS NULL
+                OR dp.tanggal_pembayaran >=
+                   CAST(:start_date AS DATE)
+            )
+
+            /*
+             * FILTER TANGGAL AKHIR
+             * Inklusif sampai tanggal end_date.
+             */
+            AND (
+                :end_date IS NULL
+                OR dp.tanggal_pembayaran <
+                   (
+                       CAST(:end_date AS DATE)
+                       + INTERVAL '1 day'
+                   )
+            )
+
+    ) collection_bulan_ini ON TRUE
+
+    /*
+     * TARGET BULAN INI
+     *
+     * SUM(m_target.target_cabang)
+     *
+     * Relasi:
+     * p.no_billing = m_target.billing_no
+     *
+     * m_target.periode adalah tanggal akhir bulan.
+     *
+     * Contoh:
+     * start_date = 2026-10-01
+     * menjadi 2026-10-31
+     *
+     * end_date = 2026-12-15
+     * menjadi 2026-12-31
+     */
+    LEFT JOIN LATERAL (
+        SELECT
+            SUM(
+                COALESCE(mt.target_cabang, 0)
+            ) AS total_target_bulan_ini
+
+        FROM public.m_target mt
+
+        WHERE BTRIM(COALESCE(mt.billing_no::TEXT, '')) =
+              BTRIM(COALESCE(p.no_billing::TEXT, ''))
+
+            /*
+             * FILTER BULAN AWAL
+             */
+            AND (
+                :start_date IS NULL
+                OR mt.periode >= (
+                    DATE_TRUNC(
+                        'month',
+                        CAST(:start_date AS DATE)
+                    )
+                    + INTERVAL '1 month - 1 day'
+                )::DATE
+            )
+
+            /*
+             * FILTER BULAN AKHIR
+             */
+            AND (
+                :end_date IS NULL
+                OR mt.periode <= (
+                    DATE_TRUNC(
+                        'month',
+                        CAST(:end_date AS DATE)
+                    )
+                    + INTERVAL '1 month - 1 day'
+                )::DATE
+            )
+
+    ) target_bulan_ini ON TRUE
 
     /*
      * STATUS VERIFIKASI
      *
      * VERIFIED jika terdapat minimal
-     * satu pembayaran dengan status S
+     * satu pembayaran dengan status S.
      */
     LEFT JOIN LATERAL (
         SELECT
@@ -20409,6 +20622,7 @@ query.getDataBayarFaktur = `
 
                 ELSE NULL
             END AS kd_status_verifikasi
+
     ) verifikasi ON TRUE
 
     /*
