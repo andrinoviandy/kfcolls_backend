@@ -21817,10 +21817,19 @@ LEFT JOIN LATERAL (
     SELECT
         p1.piutang_id,
         p1.no_faktur,
+        p1.document_type,
         p1.customer,
+        p1.sales,
+        p1.nama_sales,
         p1.cabang,
         p1.principle,
-        p1.posting_date
+        p1.posting_date,
+        p1.jatuh_tempo,
+        p1.dpp,
+        p1.ppn,
+        p1.pph,
+        p1.aging,
+        p1.status_piutang
     FROM public.d_piutang p1
     WHERE p1.no_billing = dp.no_billing
     ORDER BY p1.posting_date DESC NULLS LAST,p1.piutang_id DESC
