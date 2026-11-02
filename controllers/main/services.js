@@ -1487,7 +1487,7 @@ exports.uploadMasterTarget = async (
 
                         const valid =
                             actualHeaders.length ===
-                                expectedHeaders.length &&
+                            expectedHeaders.length &&
                             expectedHeaders.every(
                                 (header, index) =>
                                     actualHeaders[index] === header
@@ -1647,7 +1647,7 @@ exports.uploadMasterTarget = async (
             errors: result.data_error,
         };
     } catch (error) {
-        await worker.terminate().catch(() => {});
+        await worker.terminate().catch(() => { });
         throw error;
     }
 };
@@ -12084,11 +12084,232 @@ exports.getTrendSaldoPiutangDashboard = async (params) => {
     );
 };
 
-exports.getTrenPencairanPiutang = async (params) => {
+exports.getTrendPencairanPiutang = async (params) => {
     return runDashboardQuery(
-        query.getTrenPencairanPiutang,
+        query.getTrendPencairanPiutang,
         params
     );
+};
+
+exports.getDashboardCard1 = async (params = {}) => {
+
+    // CABANG
+    let cabangRaw =
+        params.cabang ||
+        params['cabang[]'] ||
+        params.sales_office ||
+        params['sales_office[]'] ||
+        [];
+
+    let cabang = Array.isArray(cabangRaw)
+        ? cabangRaw
+        : String(cabangRaw).split(',');
+
+    cabang = cabang
+        .map(item => String(item).trim())
+        .filter(Boolean);
+
+    // PRINCIPAL
+    let principalRaw =
+        params.principal ||
+        params['principal[]'] ||
+        params.principal_id ||
+        params['principal_id[]'] ||
+        [];
+
+    let principal = Array.isArray(principalRaw)
+        ? principalRaw
+        : String(principalRaw).split(',');
+
+    principal = principal
+        .map(item => String(item).trim())
+        .filter(Boolean);
+
+    // CHANNEL
+    let channelRaw =
+        params.channel ||
+        params['channel[]'] ||
+        params.channel_id ||
+        params['channel_id[]'] ||
+        [];
+
+    let channel = Array.isArray(channelRaw)
+        ? channelRaw
+        : String(channelRaw).split(',');
+
+    channel = channel
+        .map(item => String(item).trim())
+        .filter(Boolean);
+
+    // CUSTOMER
+    let customerRaw =
+        params.customer ||
+        params['customer[]'] ||
+        [];
+
+    let customer = Array.isArray(customerRaw)
+        ? customerRaw
+        : String(customerRaw).split(',');
+
+    customer = customer
+        .map(item => String(item).trim())
+        .filter(Boolean);
+
+    // CEK ALL
+    const cabangAll =
+        cabang.length === 0 ||
+        cabang.some(item => item.toUpperCase() === 'ALL');
+
+    const principalAll =
+        principal.length === 0 ||
+        principal.some(item => item.toUpperCase() === 'ALL');
+
+    const channelAll =
+        channel.length === 0 ||
+        channel.some(item => item.toUpperCase() === 'ALL');
+
+    const customerAll =
+        customer.length === 0 ||
+        customer.some(item => item.toUpperCase() === 'ALL');
+
+    // PARAMETER QUERY
+    const filters = {
+        cabang: cabangAll ? ['__NO_FILTER_MATCH__'] : cabang,
+        principal: principalAll ? ['__NO_FILTER_MATCH__'] : principal,
+        channel: channelAll ? ['__NO_FILTER_MATCH__'] : channel,
+        customer: customerAll ? ['__NO_FILTER_MATCH__'] : customer,
+
+        cabang_all: cabangAll,
+        principal_all: principalAll,
+        channel_all: channelAll,
+        customer_all: customerAll,
+
+        tanggal_akhir:
+            params.tanggal_akhir ||
+            params.end_date ||
+            params.endDate ||
+            params.tanggal ||
+            null
+    };
+
+    return await db.query(
+        query.getDashboardCard1,
+        {
+            replacements: filters,
+            type: db.QueryTypes.SELECT
+        }
+    );
+};
+
+exports.getDashboardPiutangByCabang = async (params = {}) => {
+
+    const normalizeFilter = (...values) => {
+        const raw = values.find(
+            value =>
+                value !== undefined &&
+                value !== null &&
+                value !== ''
+        );
+
+        if (raw === undefined || raw === null) {
+            return [];
+        }
+
+        const result = Array.isArray(raw)
+            ? raw
+            : typeof raw === 'string'
+                ? raw.split(',')
+                : [raw];
+
+        return result
+            .filter(item => item !== null && item !== undefined)
+            .map(item => String(item).trim())
+            .filter(Boolean);
+    };
+
+    const cabang = normalizeFilter(
+        params.cabang,
+        params['cabang[]'],
+        params.sales_office,
+        params['sales_office[]']
+    );
+
+    const principal = normalizeFilter(
+        params.principal,
+        params['principal[]'],
+        params.principal_id,
+        params['principal_id[]']
+    );
+
+    const channel = normalizeFilter(
+        params.channel,
+        params['channel[]'],
+        params.channel_id,
+        params['channel_id[]']
+    );
+
+    const customer = normalizeFilter(
+        params.customer,
+        params['customer[]']
+    );
+
+    const isAll = values =>
+        values.length === 0 ||
+        values.some(item => item.toUpperCase() === 'ALL');
+
+    const cabangAll = isAll(cabang);
+    const principalAll = isAll(principal);
+    const channelAll = isAll(channel);
+    const customerAll = isAll(customer);
+
+    const filters = {
+        cabang: cabangAll ? ['__NO_FILTER_MATCH__'] : cabang,
+        principal: principalAll ? ['__NO_FILTER_MATCH__'] : principal,
+        channel: channelAll ? ['__NO_FILTER_MATCH__'] : channel,
+        customer: customerAll ? ['__NO_FILTER_MATCH__'] : customer,
+
+        // Gunakan angka 1 dan 0, bukan boolean
+        cabang_all: cabangAll ? 1 : 0,
+        principal_all: principalAll ? 1 : 0,
+        channel_all: channelAll ? 1 : 0,
+        customer_all: customerAll ? 1 : 0,
+
+        tanggal_mulai:
+            params.tanggal_mulai ||
+            params.start_date ||
+            params.startDate ||
+            '',
+
+        tanggal_akhir:
+            params.tanggal_akhir ||
+            params.end_date ||
+            params.endDate ||
+            params.tanggal ||
+            ''
+    };
+
+    const sql = query.getDashboardPiutangByCabang;
+
+    if (typeof sql !== 'string') {
+        throw new Error(
+            'query.getDashboardPiutangByCabang tidak ditemukan atau bukan string'
+        );
+    }
+
+    console.log('FILTER DASHBOARD PIUTANG:', filters);
+
+    const result = await db.query(sql, {
+        replacements: filters,
+        type: db.QueryTypes.SELECT
+    });
+
+    const data = result[0] || {};
+
+    return {
+        top_piutang: data.top_piutang || [],
+        peringkat_cabang: data.peringkat_cabang || [],
+        saldo_piutang: data.saldo_piutang || []
+    };
 };
 
 // =====================================================

@@ -2018,7 +2018,6 @@ exports.historyPenugasan = async (req, res) => {
 const dashboardHandlers = [
     'getSummaryPiutangDashboard',
     'getTrendSaldoPiutangDashboard',
-    'getTrenPencairanPiutang',
     'getDetailPiutangDashboard',
     'getSalesOpenInvoiceDashboard',
     'getAnalisisPiutangDashboard',
@@ -2030,6 +2029,9 @@ const dashboardHandlers = [
     'getProdukDashboard',
     'getSaldoAkhirJatuhTempoDashboard',
     'getAgingPiutangDashboard',
+    'getTrendPencairanPiutang',
+    'getDashboardCard1',
+    'getDashboardPiutangByCabang'
 ];
 
 dashboardHandlers.forEach((handlerName) => {

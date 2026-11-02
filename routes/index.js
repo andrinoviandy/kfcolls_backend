@@ -55,9 +55,19 @@ router.get(
 );
 
 router.get(
-    '/getTrenPencairanPiutang',
+    '/getTrendPencairanPiutang',
     authorization.doAuth,
-    controller.main.getTrenPencairanPiutang
+    controller.main.getTrendPencairanPiutang
+);
+router.get(
+    '/getDashboardCard1',
+    authorization.doAuth,
+    controller.main.getDashboardCard1
+);
+router.get(
+    '/getDashboardPiutangByCabang',
+    authorization.doAuth,
+    controller.main.getDashboardPiutangByCabang
 );
 
 router.get(

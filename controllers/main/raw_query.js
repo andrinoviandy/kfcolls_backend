@@ -23769,15 +23769,15 @@ piutang_data AS (
 
         COALESCE(pay.dibayar, 0) AS total_collection,
 
-        COALESCE(p.dpp, 0)
+        COALESCE(p.dpp + p.ppn, 0)
             - COALESCE(pay.dibayar, 0)
             AS saldo_piutang_calc,
 
-        COALESCE(p.dpp, 0)
+        COALESCE(p.dpp + p.ppn, 0)
             AS total_piutang_calc,
 
         CASE
-            WHEN COALESCE(p.dpp, 0)
+            WHEN COALESCE(p.dpp + p.ppn, 0)
                 - COALESCE(pay.dibayar, 0) <= 0
                 THEN 'PAID'
 
@@ -24065,7 +24065,7 @@ GROUP BY DATE_TRUNC('month', p.posting_date)
 ORDER BY DATE_TRUNC('month', p.posting_date)
 `;
 
-query.getTrenPencairanPiutang = `
+query.getTrendPencairanPiutang = `
 ${PIUTANG_CTE}
 
 SELECT
@@ -25202,6 +25202,1218 @@ LEFT JOIN public.m_top mt
 
 WHERE 1 = 1
     :condition
+`;
+
+const DASHBOARD_CONDITION_NO_DATE = `
+    AND (
+        :cabang_all = TRUE
+        OR p.cabang IN (:cabang)
+    )
+    AND (
+        :principal_all = TRUE
+        OR p.principle IN (:principal)
+    )
+    AND (
+        :channel_all = TRUE
+        OR p.channel_id IN (:channel)
+    )
+    AND (
+        :customer_all = TRUE
+        OR p.customer IN (:customer)
+    )
+`;
+
+query.getDashboardCard1 = `
+WITH periode AS (
+    SELECT
+        CAST(
+            DATE_TRUNC(
+                'month',
+                COALESCE(
+                    TO_DATE(
+                        NULLIF(:tanggal_akhir, ''),
+                        'YYYY-MM-DD'
+                    ),
+                    CURRENT_DATE
+                )
+            )
+            AS DATE
+        ) AS bulan_ini
+),
+
+periode_bulan AS (
+    SELECT
+        'bulan_ini' AS jenis,
+        bulan_ini AS tanggal_mulai,
+        (
+            bulan_ini + INTERVAL '1 month' - INTERVAL '1 day'
+        ) AS tanggal_akhir
+    FROM periode
+
+    UNION ALL
+
+    SELECT
+        'bulan_lalu' AS jenis,
+        (bulan_ini - INTERVAL '1 month') AS tanggal_mulai,
+        (
+            bulan_ini - INTERVAL '1 day'
+        ) AS tanggal_akhir
+    FROM periode
+),
+
+-- =====================================================
+-- DATA PEMBAYARAN TERVERIFIKASI DAN COD
+-- =====================================================
+payment_rows AS (
+    -- Logika pembayaran existing dipertahankan untuk perhitungan Total Piutang.
+    SELECT
+        dp.no_billing,
+        DATE_TRUNC('day', dp.tanggal_pembayaran) AS tanggal_bayar,
+        COALESCE(dp.nominal_bayar, 0) AS nominal
+    FROM public.d_pembayaran dp
+
+    JOIN LATERAL (
+        SELECT
+            ds.kd_status
+        FROM public.d_status ds
+        WHERE ds.foreign_id = dp.pembayaran_id
+          AND ds.kegiatan = 'PENAGIHAN'
+        ORDER BY ds.created_at DESC NULLS LAST
+        LIMIT 1
+    ) status_verifikasi ON TRUE
+
+    WHERE UPPER(COALESCE(status_verifikasi.kd_status, '')) = 'S'
+      AND dp.tanggal_pembayaran IS NOT NULL
+
+    UNION ALL
+
+    SELECT
+        dc.no_billing,
+        DATE_TRUNC('day', dc.tanggal_pelunasan) AS tanggal_bayar,
+        COALESCE(dc.nominal_billing, 0) AS nominal
+    FROM public.d_cod dc
+    WHERE dc.tanggal_pelunasan IS NOT NULL
+),
+
+-- Pembayaran khusus KPI Pencairan:
+-- verifikasi melalui d_piutang -> d_faktur_petugas -> d_status.
+verified_billing AS (
+    SELECT DISTINCT
+        p.no_billing
+    FROM public.d_piutang p
+    INNER JOIN public.d_faktur_petugas dfp
+        ON dfp.piutang_id = p.piutang_id
+    WHERE p.no_billing IS NOT NULL
+      AND EXISTS (
+          SELECT 1
+          FROM public.d_status ds
+          WHERE ds.foreign_id = dfp.faktur_petugas_id
+            AND ds.kegiatan = 'PENAGIHAN'
+            AND UPPER(COALESCE(ds.kd_status, '')) = 'S'
+      )
+),
+
+pencairan_payment_rows AS (
+    SELECT
+        dp.no_billing,
+        DATE_TRUNC('day', dp.tanggal_pembayaran) AS tanggal_bayar,
+        COALESCE(dp.nominal_bayar, 0) AS nominal
+    FROM public.d_pembayaran dp
+    INNER JOIN verified_billing vb
+        ON vb.no_billing = dp.no_billing
+    WHERE dp.tanggal_pembayaran IS NOT NULL
+
+    UNION ALL
+
+    SELECT
+        dc.no_billing,
+        DATE_TRUNC('day', dc.tanggal_pelunasan) AS tanggal_bayar,
+        COALESCE(dc.nominal_billing, 0) AS nominal
+    FROM public.d_cod dc
+    WHERE dc.tanggal_pelunasan IS NOT NULL
+),
+
+-- =====================================================
+-- DATA PIUTANG
+-- Filter tidak menggunakan tanggal
+-- =====================================================
+piutang_data AS (
+    SELECT
+        p.piutang_id,
+        p.no_billing,
+        p.customer,
+        p.cabang,
+        p.principle,
+        p.channel_id,
+        DATE_TRUNC('day', p.posting_date) AS posting_date,
+        DATE_TRUNC('day', p.jatuh_tempo) AS jatuh_tempo,
+
+        COALESCE(p.dpp, 0) AS dpp,
+        COALESCE(p.ppn, 0) AS ppn,
+
+        (
+            COALESCE(p.dpp, 0) +
+            COALESCE(p.ppn, 0)
+        ) AS total_piutang
+
+    FROM public.d_piutang p
+
+    WHERE 1 = 1
+        ${DASHBOARD_CONDITION_NO_DATE}
+),
+
+-- =====================================================
+-- BILLING YANG SUDAH TERFILTER
+-- =====================================================
+filtered_piutang AS (
+    SELECT *
+    FROM piutang_data
+),
+
+filtered_billing AS (
+    SELECT DISTINCT no_billing
+    FROM filtered_piutang
+    WHERE no_billing IS NOT NULL
+),
+
+
+-- =====================================================
+-- DATA BULANAN UNTUK PERHITUNGAN DOAR PER CABANG
+-- Mengikuti periode tanggal_akhir:
+-- mulai Desember tahun sebelumnya sampai bulan acuan.
+-- =====================================================
+doar_monthly AS (
+    SELECT
+        p.cabang,
+        DATE_TRUNC('month', p.posting_date) AS periode,
+
+        SUM(p.total_piutang) AS total_piutang,
+        SUM(p.dpp) AS total_dpp
+
+    FROM filtered_piutang p
+    CROSS JOIN periode pr
+
+    WHERE p.posting_date IS NOT NULL
+      AND p.posting_date >= (
+          DATE_TRUNC('year', pr.bulan_ini) - INTERVAL '1 month'
+      )
+      AND p.posting_date < (
+          pr.bulan_ini + INTERVAL '1 month'
+      )
+
+    GROUP BY
+        p.cabang,
+        DATE_TRUNC('month', p.posting_date)
+),
+
+-- =====================================================
+-- HITUNG KOMPONEN DOAR PER CABANG DAN PERIODE
+-- =====================================================
+doar_branch_periode AS (
+    SELECT
+        pb.jenis,
+        pb.tanggal_akhir,
+        b.cabang,
+
+        COALESCE(awal.piutang_akhir_tahun, 0)
+            AS piutang_akhir_tahun,
+
+        COALESCE(bulan.total_piutang, 0)
+            AS piutang_bulan_ini,
+
+        COALESCE(ytd.penjualan_mtd, 0)
+            AS penjualan_mtd,
+
+        CASE
+            WHEN COALESCE(ytd.penjualan_mtd, 0) > 0
+            THEN ROUND(
+                (
+                    (
+                        (
+                            COALESCE(awal.piutang_akhir_tahun, 0)
+                            + COALESCE(bulan.total_piutang, 0)
+                        ) / 2.0
+                    )
+                    * EXTRACT(DAY FROM pb.tanggal_akhir)
+                ) / ytd.penjualan_mtd,
+                0
+            )
+            ELSE 0
+        END AS doar_cabang
+
+    FROM periode_bulan pb
+
+    CROSS JOIN (
+        SELECT DISTINCT cabang
+        FROM filtered_piutang
+        WHERE cabang IS NOT NULL
+    ) b
+
+    -- Piutang pada bulan pertama yang memiliki nilai non-zero,
+    -- dimulai dari Desember tahun sebelumnya.
+    LEFT JOIN LATERAL (
+        SELECT
+            dm.total_piutang AS piutang_akhir_tahun
+        FROM doar_monthly dm
+        WHERE dm.cabang = b.cabang
+          AND dm.periode >= (
+              DATE_TRUNC('year', pb.tanggal_akhir)
+              - INTERVAL '1 month'
+          )
+          AND dm.periode <= DATE_TRUNC('month', pb.tanggal_akhir)
+          AND dm.total_piutang <> 0
+        ORDER BY dm.periode ASC
+        LIMIT 1
+    ) awal ON TRUE
+
+    -- Total piutang pada bulan acuan.
+    LEFT JOIN doar_monthly bulan
+        ON bulan.cabang = b.cabang
+       AND bulan.periode = DATE_TRUNC('month', pb.tanggal_akhir)
+
+    -- Penjualan DPP YTD sampai dengan bulan acuan.
+    LEFT JOIN LATERAL (
+        SELECT
+            SUM(dm.total_dpp) AS penjualan_mtd
+        FROM doar_monthly dm
+        WHERE dm.cabang = b.cabang
+          AND dm.periode >= DATE_TRUNC('year', pb.tanggal_akhir)
+          AND dm.periode <= DATE_TRUNC('month', pb.tanggal_akhir)
+    ) ytd ON TRUE
+),
+
+-- =====================================================
+-- REKAP DOAR SELURUH CABANG
+-- DOAR cabang digabung menggunakan pembobotan penjualan DPP YTD.
+-- =====================================================
+rekap_doar AS (
+    SELECT
+        jenis,
+
+        CASE
+            WHEN SUM(penjualan_mtd) > 0
+            THEN ROUND(
+                SUM(doar_cabang * penjualan_mtd)
+                / SUM(penjualan_mtd),
+                0
+            )
+            ELSE 0
+        END AS doar
+
+    FROM doar_branch_periode
+    GROUP BY jenis
+),
+
+-- =====================================================
+-- HITUNG SALDO PIUTANG PER AKHIR BULAN
+-- Outstanding = DPP + PPN - pembayaran d_pembayaran terverifikasi - COD.
+-- Jika total pembayaran >= DPP + PPN, outstanding menjadi 0.
+-- =====================================================
+snapshot_piutang AS (
+    SELECT
+        pb.jenis,
+        pb.tanggal_mulai,
+        pb.tanggal_akhir,
+
+        p.piutang_id,
+        p.no_billing,
+        p.posting_date,
+        p.jatuh_tempo,
+        p.total_piutang,
+
+        COALESCE(pay.total_dibayar, 0) AS total_dibayar,
+
+        GREATEST(
+            p.total_piutang - COALESCE(pay.total_dibayar, 0),
+            0
+        ) AS outstanding,
+
+        CASE
+            WHEN p.posting_date IS NOT NULL
+            THEN EXTRACT(DAY FROM (pb.tanggal_akhir - p.posting_date))
+            ELSE 0
+        END AS aging
+
+    FROM periode_bulan pb
+
+    CROSS JOIN filtered_piutang p
+
+    LEFT JOIN LATERAL (
+        SELECT
+            SUM(pr.nominal) AS total_dibayar
+        -- Gunakan pembayaran yang sudah terverifikasi melalui:
+        -- d_piutang -> d_faktur_petugas -> d_status (S, PENAGIHAN),
+        -- ditambah pelunasan COD.
+        FROM pencairan_payment_rows pr
+        WHERE pr.no_billing = p.no_billing
+          AND pr.tanggal_bayar < (pb.tanggal_akhir + INTERVAL '1 day')
+    ) pay ON TRUE
+
+    WHERE p.posting_date IS NOT NULL
+      AND DATE_TRUNC('month', p.posting_date)
+          = DATE_TRUNC('month', pb.tanggal_akhir)
+),
+
+-- =====================================================
+-- REKAP SALDO PIUTANG PER BULAN
+-- =====================================================
+rekap_piutang AS (
+    SELECT
+        pb.jenis,
+        COALESCE(sp.total_piutang, 0) AS total_piutang,
+        COALESCE(sp.piutang_overdue, 0) AS piutang_overdue,
+        COALESCE(pg.piutang_jatuh_tempo, 0) AS piutang_jatuh_tempo,
+        COALESCE(pg.piutang_lebih_360_hari, 0) AS piutang_lebih_360_hari
+    FROM periode_bulan pb
+
+    LEFT JOIN (
+        SELECT
+            jenis,
+            SUM(outstanding) AS total_piutang,
+            SUM(outstanding) FILTER (
+                WHERE jatuh_tempo IS NOT NULL
+                  AND jatuh_tempo < tanggal_akhir
+            ) AS piutang_overdue
+        FROM snapshot_piutang
+        GROUP BY jenis
+    ) sp
+        ON sp.jenis = pb.jenis
+
+    LEFT JOIN LATERAL (
+        SELECT
+            COALESCE(
+                SUM(p.total_piutang) FILTER (
+                    WHERE p.jatuh_tempo < CURRENT_DATE
+                ),
+                0
+            ) AS piutang_jatuh_tempo,
+
+            COALESCE(
+                SUM(p.total_piutang) FILTER (
+                    WHERE p.jatuh_tempo < (CURRENT_DATE - INTERVAL '360 days')
+                ),
+                0
+            ) AS piutang_lebih_360_hari
+
+        FROM filtered_piutang p
+        WHERE p.posting_date IS NOT NULL
+          AND DATE_TRUNC('month', p.posting_date)
+              = DATE_TRUNC('month', pb.tanggal_akhir)
+    ) pg ON TRUE
+),
+
+-- =====================================================
+-- PENCAIRAN MTD PER BULAN
+-- Berdasarkan tanggal pembayaran
+-- =====================================================
+rekap_pencairan AS (
+    SELECT
+        pb.jenis,
+        COALESCE(SUM(pr.nominal), 0) AS pencairan_mtd
+    FROM periode_bulan pb
+
+    LEFT JOIN (
+        SELECT
+            pay.no_billing,
+            pay.tanggal_bayar,
+            pay.nominal
+        FROM pencairan_payment_rows pay
+        INNER JOIN filtered_billing fb
+            ON fb.no_billing = pay.no_billing
+    ) pr
+        ON pr.tanggal_bayar >= pb.tanggal_mulai
+       AND pr.tanggal_bayar < (pb.tanggal_akhir + INTERVAL '1 day')
+
+    GROUP BY pb.jenis
+),
+
+-- =====================================================
+-- GABUNGKAN KPI PER BULAN
+-- =====================================================
+kpi_bulanan AS (
+    SELECT
+        pb.jenis,
+
+        -- Total Piutang: tetap menggunakan outstanding snapshot.
+        COALESCE(rp.total_piutang, 0) AS total_piutang,
+
+        -- DOAR hasil perhitungan per cabang.
+        COALESCE(rd.doar, 0) AS doar,
+
+        -- Skor Piutang: semakin kecil rasio overdue terhadap total piutang,
+        -- semakin tinggi skor. Rasio 1% mengurangi skor sebesar 2 poin.
+        CASE
+            WHEN COALESCE(rp.total_piutang, 0) <= 0 THEN 0
+            ELSE ROUND(
+                GREATEST(
+                    0,
+                    LEAST(
+                        100,
+                        100 - (
+                            2 * (
+                                COALESCE(rp.piutang_overdue, 0)
+                                / NULLIF(rp.total_piutang, 0)
+                            ) * 100
+                        )
+                    )
+                ),
+                2
+            )
+        END AS skor_piutang,
+
+        COALESCE(rc.pencairan_mtd, 0) AS pencairan_mtd,
+        COALESCE(rp.piutang_jatuh_tempo, 0) AS piutang_jatuh_tempo,
+        COALESCE(
+            rp.piutang_lebih_360_hari,
+            0
+        ) AS piutang_lebih_360_hari
+
+    FROM periode_bulan pb
+
+    LEFT JOIN rekap_piutang rp
+        ON rp.jenis = pb.jenis
+
+    LEFT JOIN rekap_doar rd
+        ON rd.jenis = pb.jenis
+
+    LEFT JOIN rekap_pencairan rc
+        ON rc.jenis = pb.jenis
+),
+
+-- =====================================================
+-- PIVOT BULAN INI DAN BULAN LALU
+-- =====================================================
+perbandingan AS (
+    SELECT
+        MAX(total_piutang) FILTER (
+            WHERE jenis = 'bulan_ini'
+        ) AS total_piutang,
+
+        MAX(total_piutang) FILTER (
+            WHERE jenis = 'bulan_lalu'
+        ) AS total_piutang_bulan_lalu,
+
+        MAX(doar) FILTER (
+            WHERE jenis = 'bulan_ini'
+        ) AS doar,
+
+        MAX(doar) FILTER (
+            WHERE jenis = 'bulan_lalu'
+        ) AS doar_bulan_lalu,
+
+        MAX(skor_piutang) FILTER (
+            WHERE jenis = 'bulan_ini'
+        ) AS skor_piutang,
+
+        MAX(skor_piutang) FILTER (
+            WHERE jenis = 'bulan_lalu'
+        ) AS skor_piutang_bulan_lalu,
+
+        MAX(pencairan_mtd) FILTER (
+            WHERE jenis = 'bulan_ini'
+        ) AS pencairan_mtd,
+
+        MAX(pencairan_mtd) FILTER (
+            WHERE jenis = 'bulan_lalu'
+        ) AS pencairan_mtd_bulan_lalu,
+
+        MAX(piutang_jatuh_tempo) FILTER (
+            WHERE jenis = 'bulan_ini'
+        ) AS piutang_jatuh_tempo,
+
+        MAX(piutang_jatuh_tempo) FILTER (
+            WHERE jenis = 'bulan_lalu'
+        ) AS piutang_jatuh_tempo_bulan_lalu,
+
+        MAX(piutang_lebih_360_hari) FILTER (
+            WHERE jenis = 'bulan_ini'
+        ) AS piutang_lebih_360_hari,
+
+        MAX(piutang_lebih_360_hari) FILTER (
+            WHERE jenis = 'bulan_lalu'
+        ) AS piutang_lebih_360_hari_bulan_lalu
+
+    FROM kpi_bulanan
+)
+
+-- =====================================================
+-- HASIL AKHIR
+-- =====================================================
+SELECT
+    -- TOTAL PIUTANG
+    COALESCE(total_piutang, 0) AS total_piutang,
+    COALESCE(total_piutang_bulan_lalu, 0) AS total_piutang_bulan_lalu,
+
+    COALESCE(total_piutang, 0) -
+    COALESCE(total_piutang_bulan_lalu, 0) AS selisih_total_piutang,
+
+    ROUND(
+        (
+            (
+                COALESCE(total_piutang, 0) -
+                COALESCE(total_piutang_bulan_lalu, 0)
+            ) / NULLIF(total_piutang_bulan_lalu, 0)
+        ) * 100,
+        2
+    ) AS persentase_total_piutang,
+
+    -- DOAR
+    COALESCE(doar, 0) AS doar,
+    COALESCE(doar_bulan_lalu, 0) AS doar_bulan_lalu,
+
+    COALESCE(doar, 0) -
+    COALESCE(doar_bulan_lalu, 0) AS selisih_doar,
+
+    ROUND(
+        (
+            (
+                COALESCE(doar, 0) -
+                COALESCE(doar_bulan_lalu, 0)
+            ) / NULLIF(doar_bulan_lalu, 0)
+        ) * 100,
+        2
+    ) AS persentase_doar,
+
+    -- SKOR PIUTANG
+    COALESCE(skor_piutang, 0) AS skor_piutang,
+    COALESCE(skor_piutang_bulan_lalu, 0) AS skor_piutang_bulan_lalu,
+
+    COALESCE(skor_piutang, 0) -
+    COALESCE(skor_piutang_bulan_lalu, 0) AS selisih_skor_piutang,
+
+    ROUND(
+        (
+            (
+                COALESCE(skor_piutang, 0) -
+                COALESCE(skor_piutang_bulan_lalu, 0)
+            ) / NULLIF(skor_piutang_bulan_lalu, 0)
+        ) * 100,
+        2
+    ) AS persentase_skor_piutang,
+
+    -- PENCAIRAN MTD
+    COALESCE(pencairan_mtd, 0) AS pencairan_mtd,
+    COALESCE(pencairan_mtd_bulan_lalu, 0) AS pencairan_mtd_bulan_lalu,
+
+    COALESCE(pencairan_mtd, 0) -
+    COALESCE(pencairan_mtd_bulan_lalu, 0) AS selisih_pencairan_mtd,
+
+    ROUND(
+        (
+            (
+                COALESCE(pencairan_mtd, 0) -
+                COALESCE(pencairan_mtd_bulan_lalu, 0)
+            ) / NULLIF(pencairan_mtd_bulan_lalu, 0)
+        ) * 100,
+        2
+    ) AS persentase_pencairan_mtd,
+
+    -- PIUTANG JATUH TEMPO
+    COALESCE(piutang_jatuh_tempo, 0) AS piutang_jatuh_tempo,
+    COALESCE(piutang_jatuh_tempo_bulan_lalu, 0) AS piutang_jatuh_tempo_bulan_lalu,
+
+    COALESCE(piutang_jatuh_tempo, 0) -
+    COALESCE(piutang_jatuh_tempo_bulan_lalu, 0) AS selisih_piutang_jatuh_tempo,
+
+    ROUND(
+        (
+            (
+                COALESCE(piutang_jatuh_tempo, 0) -
+                COALESCE(piutang_jatuh_tempo_bulan_lalu, 0)
+            ) / NULLIF(piutang_jatuh_tempo_bulan_lalu, 0)
+        ) * 100,
+        2
+    ) AS persentase_piutang_jatuh_tempo,
+
+    -- PIUTANG > 360 HARI
+    COALESCE(piutang_lebih_360_hari, 0) AS piutang_lebih_360_hari,
+    COALESCE(piutang_lebih_360_hari_bulan_lalu, 0) AS piutang_lebih_360_hari_bulan_lalu,
+
+    COALESCE(piutang_lebih_360_hari, 0) -
+    COALESCE(piutang_lebih_360_hari_bulan_lalu, 0) AS selisih_piutang_lebih_360_hari,
+
+    ROUND(
+        (
+            (
+                COALESCE(piutang_lebih_360_hari, 0) -
+                COALESCE(piutang_lebih_360_hari_bulan_lalu, 0)
+            ) / NULLIF(piutang_lebih_360_hari_bulan_lalu, 0)
+        ) * 100,
+        2
+    ) AS persentase_piutang_lebih_360_hari
+
+FROM perbandingan
+`;
+
+query.getDashboardPiutangByCabang = `
+WITH
+
+-- =====================================================
+-- 1. PERIODE FILTER
+-- =====================================================
+periode AS (
+    SELECT
+        COALESCE(
+            TO_DATE(
+                NULLIF(:tanggal_mulai, ''),
+                'YYYY-MM-DD'
+            ),
+            DATE_TRUNC('month', CURRENT_DATE)::DATE
+        ) AS tanggal_mulai,
+
+        COALESCE(
+            TO_DATE(
+                NULLIF(:tanggal_akhir, ''),
+                'YYYY-MM-DD'
+            ),
+            CURRENT_DATE
+        ) AS tanggal_akhir
+),
+
+-- =====================================================
+-- 2. MASTER CABANG
+-- =====================================================
+master_cabang AS (
+    SELECT
+        mr.kd_ref AS cabang,
+        mr.ur_ref AS nama_cabang
+
+    FROM public.m_referensi mr
+
+    WHERE mr.jns_ref = 'cabang_id'
+),
+
+-- =====================================================
+-- 3. MASTER CHANNEL
+-- =====================================================
+master_channel AS (
+    SELECT
+        mr.kd_ref AS channel_id,
+        mr.ur_ref AS nama_channel
+
+    FROM public.m_referensi mr
+
+    WHERE mr.jns_ref = 'channel_id'
+),
+
+-- =====================================================
+-- 4. FILTER DATA PIUTANG
+-- =====================================================
+filtered_piutang AS (
+    SELECT
+        p.piutang_id,
+        p.no_billing,
+        p.customer,
+        p.cabang,
+        p.principle,
+        p.channel_id,
+
+        p.posting_date::DATE AS posting_date,
+        p.jatuh_tempo::DATE AS jatuh_tempo,
+
+        COALESCE(p.dpp, 0) AS dpp,
+        COALESCE(p.ppn, 0) AS ppn,
+
+        (
+            COALESCE(p.dpp, 0) +
+            COALESCE(p.ppn, 0)
+        ) AS total_piutang
+
+    FROM public.d_piutang p
+
+    CROSS JOIN periode pr
+
+    WHERE 1 = 1
+
+        -- FILTER TANGGAL
+        AND p.posting_date >= pr.tanggal_mulai
+
+        AND p.posting_date < (
+            pr.tanggal_akhir + INTERVAL '1 day'
+        )
+
+        -- FILTER CABANG
+        AND (
+            :cabang_all = 1
+            OR p.cabang IN (:cabang)
+        )
+
+        -- FILTER PRINCIPAL
+        AND (
+            :principal_all = 1
+            OR p.principle IN (:principal)
+        )
+
+        -- FILTER CHANNEL
+        AND (
+            :channel_all = 1
+            OR p.channel_id IN (:channel)
+        )
+
+        -- FILTER CUSTOMER
+        AND (
+            :customer_all = 1
+            OR p.customer IN (:customer)
+        )
+),
+
+-- =====================================================
+-- 5. BILLING YANG SUDAH TERVERIFIKASI
+-- d_piutang -> d_faktur_petugas -> d_status
+-- =====================================================
+verified_billing AS (
+    SELECT DISTINCT
+        p.no_billing
+
+    FROM public.d_piutang p
+
+    INNER JOIN public.d_faktur_petugas dfp
+        ON dfp.piutang_id = p.piutang_id
+
+    WHERE p.no_billing IS NOT NULL
+
+        AND EXISTS (
+            SELECT 1
+
+            FROM public.d_status ds
+
+            WHERE ds.foreign_id = dfp.faktur_petugas_id
+
+                AND ds.kegiatan = 'PENAGIHAN'
+
+                AND UPPER(
+                    COALESCE(ds.kd_status, '')
+                ) = 'S'
+        )
+),
+
+-- =====================================================
+-- 6. DATA PEMBAYARAN TERVERIFIKASI DAN COD
+-- =====================================================
+payment_rows AS (
+
+    -- PEMBAYARAN TERVERIFIKASI
+    SELECT
+        dp.no_billing,
+
+        dp.tanggal_pembayaran::DATE AS tanggal_bayar,
+
+        COALESCE(
+            dp.nominal_bayar,
+            0
+        ) AS nominal
+
+    FROM public.d_pembayaran dp
+
+    INNER JOIN verified_billing vb
+        ON vb.no_billing = dp.no_billing
+
+    WHERE dp.tanggal_pembayaran IS NOT NULL
+
+    UNION ALL
+
+    -- PEMBAYARAN COD
+    SELECT
+        dc.no_billing,
+
+        dc.tanggal_pelunasan::DATE AS tanggal_bayar,
+
+        COALESCE(
+            dc.nominal_billing,
+            0
+        ) AS nominal
+
+    FROM public.d_cod dc
+
+    WHERE dc.tanggal_pelunasan IS NOT NULL
+),
+
+-- =====================================================
+-- 7. HITUNG OUTSTANDING PER PIUTANG
+-- =====================================================
+piutang_outstanding AS (
+    SELECT
+        p.piutang_id,
+        p.no_billing,
+        p.customer,
+        p.cabang,
+        p.principle,
+        p.channel_id,
+
+        p.posting_date,
+        p.jatuh_tempo,
+
+        p.dpp,
+        p.ppn,
+        p.total_piutang,
+
+        COALESCE(
+            pay.total_dibayar,
+            0
+        ) AS total_dibayar,
+
+        -- OUTSTANDING
+        GREATEST(
+            p.total_piutang -
+            COALESCE(pay.total_dibayar, 0),
+            0
+        ) AS outstanding,
+
+        -- AGING DARI JATUH TEMPO
+        CASE
+            WHEN p.jatuh_tempo IS NOT NULL
+
+            THEN GREATEST(
+                (
+                    pr.tanggal_akhir -
+                    p.jatuh_tempo
+                ),
+                0
+            )
+
+            ELSE 0
+        END AS aging,
+
+        -- PIUTANG OVERDUE
+        CASE
+            WHEN p.jatuh_tempo IS NOT NULL
+
+                AND p.jatuh_tempo < pr.tanggal_akhir
+
+            THEN GREATEST(
+                p.total_piutang -
+                COALESCE(pay.total_dibayar, 0),
+                0
+            )
+
+            ELSE 0
+        END AS piutang_overdue
+
+    FROM filtered_piutang p
+
+    CROSS JOIN periode pr
+
+    LEFT JOIN LATERAL (
+        SELECT
+            SUM(prw.nominal) AS total_dibayar
+
+        FROM payment_rows prw
+
+        WHERE prw.no_billing = p.no_billing
+
+            AND prw.tanggal_bayar <= pr.tanggal_akhir
+
+    ) pay ON TRUE
+),
+
+-- =====================================================
+-- 8. REKAP PIUTANG PER CHANNEL DAN CUSTOMER
+-- =====================================================
+rekap_channel_customer AS (
+    SELECT
+        po.channel_id,
+
+        COALESCE(
+            mch.nama_channel,
+            'Channel Tidak Diketahui'
+        ) AS nama_channel,
+
+        po.customer AS kode_customer,
+
+        COALESCE(
+            mc.name,
+            po.customer
+        ) AS nama_customer,
+
+        SUM(
+            po.total_piutang
+        ) AS total_piutang,
+
+        SUM(
+            po.outstanding
+        ) AS outstanding,
+
+        SUM(
+            po.piutang_overdue
+        ) AS piutang_overdue,
+
+        SUM(
+            CASE
+                WHEN po.aging > 360
+                THEN po.outstanding
+                ELSE 0
+            END
+        ) AS saldo_lebih_360_hari,
+
+        -- AGING MAKSIMUM CUSTOMER
+        MAX(
+            po.aging
+        ) AS aging,
+
+        -- TAHUN POSTING DATE TERBARU
+        EXTRACT(
+            YEAR FROM MAX(po.posting_date)
+        )::INTEGER AS tahun
+
+    FROM piutang_outstanding po
+
+    LEFT JOIN master_channel mch
+        ON po.channel_id::TEXT = mch.channel_id::TEXT
+
+    LEFT JOIN public.m_customer mc
+        ON po.customer::TEXT = mc.kode_customer::TEXT
+
+    GROUP BY
+        po.channel_id,
+        mch.nama_channel,
+        po.customer,
+        mc.name
+),
+
+-- =====================================================
+-- 9. RANKING CUSTOMER PER CHANNEL
+-- =====================================================
+top_piutang_ranked AS (
+    SELECT
+        rc.*,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY rc.channel_id
+
+            ORDER BY
+                rc.outstanding DESC,
+                rc.nama_customer ASC
+        ) AS urutan
+
+    FROM rekap_channel_customer rc
+
+    WHERE rc.outstanding > 0
+),
+
+-- =====================================================
+-- 10. TOP 10 CUSTOMER PER CHANNEL
+-- =====================================================
+top_piutang AS (
+    SELECT
+        channel_id,
+        nama_channel,
+
+        kode_customer,
+        nama_customer,
+
+        total_piutang,
+        outstanding,
+        piutang_overdue,
+        saldo_lebih_360_hari,
+
+        aging,
+        tahun,
+
+        urutan
+
+    FROM top_piutang_ranked
+
+    WHERE urutan <= 10
+),
+
+-- =====================================================
+-- 11. GROUP TOP PIUTANG BERDASARKAN CHANNEL
+-- =====================================================
+top_piutang_group AS (
+    SELECT
+        nama_channel,
+
+        JSONB_AGG(
+            JSONB_BUILD_OBJECT(
+                'kode_customer', kode_customer,
+                'nama_customer', nama_customer,
+
+                'total_piutang', total_piutang,
+                'outstanding', outstanding,
+                'piutang_overdue', piutang_overdue,
+                'saldo_lebih_360_hari', saldo_lebih_360_hari,
+
+                'aging', aging,
+                'tahun', tahun,
+
+                'urutan', urutan
+            )
+
+            ORDER BY urutan
+        ) AS data
+
+    FROM top_piutang
+
+    GROUP BY
+        nama_channel
+),
+
+-- =====================================================
+-- 12. REKAP PIUTANG SELURUH CABANG
+-- BAGIAN INI TETAP SAMA
+-- =====================================================
+rekap_cabang AS (
+    SELECT
+        mc.cabang,
+        mc.nama_cabang,
+
+        COALESCE(
+            SUM(po.total_piutang),
+            0
+        ) AS total_piutang,
+
+        COALESCE(
+            SUM(po.outstanding),
+            0
+        ) AS outstanding,
+
+        COALESCE(
+            SUM(po.piutang_overdue),
+            0
+        ) AS piutang_overdue,
+
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN po.aging > 360
+                    THEN po.outstanding
+                    ELSE 0
+                END
+            ),
+            0
+        ) AS saldo_lebih_360_hari
+
+    FROM master_cabang mc
+
+    LEFT JOIN piutang_outstanding po
+        ON po.cabang::TEXT = mc.cabang::TEXT
+
+    GROUP BY
+        mc.cabang,
+        mc.nama_cabang
+),
+
+-- =====================================================
+-- 13. PERINGKAT CABANG BERDASARKAN SKOR PIUTANG
+-- TIDAK DIUBAH
+-- =====================================================
+peringkat_cabang AS (
+    SELECT
+        rc.cabang,
+        rc.nama_cabang,
+
+        rc.total_piutang,
+        rc.outstanding,
+        rc.piutang_overdue,
+
+        CASE
+            WHEN rc.outstanding <= 0
+
+            THEN 0
+
+            ELSE ROUND(
+                GREATEST(
+                    0,
+
+                    LEAST(
+                        100,
+
+                        100 - (
+                            2 * (
+                                rc.piutang_overdue /
+                                NULLIF(rc.outstanding, 0)
+                            ) * 100
+                        )
+                    )
+                ),
+                2
+            )
+        END AS skor_piutang
+
+    FROM rekap_cabang rc
+),
+
+-- =====================================================
+-- 14. SALDO PIUTANG > 360 HARI PER CABANG
+-- TIDAK DIUBAH
+-- =====================================================
+saldo_piutang AS (
+    SELECT
+        rc.cabang,
+        rc.nama_cabang,
+
+        rc.saldo_lebih_360_hari AS saldo_piutang
+
+    FROM rekap_cabang rc
+)
+
+-- =====================================================
+-- 15. HASIL AKHIR
+-- =====================================================
+SELECT
+
+    -- =================================================
+    -- TOP PIUTANG PER CHANNEL
+    -- DATA DI DALAMNYA PER CUSTOMER
+    -- =================================================
+    COALESCE(
+        (
+            SELECT JSONB_AGG(
+                JSONB_BUILD_OBJECT(
+                    'nama_channel', t.nama_channel,
+                    'data', t.data
+                )
+
+                ORDER BY t.nama_channel
+            )
+
+            FROM top_piutang_group t
+        ),
+
+        '[]'::JSONB
+
+    ) AS top_piutang,
+
+    -- =================================================
+    -- PERINGKAT SELURUH CABANG
+    -- =================================================
+    COALESCE(
+        (
+            SELECT JSONB_AGG(
+                TO_JSONB(r)
+
+                ORDER BY
+                    r.skor_piutang DESC,
+                    r.nama_cabang ASC
+            )
+
+            FROM peringkat_cabang r
+        ),
+
+        '[]'::JSONB
+
+    ) AS peringkat_cabang,
+
+    -- =================================================
+    -- SALDO PIUTANG > 360 HARI
+    -- =================================================
+    COALESCE(
+        (
+            SELECT JSONB_AGG(
+                TO_JSONB(s)
+
+                ORDER BY
+                    s.saldo_piutang DESC,
+                    s.nama_cabang ASC
+            )
+
+            FROM saldo_piutang s
+        ),
+
+        '[]'::JSONB
+
+    ) AS saldo_piutang
+
 `;
 
 module.exports = query;
