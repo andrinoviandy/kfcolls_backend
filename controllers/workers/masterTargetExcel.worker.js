@@ -12,7 +12,9 @@ function sendAndWait(message) {
                 resolve();
             } else if (response?.type === "CANCEL") {
                 cleanup();
-                reject(new Error("Proses Excel dibatalkan."));
+                reject(
+                    new Error("Proses Excel dibatalkan.")
+                );
             }
         };
 
@@ -28,7 +30,9 @@ function sendAndWait(message) {
 async function main() {
     try {
         if (!workerData?.filePath) {
-            throw new Error("Path file Excel tidak ditemukan.");
+            throw new Error(
+                "Path file Excel tidak ditemukan."
+            );
         }
 
         console.log("[MASTER TARGET WORKER] Mulai:", {
@@ -39,24 +43,33 @@ async function main() {
 
         const startTime = Date.now();
 
-        const workbook = XLSX.readFile(workerData.filePath, {
-            cellDates: true,
-            dense: false,
-        });
+        const workbook = XLSX.readFile(
+            workerData.filePath,
+            {
+                cellDates: true,
+                dense: false,
+            }
+        );
 
         const sheetName = workbook.SheetNames[0];
 
         if (!sheetName) {
-            throw new Error("File Excel tidak memiliki sheet.");
+            throw new Error(
+                "File Excel tidak memiliki sheet."
+            );
         }
 
         const worksheet = workbook.Sheets[sheetName];
 
         if (!worksheet || !worksheet["!ref"]) {
-            throw new Error("File Excel tidak memiliki data.");
+            throw new Error(
+                "File Excel tidak memiliki data."
+            );
         }
 
-        const range = XLSX.utils.decode_range(worksheet["!ref"]);
+        const range = XLSX.utils.decode_range(
+            worksheet["!ref"]
+        );
 
         console.log("[MASTER TARGET WORKER] Range Excel:", {
             ref: worksheet["!ref"],
@@ -66,6 +79,11 @@ async function main() {
             endColumn: range.e.c,
             totalBarisExcel: range.e.r - range.s.r,
         });
+
+        // ==========================================
+        // BACA HEADER
+        // ==========================================
+
         const headers = [];
 
         for (
@@ -80,32 +98,34 @@ async function main() {
 
             const cell = worksheet[address];
 
-            if (cell?.f) {
-                console.log("[MASTER TARGET WORKER] Formula:", {
-                    excelRow: rowIndex + 1,
-                    formula: cell.f,
-                    value: cell.v,
-                    type: cell.t,
-                });
-            }
             headers.push(cell?.v ?? "");
         }
 
         if (
             !headers.some(
-                (header) => String(header).trim() !== ""
+                (header) =>
+                    String(header).trim() !== ""
             )
         ) {
-            throw new Error("File Excel tidak memiliki header.");
+            throw new Error(
+                "File Excel tidak memiliki header."
+            );
         }
 
-        console.log("[MASTER TARGET WORKER] Header:", headers);
+        console.log(
+            "[MASTER TARGET WORKER] Header:",
+            headers
+        );
 
-        // Minta service memvalidasi header sebelum mengirim data.
+        // Minta service memvalidasi header sebelum data dikirim.
         await sendAndWait({
             type: "HEADERS",
             headers,
         });
+
+        // ==========================================
+        // BACA DATA DAN KIRIM BATCH
+        // ==========================================
 
         let batch = [];
 
@@ -128,25 +148,14 @@ async function main() {
 
                 const cell = worksheet[address];
 
-                if (cell?.f) {
-                    console.log("[MASTER TARGET WORKER] Formula:", {
-                        excelRow: rowIndex + 1,
-                        formula: cell.f,
-                        value: cell.v,
-                        type: cell.t,
-                    });
-                }
                 values.push(cell?.v ?? "");
             }
 
-            console.log("[MASTER TARGET WORKER] Data baris:", {
-                excelRow: rowIndex + 1,
-                values,
-            });
             // Lewati baris kosong.
             if (
                 !values.some(
-                    (value) => String(value ?? "").trim() !== ""
+                    (value) =>
+                        String(value ?? "").trim() !== ""
                 )
             ) {
                 continue;
@@ -167,7 +176,7 @@ async function main() {
             }
         }
 
-        // Kirim sisa baris yang belum mencapai ukuran batch.
+        // Kirim sisa data yang belum mencapai ukuran batch.
         if (batch.length > 0) {
             await sendAndWait({
                 type: "BATCH",
@@ -175,22 +184,27 @@ async function main() {
             });
         }
 
-        console.log("[MASTER TARGET WORKER] Parsing selesai:", {
-            durationSeconds: (
-                (Date.now() - startTime) /
-                1000
-            ).toFixed(2),
-            memory: process.memoryUsage(),
-        });
+        console.log(
+            "[MASTER TARGET WORKER] Parsing selesai:",
+            {
+                durationSeconds: (
+                    (Date.now() - startTime) / 1000
+                ).toFixed(2),
+                memory: process.memoryUsage(),
+            }
+        );
 
         parentPort.postMessage({
             type: "DONE",
         });
     } catch (error) {
-        console.error("[MASTER TARGET WORKER] Error:", {
-            message: error.message,
-            stack: error.stack,
-        });
+        console.error(
+            "[MASTER TARGET WORKER] Error:",
+            {
+                message: error.message,
+                stack: error.stack,
+            }
+        );
 
         parentPort.postMessage({
             type: "ERROR",

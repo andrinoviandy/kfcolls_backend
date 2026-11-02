@@ -404,6 +404,42 @@ exports.getDataPiutang = async (req, res) => {
     }
 }
 
+exports.getDataDoar = async (req, res) => {
+    try {
+        const params = {
+            ...req.query
+        }
+
+        console.log(
+            params,
+            'params getDataDoar'
+        )
+
+        const result =
+            await serviceMain.getDataDoar(
+                params
+            )
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        )
+
+    } catch (error) {
+        console.log(
+            error,
+            "ERROR GET DATA DOAR <<<<<<<<<"
+        )
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        )
+    }
+}
+
 exports.getDataKreasiFaktur = async (req, res) => {
     try {
         const params = {
@@ -1982,6 +2018,7 @@ exports.historyPenugasan = async (req, res) => {
 const dashboardHandlers = [
     'getSummaryPiutangDashboard',
     'getTrendSaldoPiutangDashboard',
+    'getTrenPencairanPiutang',
     'getDetailPiutangDashboard',
     'getSalesOpenInvoiceDashboard',
     'getAnalisisPiutangDashboard',

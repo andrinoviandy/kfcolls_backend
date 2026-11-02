@@ -19,6 +19,7 @@ router.get('/getReferensiByJenisGroup', authorization.doAuth, controller.main.ge
 router.get('/getDataMasterTarget', authorization.doAuth, controller.main.getDataMasterTarget);
 router.get('/getDataPenjualan', authorization.doAuth, controller.main.getDataPenjualan);
 router.get('/getDataPiutang', authorization.doAuth, controller.main.getDataPiutang);
+router.get('/getDataDoar', authorization.doAuth, controller.main.getDataDoar);
 router.get('/getDataKreasiFaktur', authorization.doAuth, controller.main.getDataKreasiFaktur);
 router.get('/getDataReportSales', authorization.doAuth, controller.main.getDataReportSales);
 router.get('/getDataPelanggan', authorization.doAuth, controller.main.getDataPelanggan);
@@ -51,6 +52,12 @@ router.get(
     '/getTrendSaldoPiutangDashboard',
     authorization.doAuth,
     controller.main.getTrendSaldoPiutangDashboard
+);
+
+router.get(
+    '/getTrenPencairanPiutang',
+    authorization.doAuth,
+    controller.main.getTrenPencairanPiutang
 );
 
 router.get(

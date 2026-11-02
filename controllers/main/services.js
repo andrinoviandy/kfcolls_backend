@@ -1147,6 +1147,7 @@ const MASTER_TARGET_HEADERS = [
     "30/09/2026",
     "Ket Target Cabang",
     "TARGET CABANG",
+    "JENIS TARGET",
 ];
 
 const MASTER_TARGET_FIELDS = [
@@ -1173,6 +1174,7 @@ const MASTER_TARGET_FIELDS = [
     "nilai_aging_top_periode",
     "ket_target_cabang",
     "target_cabang",
+    "jenis_target",
 ];
 
 const MASTER_TARGET_DATE_FIELDS = new Set([
@@ -1288,6 +1290,7 @@ const parseMasterTargetNumber = (value, field) => {
     return number;
 };
 
+
 exports.uploadMasterTarget = async (
     file,
     createdBy,
@@ -1372,7 +1375,7 @@ exports.uploadMasterTarget = async (
                 const item = {};
 
                 MASTER_TARGET_FIELDS.forEach((field, index) => {
-                    let value = values[index];
+                    const value = values[index];
 
                     if (
                         value === null ||
@@ -1384,7 +1387,8 @@ exports.uploadMasterTarget = async (
                     }
 
                     if (MASTER_TARGET_DATE_FIELDS.has(field)) {
-                        const parsedDate = parseMasterTargetDate(value);
+                        const parsedDate =
+                            parseMasterTargetDate(value);
 
                         if (!parsedDate) {
                             throw new Error(
@@ -1404,6 +1408,7 @@ exports.uploadMasterTarget = async (
                         return;
                     }
 
+                    // jenis_target diproses sebagai teks.
                     item[field] = String(value).trim();
                 });
 
@@ -1416,10 +1421,14 @@ exports.uploadMasterTarget = async (
                     );
                 }
 
-                item.document_no = String(item.document_no).trim();
+                item.document_no = String(
+                    item.document_no
+                ).trim();
+
                 item.is_active = 1;
 
-                // Sesuaikan nama kolom audit jika model kamu menggunakannya.
+                // Jika model menggunakan kolom created_by,
+                // aktifkan bagian berikut:
                 // if (createdBy) {
                 //     item.created_by = createdBy;
                 // }
@@ -1478,19 +1487,21 @@ exports.uploadMasterTarget = async (
 
                         const valid =
                             actualHeaders.length ===
-                            expectedHeaders.length &&
+                                expectedHeaders.length &&
                             expectedHeaders.every(
                                 (header, index) =>
                                     actualHeaders[index] === header
                             );
 
                         if (!valid) {
-                            worker.postMessage({ type: "CANCEL" });
+                            worker.postMessage({
+                                type: "CANCEL",
+                            });
 
                             finishError(
                                 new Error(
                                     "Header Excel tidak sesuai template Master Target. " +
-                                    "Pastikan 23 kolom dan urutannya sesuai template."
+                                    `Pastikan ${expectedHeaders.length} kolom dan urutannya sesuai template.`
                                 )
                             );
 
@@ -1499,7 +1510,10 @@ exports.uploadMasterTarget = async (
 
                         headersValidated = true;
 
-                        worker.postMessage({ type: "ACK" });
+                        worker.postMessage({
+                            type: "ACK",
+                        });
+
                         return;
                     }
 
@@ -1512,7 +1526,10 @@ exports.uploadMasterTarget = async (
 
                         processRows(message.rows || []);
 
-                        worker.postMessage({ type: "ACK" });
+                        worker.postMessage({
+                            type: "ACK",
+                        });
+
                         return;
                     }
 
@@ -1537,12 +1554,12 @@ exports.uploadMasterTarget = async (
 
                         if (!targetModel) {
                             throw new Error(
-                                "Model aging_piutang tidak ditemukan."
+                                "Model m_target tidak ditemukan."
                             );
                         }
 
-                        // Nonaktifkan semua data lama untuk dokumen
-                        // yang akan digantikan oleh data valid baru.
+                        // Nonaktifkan data lama berdasarkan document_no
+                        // yang terdapat pada data valid yang akan di-upload.
                         const documentNumbers = [
                             ...new Set(
                                 validRows.map(
@@ -1552,7 +1569,9 @@ exports.uploadMasterTarget = async (
                         ];
 
                         await targetModel.update(
-                            { is_active: 0 },
+                            {
+                                is_active: 0,
+                            },
                             {
                                 where: {
                                     document_no: documentNumbers,
@@ -1562,8 +1581,7 @@ exports.uploadMasterTarget = async (
                             }
                         );
 
-                        // Insert data baru setelah seluruh dokumen lama
-                        // yang relevan dinonaktifkan.
+                        // Insert data baru secara bertahap.
                         const insertBatchSize = 500;
 
                         for (
@@ -1587,9 +1605,11 @@ exports.uploadMasterTarget = async (
                             result.success += batch.length;
                         }
 
-                        result.failed = result.total - result.success;
+                        result.failed =
+                            result.total - result.success;
 
                         finishSuccess();
+                        return;
                     }
 
                     if (message.type === "ERROR") {
@@ -1601,7 +1621,10 @@ exports.uploadMasterTarget = async (
                         );
                     }
                 } catch (error) {
-                    worker.postMessage({ type: "CANCEL" });
+                    worker.postMessage({
+                        type: "CANCEL",
+                    });
+
                     finishError(error);
                 }
             });
@@ -1624,7 +1647,7 @@ exports.uploadMasterTarget = async (
             errors: result.data_error,
         };
     } catch (error) {
-        await worker.terminate().catch(() => { });
+        await worker.terminate().catch(() => {});
         throw error;
     }
 };
@@ -2002,6 +2025,15 @@ exports.getDataMasterTarget = async (params = {}) => {
             params?.periode || ''
         ).trim();
 
+        // =====================================================
+        // FILTER JENIS TARGET
+        // Default: Cabang
+        // Pilihan: Cabang, Target Optimis, HO
+        // =====================================================
+        const jenisTarget = String(
+            params?.jenis_target || 'Cabang'
+        ).trim();
+
         const companyCodes = normalizeFilterValues(
             params?.company_code ??
             params?.['company_code[]']
@@ -2041,6 +2073,18 @@ exports.getDataMasterTarget = async (params = {}) => {
         };
 
         // =====================================================
+        // FILTER JENIS TARGET
+        // =====================================================
+        if (jenisTarget) {
+            condition += `
+                AND LOWER(TRIM(COALESCE(jenis_target, '')))
+                    = LOWER(:jenis_target)
+            `;
+
+            replacements.jenis_target = jenisTarget;
+        }
+
+        // =====================================================
         // KEYWORD SEARCH
         // =====================================================
         if (keyword) {
@@ -2057,6 +2101,7 @@ exports.getDataMasterTarget = async (params = {}) => {
                     OR COALESCE(lini_ii, '') ILIKE :keyword
                     OR COALESCE(text_information, '') ILIKE :keyword
                     OR COALESCE(ket_target_cabang, '') ILIKE :keyword
+                    OR COALESCE(jenis_target, '') ILIKE :keyword
                 )
             `;
 
@@ -2269,6 +2314,7 @@ exports.getDataMasterTarget = async (params = {}) => {
                 nilai_aging_periode,
                 aging_top,
                 nilai_aging_top_periode,
+                jenis_target,
                 ket_target_cabang,
                 target_cabang,
                 is_active,
@@ -3768,92 +3814,144 @@ exports.updateFakturPetugas = async (payload, transaction) => {
     }));
 };
 
+
 exports.getDataFakturPetugas = async (params) => {
     try {
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value) ? value : [value];
+
             return values
                 .filter((item) => item !== undefined && item !== null)
                 .map((item) => String(item).trim())
                 .filter(Boolean);
         };
+
         const page = Number(params?.page) || 1;
         const limit = Number(params?.limit) || 10;
         const offset = (page - 1) * limit;
+
         const keyword = String(params?.keyword || '').trim();
         const kegiatan = String(params?.kegiatan || 'ALL').trim().toUpperCase();
-        const salesOffices = normalizeFilterValues(params?.sales_office ?? params?.['sales_office[]']);
-        const customers = normalizeFilterValues(params?.customer ?? params?.['customer[]']);
+
+        const salesOffices = normalizeFilterValues(
+            params?.sales_office ?? params?.['sales_office[]']
+        );
+
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.['customer[]']
+        );
+
         const status = String(params?.status || 'ALL').trim().toUpperCase();
         const startDate = String(params?.start_date || '').trim();
         const endDate = String(params?.end_date || '').trim();
+
         let condition = '';
+
         const bind = {
             limit,
             offset
         };
+
+        // FILTER KEYWORD
         if (keyword) {
             condition += `
-        AND (
-            p.no_faktur ILIKE :keyword
-            OR p.no_billing ILIKE :keyword
-            OR p.customer ILIKE :keyword
-            OR p.sales ILIKE :keyword
-            OR p.nama_sales ILIKE :keyword
-            OR p.cabang ILIKE :keyword
-            OR p.principle ILIKE :keyword
-            OR p.document_type ILIKE :keyword
-            OR p.posting_date::text ILIKE :keyword
-            OR p.jatuh_tempo::text ILIKE :keyword
-            OR mc.name ILIKE :keyword
-            OR mr.ur_ref ILIKE :keyword
-            OR mp.nama_principle ILIKE :keyword
-        )
-    `;
+                AND (
+                    p.no_faktur ILIKE :keyword
+                    OR p.no_billing ILIKE :keyword
+                    OR p.customer ILIKE :keyword
+                    OR p.sales ILIKE :keyword
+                    OR p.nama_sales ILIKE :keyword
+                    OR p.cabang ILIKE :keyword
+                    OR p.principle ILIKE :keyword
+                    OR p.document_type ILIKE :keyword
+                    OR p.posting_date::text ILIKE :keyword
+                    OR p.jatuh_tempo::text ILIKE :keyword
+                    OR mc.name ILIKE :keyword
+                    OR mr.ur_ref ILIKE :keyword
+                    OR mp.nama_principle ILIKE :keyword
+                )
+            `;
+
             bind.keyword = `%${keyword}%`;
         }
-        if (salesOffices.length && !salesOffices.some((item) => item.toUpperCase() === 'ALL')) {
+
+        // FILTER CABANG
+        if (
+            salesOffices.length &&
+            !salesOffices.some((item) => item.toUpperCase() === 'ALL')
+        ) {
             condition += `
                 AND p.cabang IN (:sales_offices)
             `;
+
             bind.sales_offices = salesOffices;
         }
-        if (customers.length && !customers.some((item) => item.toUpperCase() === 'ALL')) {
+
+        // FILTER CUSTOMER
+        if (
+            customers.length &&
+            !customers.some((item) => item.toUpperCase() === 'ALL')
+        ) {
             condition += `
                 AND p.customer IN (:customers)
             `;
+
             bind.customers = customers;
         }
+
+        // FILTER KEGIATAN
         if (kegiatan !== 'ALL') {
             if (!['TUKAR_FAKTUR', 'PENAGIHAN'].includes(kegiatan)) {
                 throw new Error(
                     'Kegiatan hanya boleh TUKAR_FAKTUR atau PENAGIHAN'
                 );
             }
+
             bind.kegiatan = kegiatan;
+
             if (kegiatan === 'TUKAR_FAKTUR') {
                 condition += `
                     AND fp_tukar.faktur_petugas_id IS NOT NULL
                 `;
             }
+
             if (kegiatan === 'PENAGIHAN') {
                 condition += `
                     AND fp_penagihan.faktur_petugas_id IS NOT NULL
                 `;
             }
         }
+
+        // FILTER STATUS
         if (status && status !== 'ALL') {
-            if (!['BELUM_DITUGASKAN', 'SUDAH_DITUGASKAN'].includes(status)) {
+            const allowedStatus = [
+                'BELUM_DITUGASKAN',
+                'SUDAH_DITUGASKAN',
+                'FAKTUR_KEMBALI_TUKAR_FAKTUR',
+                'FAKTUR_KEMBALI_PENAGIHAN'
+            ];
+
+            if (!allowedStatus.includes(status)) {
                 throw new Error(
-                    'Status hanya boleh BELUM_DITUGASKAN atau SUDAH_DITUGASKAN'
+                    `Status tidak valid: ${status}`
                 );
             }
-            if (kegiatan === 'TUKAR_FAKTUR') {
+
+            if (status === 'FAKTUR_KEMBALI_TUKAR_FAKTUR') {
+                condition += `
+                    AND fp_kembali_tukar.faktur_petugas_id IS NOT NULL
+                `;
+            } else if (status === 'FAKTUR_KEMBALI_PENAGIHAN') {
+                condition += `
+                    AND fp_kembali_penagihan.faktur_petugas_id IS NOT NULL
+                `;
+            } else if (kegiatan === 'TUKAR_FAKTUR') {
                 if (status === 'BELUM_DITUGASKAN') {
                     condition += `
                         AND fp_tukar.faktur_petugas_id IS NULL
                     `;
                 }
+
                 if (status === 'SUDAH_DITUGASKAN') {
                     condition += `
                         AND fp_tukar.faktur_petugas_id IS NOT NULL
@@ -3865,6 +3963,7 @@ exports.getDataFakturPetugas = async (params) => {
                         AND fp_penagihan.faktur_petugas_id IS NULL
                     `;
                 }
+
                 if (status === 'SUDAH_DITUGASKAN') {
                     condition += `
                         AND fp_penagihan.faktur_petugas_id IS NOT NULL
@@ -3877,6 +3976,7 @@ exports.getDataFakturPetugas = async (params) => {
                         AND fp_penagihan.faktur_petugas_id IS NULL
                     `;
                 }
+
                 if (status === 'SUDAH_DITUGASKAN') {
                     condition += `
                         AND (
@@ -3887,46 +3987,62 @@ exports.getDataFakturPetugas = async (params) => {
                 }
             }
         }
+
+        // FILTER TANGGAL
         if (startDate) {
             condition += `
                 AND p.posting_date >= :start_date
             `;
+
             bind.start_date = startDate;
         }
+
         if (endDate) {
             condition += `
                 AND p.posting_date <= :end_date
             `;
+
             bind.end_date = endDate;
         }
-        const listQuery = query.getDataFakturPetugas.replace(':condition', condition);
-        const listData = await db.query(
-            listQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT,
-                // logging: console.log
-            }
+
+        // GET LIST DATA
+        const listQuery = query.getDataFakturPetugas.replace(
+            ':condition',
+            condition
         );
-        const countQuery = query.countDataFakturPetugas.replace(':condition', condition);
-        const countData = await db.query(
-            countQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT
-            }
+
+        const listData = await db.query(listQuery, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+
+        // GET COUNT DATA
+        const countQuery = query.countDataFakturPetugas.replace(
+            ':condition',
+            condition
         );
+
+        const countData = await db.query(countQuery, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+
         const totalData = Number(countData?.[0]?.total || 0);
         const totalHalaman = Math.ceil(totalData / limit);
-        const summaryQuery = query.summaryDataFakturPetugas.replace(':condition', condition);
-        const summaryResult = await db.query(
-            summaryQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT
-            }
+
+        // GET SUMMARY DATA
+        const summaryQuery = query.summaryDataFakturPetugas.replace(
+            ':condition',
+            condition
         );
+
+        const summaryResult = await db.query(summaryQuery, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+
         const summary = summaryResult?.[0] || {};
+
         return {
             total_data: totalData,
             total_halaman: totalHalaman,
@@ -3936,17 +4052,26 @@ exports.getDataFakturPetugas = async (params) => {
             summary: {
                 total_faktur: Number(summary?.total_faktur || 0),
                 sudah_ditugaskan: Number(summary?.sudah_ditugaskan || 0),
-                belum_ditugaskan: Number(summary?.belum_ditugaskan || 0)
+                belum_ditugaskan: Number(summary?.belum_ditugaskan || 0),
+                total_faktur_kembali_tukar_faktur: Number(
+                    summary?.total_faktur_kembali_tukar_faktur || 0
+                ),
+                total_faktur_kembali_penagihan: Number(
+                    summary?.total_faktur_kembali_penagihan || 0
+                )
             }
         };
+
     } catch (error) {
         console.error(
             'ERROR SERVICE GET DATA FAKTUR PETUGAS:',
             error
         );
+
         throw error;
     }
 };
+
 
 exports.getDataTukarFaktur = async (params) => {
     try {
@@ -5331,13 +5456,67 @@ exports.insertBayarFaktur = async (
             );
         }
 
+        // =====================================================
+        // VALIDASI METODE PEMBAYARAN
+        // =====================================================
+
+        const metodePembayaran = String(
+            payload?.metode_pembayaran || ''
+        ).toUpperCase();
+
+        const namaBank = String(
+            payload?.nama_bank || ''
+        ).trim();
+
+        const nomorParkDokumenSAP = String(
+            payload?.nomor_park_dokumen_sap || ''
+        ).trim();
+
+        // Nama bank wajib untuk Direct Transfer.
+        if (
+            metodePembayaran === 'DIRECT_TRANSFER' &&
+            !namaBank
+        ) {
+            throw new Error(
+                'Nama bank wajib diisi untuk metode Direct Transfer'
+            );
+        }
+
+        // Nomor Park Dokumen SAP wajib untuk Pembebanan Afiliasi.
+        if (
+            metodePembayaran === 'PEMBEBANAN_AFILIASI' &&
+            !nomorParkDokumenSAP
+        ) {
+            throw new Error(
+                'Nomor Park Dokumen SAP wajib diisi untuk metode Pembebanan Afiliasi'
+            );
+        }
+
+        const dataMetodePembayaran = {
+            nama_bank:
+                metodePembayaran === 'DIRECT_TRANSFER'
+                    ? namaBank
+                    : null,
+
+            nomor_park_dokumen_sap:
+                metodePembayaran === 'PEMBEBANAN_AFILIASI'
+                    ? nomorParkDokumenSAP
+                    : null
+        };
+
+        // =====================================================
+        // VALIDASI PIUTANG
+        // =====================================================
+
         const piutangIds =
-            payload.faktur ? payload.faktur
-                .map(
-                    item =>
-                        item?.piutang_id
-                )
-                .filter(Boolean) : [];
+            payload.faktur
+                ? payload.faktur
+                    .map(
+                        item =>
+                            item?.piutang_id
+                    )
+                    .filter(Boolean)
+                : [];
 
         const uniquePiutangIds = [
             ...new Set(
@@ -5373,9 +5552,10 @@ exports.insertBayarFaktur = async (
             );
         }
 
-        /*
-         * Upload bukti pembayaran
-         */
+        // =====================================================
+        // UPLOAD BUKTI PEMBAYARAN
+        // =====================================================
+
         const uploadDocument =
             await this.processUploadFile(
                 payload,
@@ -5404,7 +5584,12 @@ exports.insertBayarFaktur = async (
 
         const pembayaranData = [];
 
+        // =====================================================
+        // PEMBAYARAN FAKTUR
+        // =====================================================
+
         if (payload.faktur) {
+
             for (
                 const item of payload.faktur
             ) {
@@ -5413,10 +5598,9 @@ exports.insertBayarFaktur = async (
                  * SALDO PIUTANG
                  *
                  * Nilai ini berasal dari frontend:
-                 *
-                 * saldo_piutang =
-                 * dpp - collections
+                 * saldo_piutang = dpp - collections
                  */
+
                 const saldoPiutang =
                     Number(
                         item?.saldo_piutang ??
@@ -5428,9 +5612,10 @@ exports.insertBayarFaktur = async (
                 let totalBayar = 0;
                 let nominalBayar = 0;
 
-                /*
-                 * FULL PAYMENT
-                 */
+                // =================================================
+                // FULL PAYMENT
+                // =================================================
+
                 if (
                     jenisPembayaran ===
                     'FULL_PAYMENT'
@@ -5443,9 +5628,10 @@ exports.insertBayarFaktur = async (
                         saldoPiutang;
                 }
 
-                /*
-                 * PARTIAL PAYMENT
-                 */
+                // =================================================
+                // PARTIAL PAYMENT
+                // =================================================
+
                 else if (
                     jenisPembayaran ===
                     'PARTIAL_PAYMENT'
@@ -5461,9 +5647,10 @@ exports.insertBayarFaktur = async (
                         );
                 }
 
-                /*
-                 * MENUNGGU PEMBAYARAN
-                 */
+                // =================================================
+                // MENUNGGU PEMBAYARAN
+                // =================================================
+
                 else if (
                     jenisPembayaran ===
                     'MENUNGGU_PEMBAYARAN'
@@ -5475,9 +5662,10 @@ exports.insertBayarFaktur = async (
                     nominalBayar = 0;
                 }
 
-                /*
-                 * VALIDASI NOMINAL
-                 */
+                // =================================================
+                // VALIDASI NOMINAL
+                // =================================================
+
                 if (
                     jenisPembayaran !==
                     'MENUNGGU_PEMBAYARAN' &&
@@ -5488,11 +5676,10 @@ exports.insertBayarFaktur = async (
                     );
                 }
 
-                /*
-                 * VALIDASI PEMBAYARAN
-                 * TIDAK BOLEH MELEBIHI
-                 * SALDO PIUTANG
-                 */
+                // =================================================
+                // VALIDASI SALDO PIUTANG
+                // =================================================
+
                 if (
                     jenisPembayaran ===
                     'PARTIAL_PAYMENT' &&
@@ -5503,9 +5690,10 @@ exports.insertBayarFaktur = async (
                     );
                 }
 
-                /*
-                 * INSERT d_pembayaran
-                 */
+                // =================================================
+                // INSERT d_pembayaran
+                // =================================================
+
                 const pembayaran =
                     await model.d_pembayaran.create(
                         {
@@ -5530,10 +5718,19 @@ exports.insertBayarFaktur = async (
                             tanggal_pembayaran:
                                 tanggalPembayaran,
 
-                            jenis_pembayaran: jenisPembayaran,
+                            jenis_pembayaran:
+                                jenisPembayaran,
 
                             metode_pembayaran:
                                 payload?.metode_pembayaran,
+
+                            // Tambahan nama bank.
+                            nama_bank:
+                                dataMetodePembayaran.nama_bank,
+
+                            // Tambahan nomor Park Dokumen SAP.
+                            nomor_park_dokumen_sap:
+                                dataMetodePembayaran.nomor_park_dokumen_sap,
 
                             created_by:
                                 payload?.created_by ||
@@ -5555,29 +5752,81 @@ exports.insertBayarFaktur = async (
                         }
                     );
 
-                if (pembayaran && (item?.no_billing || item?.no_faktur)) {
-                    const userToNotif = await model.m_role_user.findAll({ where: { cabang_id: payload?.dataUser?.cabang_id, role_id: '03' }, returning: true })
+                // =================================================
+                // NOTIFIKASI
+                // =================================================
+
+                if (
+                    pembayaran &&
+                    (
+                        item?.no_billing ||
+                        item?.no_faktur
+                    )
+                ) {
+
+                    const userToNotif =
+                        await model.m_role_user.findAll({
+                            where: {
+                                cabang_id:
+                                    payload?.dataUser?.cabang_id,
+
+                                role_id: '03'
+                            },
+                            returning: true
+                        });
+
                     const payNotif = {
-                        notifikasi_id: uuidv4(),
-                        no_billing: item?.no_faktur || item?.no_billing,
+                        notifikasi_id:
+                            uuidv4(),
+
+                        no_billing:
+                            item?.no_faktur ||
+                            item?.no_billing,
+
                         // username: payload?.nip,
-                        title: 'Penukaran Faktur',
-                        body: `Sales Telah Melakukan Tukar Faktur Pada Faktur Ini`,
-                        created_by: payload?.created_by || '',
-                        kegiatan: 'SALES_TUKAR_FAKTUR',
-                        user: [...new Set(userToNotif.map(a => a.user_id))]
-                    }
-                    await this.insertNotifikasi(payNotif, transaction)
+
+                        title:
+                            'Penukaran Faktur',
+
+                        body:
+                            `Sales Telah Melakukan Tukar Faktur Pada Faktur Ini`,
+
+                        created_by:
+                            payload?.created_by || '',
+
+                        kegiatan:
+                            'SALES_TUKAR_FAKTUR',
+
+                        user: [
+                            ...new Set(
+                                userToNotif.map(
+                                    a => a.user_id
+                                )
+                            )
+                        ]
+                    };
+
+                    await this.insertNotifikasi(
+                        payNotif,
+                        transaction
+                    );
                 }
 
                 pembayaranData.push(
                     pembayaran
                 );
-
             }
         }
 
-        if (jenisPembayaran === 'PENERIMAAN_LAIN') {
+        // =====================================================
+        // PENERIMAAN LAIN
+        // =====================================================
+
+        if (
+            jenisPembayaran ===
+            'PENERIMAAN_LAIN'
+        ) {
+
             const pembayaran =
                 await model.d_pembayaran.create(
                     {
@@ -5590,10 +5839,19 @@ exports.insertBayarFaktur = async (
                         tanggal_pembayaran:
                             tanggalPembayaran,
 
-                        jenis_pembayaran: jenisPembayaran,
+                        jenis_pembayaran:
+                            jenisPembayaran,
 
                         metode_pembayaran:
                             payload?.metode_pembayaran,
+
+                        // Tambahan nama bank.
+                        nama_bank:
+                            dataMetodePembayaran.nama_bank,
+
+                        // Tambahan nomor Park Dokumen SAP.
+                        nomor_park_dokumen_sap:
+                            dataMetodePembayaran.nomor_park_dokumen_sap,
 
                         created_by:
                             payload?.created_by ||
@@ -5616,6 +5874,10 @@ exports.insertBayarFaktur = async (
                 pembayaran
             );
         }
+
+        // =====================================================
+        // RETURN
+        // =====================================================
 
         return {
             total:
@@ -10718,7 +10980,22 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     }
 
     // ==================================================
-    // 4. SIAPKAN RINCIAN BILLING
+    // 4. AMBIL NAMA CABANG DARI M_REFERENSI
+    // ==================================================
+
+    const referensiCabang = await model.m_referensi.findOne({
+        where: {
+            kd_ref: firstPiutang.cabang,
+            jns_ref: "cabang_id",
+        },
+        attributes: ["ur_ref"],
+        transaction,
+    });
+
+    const namaCabang = referensiCabang?.ur_ref || "-";
+
+    // ==================================================
+    // 5. SIAPKAN RINCIAN BILLING
     // ==================================================
 
     const rows = orderedRows.map((item, index) => {
@@ -10793,7 +11070,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     });
 
     // ==================================================
-    // 5. HITUNG TOTAL PIUTANG
+    // 6. HITUNG TOTAL PIUTANG
     // ==================================================
 
     const totalLcAmount = rows.reduce(
@@ -10844,13 +11121,13 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     let messageId = null;
 
     // ==================================================
-    // 6. SIAPKAN ID KONFIRMASI
+    // 7. SIAPKAN ID KONFIRMASI
     // ==================================================
 
     const k_konfirmasi_id = uuidv4();
 
     // ==================================================
-    // 7. KIRIM SATU EMAIL UNTUK SEMUA BILLING
+    // 8. KIRIM SATU EMAIL UNTUK SEMUA BILLING
     // ==================================================
 
     try {
@@ -10884,7 +11161,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         }
 
         // ==================================================
-        // 8. SUBJECT DAN TANGGAL SURAT
+        // 9. SUBJECT DAN TANGGAL SURAT
         // ==================================================
 
         const subject = `Konfirmasi Piutang - ${nama}`;
@@ -10902,9 +11179,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         const tanggalSuratDenganKota = `Jakarta, ${tanggalSurat}`;
 
         // ==================================================
-        // 9. LOGO EMAIL
-        // Variabel fs, logoHeaderPath, logoFixPath,
-        // dan escapeHtml harus tersedia di file service.
+        // 10. LOGO EMAIL
         // ==================================================
 
         const headerLogoHtml = `
@@ -10917,27 +11192,27 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
                 <tr>
                     ${fs.existsSync(logoHeaderPath)
                 ? `
-                                <td style="vertical-align:middle;padding-left:10px;">
-                                    <img
-                                        src="cid:logoKimiaFarmaHeader"
-                                        alt="Kimia Farma"
-                                        style="display:block;width:auto;height:30px;max-width:120px;border:0;"
-                                    />
-                                </td>
-                            `
+                            <td style="vertical-align:middle;padding-left:10px;">
+                                <img
+                                    src="cid:logoKimiaFarmaHeader"
+                                    alt="Kimia Farma"
+                                    style="display:block;width:auto;height:30px;max-width:120px;border:0;"
+                                />
+                            </td>
+                        `
                 : ""
             }
 
                     ${fs.existsSync(logoFixPath)
                 ? `
-                                <td style="vertical-align:middle;padding-left:10px;">
-                                    <img
-                                        src="cid:logoFixHeader"
-                                        alt="Logo Fix"
-                                        style="display:block;width:auto;height:30px;max-width:120px;border:0;"
-                                    />
-                                </td>
-                            `
+                            <td style="vertical-align:middle;padding-left:10px;">
+                                <img
+                                    src="cid:logoFixHeader"
+                                    alt="Logo Fix"
+                                    style="display:block;width:auto;height:30px;max-width:120px;border:0;"
+                                />
+                            </td>
+                        `
                 : ""
             }
                 </tr>
@@ -10945,8 +11220,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         `;
 
         // ==================================================
-        // 10. BARIS TABEL RINCIAN FAKTUR
-        // Lampiran rincian tetap ditampilkan di email.
+        // 11. BARIS TABEL RINCIAN FAKTUR
         // ==================================================
 
         const detailRowsHtml = rows.map((row) => `
@@ -10978,7 +11252,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         `).join("");
 
         // ==================================================
-        // 11. FORMAT RINGKASAN PIUTANG
+        // 12. FORMAT RINGKASAN PIUTANG
         // ==================================================
 
         const ringkasanPiutangHtml = `
@@ -10998,20 +11272,20 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
                     </td>
                 </tr>
 
-                <tr>
-                    <td style="padding:5px 0;">
-                        Total Piutang Jatuh Tempo
-                    </td>
-                    <td style="padding:5px 0;">:</td>
-                    <td style="padding:5px 0;font-weight:bold;">
-                        ${escapeHtml(formatRupiah(totalPiutangJatuhTempo))}
-                    </td>
-                </tr>
+                // <tr>
+                //     <td style="padding:5px 0;">
+                //         Total Piutang Jatuh Tempo
+                //     </td>
+                //     <td style="padding:5px 0;">:</td>
+                //     <td style="padding:5px 0;font-weight:bold;">
+                //         ${escapeHtml(formatRupiah(totalPiutangJatuhTempo))}
+                //     </td>
+                // </tr>
             </table>
         `;
 
         // ==================================================
-        // 12. HTML EMAIL
+        // 13. HTML EMAIL
         // ==================================================
 
         const html = `
@@ -11057,7 +11331,6 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
                     </p>
 
                     <!-- PERIHAL -->
-                    <!-- PERIHAL RATA TENGAH -->
                     <p style="text-align:center;margin:24px 0;font-weight:bold;">
                         Perihal: Konfirmasi Piutang
                     </p>
@@ -11112,12 +11385,12 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
 
                         <div style="height:64px;"></div>
 
-                        <p style="margin:0;font-weight:bold;text-decoration:underline;">
-                            Soni Odang Sonjaya
+                        <p style="margin:0;font-weight:bold;">
+                            Branch Manager
                         </p>
 
                         <p style="margin:4px 0 0;">
-                            Direktur Keuangan, Manajemen Risiko &amp; SDM
+                            ${escapeHtml(namaCabang)}
                         </p>
                     </div>
 
@@ -11241,7 +11514,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         `;
 
         // ==================================================
-        // 13. VERSI TEXT EMAIL
+        // 14. VERSI TEXT EMAIL
         // ==================================================
 
         const text = [
@@ -11271,8 +11544,8 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
             "PT Kimia Farma Trading & Distribution",
             "",
             "",
-            "Soni Odang Sonjaya",
-            "Direktur Keuangan, Manajemen Risiko & SDM",
+            "Branch Manager",
+            namaCabang,
             "",
             "LAMPIRAN RINCIAN PIUTANG",
             `Kode Customer: ${kodeCustomer}`,
@@ -11295,7 +11568,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         ].join("\n");
 
         // ==================================================
-        // 14. ATTACHMENT LOGO
+        // 15. ATTACHMENT LOGO
         // ==================================================
 
         const attachments = [];
@@ -11339,7 +11612,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
         }
 
         // ==================================================
-        // 15. KIRIM EMAIL
+        // 16. KIRIM EMAIL
         // ==================================================
 
         const info = await transporter.sendMail({
@@ -11375,7 +11648,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     }
 
     // ==================================================
-    // 16. SIMPAN LOG UNTUK SETIAP BILLING
+    // 17. SIMPAN LOG UNTUK SETIAP BILLING
     // ==================================================
 
     const logKonfirmasi = [];
@@ -11434,7 +11707,7 @@ exports.konfirmasiPiutang = async (payload = {}, transaction) => {
     }
 
     // ==================================================
-    // 17. RESPONSE
+    // 18. RESPONSE
     // ==================================================
 
     return {
@@ -11807,6 +12080,13 @@ exports.getSummaryPiutangDashboard = async (params) => {
 exports.getTrendSaldoPiutangDashboard = async (params) => {
     return runDashboardQuery(
         query.getTrendSaldoPiutangDashboard,
+        params
+    );
+};
+
+exports.getTrenPencairanPiutang = async (params) => {
+    return runDashboardQuery(
+        query.getTrenPencairanPiutang,
         params
     );
 };
@@ -12370,3 +12650,181 @@ exports.getAgingPiutangDashboard = async (params) => {
     }
 };
 
+exports.getDataDoar = async (params) => {
+    try {
+        const normalizeFilterValues = (value) => {
+            const values = Array.isArray(value) ? value : [value];
+
+            return values
+                .filter((item) => item !== undefined && item !== null)
+                .map((item) => String(item).trim())
+                .filter(Boolean);
+        };
+
+        const page = Number(params?.page) || 1;
+        const limit = Number(params?.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        const keyword = String(params?.keyword || '').trim();
+
+        // SALES OFFICE / CABANG
+        const salesOffices = normalizeFilterValues(
+            params?.sales_office ?? params?.['sales_office[]']
+        );
+
+        // CUSTOMER
+        const customers = normalizeFilterValues(
+            params?.customer ?? params?.['customer[]']
+        );
+
+        // CUSTOMER GROUP / CHANNEL
+        const customerGroups = normalizeFilterValues(
+            params?.customer_group ?? params?.['customer_group[]']
+        );
+
+        // PRINCIPLE
+        const principles = normalizeFilterValues(
+            params?.principle ?? params?.['principle[]']
+        );
+
+        // DATE
+        const startDate = String(params?.start_date || '').trim();
+        const endDate = String(params?.end_date || '').trim();
+
+        let condition = '';
+
+        const bind = {
+            limit,
+            offset
+        };
+
+        // KEYWORD
+        if (keyword) {
+            condition += `
+                AND (
+                    p.customer ILIKE :keyword
+                    OR p.cabang ILIKE :keyword
+                    OR p.principle ILIKE :keyword
+                    OR mc.name ILIKE :keyword
+                    OR mr_cabang.ur_ref ILIKE :keyword
+                    OR mp.nama_principle ILIKE :keyword
+                    OR mt.lini ILIKE :keyword
+                )
+            `;
+
+            bind.keyword = `%${keyword}%`;
+        }
+
+        // FILTER SALES OFFICE / CABANG
+        if (
+            salesOffices.length &&
+            !salesOffices.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND p.cabang IN (:sales_offices)
+            `;
+
+            bind.sales_offices = salesOffices;
+        }
+
+        // FILTER CUSTOMER
+        if (
+            customers.length &&
+            !customers.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND p.customer IN (:customers)
+            `;
+
+            bind.customers = customers;
+        }
+
+        // FILTER CUSTOMER GROUP / CHANNEL
+        if (
+            customerGroups.length &&
+            !customerGroups.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND p.channel_id IN (:customer_groups)
+            `;
+
+            bind.customer_groups = customerGroups;
+        }
+
+        // FILTER PRINCIPLE
+        if (
+            principles.length &&
+            !principles.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
+        ) {
+            condition += `
+                AND p.principle IN (:principles)
+            `;
+
+            bind.principles = principles;
+        }
+
+        // FILTER START DATE
+        if (startDate) {
+            condition += `
+                AND p.posting_date >= :start_date
+            `;
+
+            bind.start_date = startDate;
+        }
+
+        // FILTER END DATE
+        if (endDate) {
+            condition += `
+                AND p.posting_date <= :end_date
+            `;
+
+            bind.end_date = endDate;
+        }
+
+        // 1. GET LIST DATA
+        const LIST_QUERY = query.getDataDoar.replace(
+            /:condition/g,
+            condition
+        );
+
+        const listData = await db.query(LIST_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+
+        // 2. GET TOTAL CUSTOMER
+        const COUNT_QUERY = query.countDataDoar.replace(
+            /:condition/g,
+            condition
+        );
+
+        const countData = await db.query(COUNT_QUERY, {
+            replacements: bind,
+            type: db.QueryTypes.SELECT
+        });
+
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
+
+        // RETURN
+        return {
+            total_data: totalData,
+            total_halaman: totalHalaman,
+            limit,
+            page,
+            list_data: listData
+        };
+
+    } catch (error) {
+        console.error('ERROR SERVICE GET DATA DOAR:', error);
+        throw error;
+    }
+};

@@ -5920,6 +5920,14 @@ exports.D_PEMBAYARAN = db.define('d_pembayaran',
             type: DataTypes.STRING,
             field: 'keterangan'
         },
+        nomor_park_dokumen_sap: {
+            type: DataTypes.STRING,
+            field: 'nomor_park_dokumen_sap'
+        },
+        nama_bank: {
+            type: DataTypes.STRING,
+            field: 'nama_bank'
+        },
     }, {
     schema: 'public',
     freezeTableName: true,

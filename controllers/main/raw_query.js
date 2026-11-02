@@ -18692,7 +18692,7 @@ piutang_data AS (
                     )
                 )
                 / cd.penjualan_mtd,
-                2
+                0
             )
             ELSE 0
         END AS doar,
@@ -19406,6 +19406,7 @@ query.summaryDataPelanggan = `
         :condition
 `;
 
+
 query.getDataFakturPetugas = `
     SELECT
         p.piutang_id,
@@ -19427,25 +19428,54 @@ query.getDataFakturPetugas = `
         p.pph,
         p.aging,
         p.status_piutang,
+
+        -- PETUGAS TUKAR FAKTUR
         fp_tukar.faktur_petugas_id AS tukar_faktur_petugas_id,
         fp_tukar.nip AS tukar_faktur_nip,
         mu_tukar.nama AS tukar_faktur_nama,
         fp_tukar.assigned_at AS tukar_faktur_assigned_at,
+
+        -- PETUGAS PENAGIHAN
         fp_penagihan.faktur_petugas_id AS penagihan_petugas_id,
         fp_penagihan.nip AS penagihan_nip,
         mu_penagihan.nama AS penagihan_nama,
         fp_penagihan.assigned_at AS penagihan_assigned_at,
+
+        -- FAKTUR KEMBALI TUKAR FAKTUR
+        fp_kembali_tukar.faktur_petugas_id
+            AS faktur_kembali_tukar_id,
+        fp_kembali_tukar.kd_status
+            AS faktur_kembali_tukar_status,
+        fp_kembali_tukar.alasan_pengembalian
+            AS alasan_pengembalian_tukar_faktur,
+        fp_kembali_tukar.created_at
+            AS faktur_kembali_tukar_created_at,
+
+        -- FAKTUR KEMBALI PENAGIHAN
+        fp_kembali_penagihan.faktur_petugas_id
+            AS faktur_kembali_penagihan_id,
+        fp_kembali_penagihan.kd_status
+            AS faktur_kembali_penagihan_status,
+        fp_kembali_penagihan.alasan_pengembalian
+            AS alasan_pengembalian_penagihan,
+        fp_kembali_penagihan.created_at
+            AS faktur_kembali_penagihan_created_at,
+
         CASE
             WHEN fp_tukar.faktur_petugas_id IS NOT NULL
                 OR fp_penagihan.faktur_petugas_id IS NOT NULL
                 THEN 'SUDAH_DITUGASKAN'
             ELSE 'BELUM_DITUGASKAN'
         END AS status_penugasan,
+
         p.created_by,
         p.created_at,
         p.updated_by,
         p.updated_at
+
     FROM public.d_piutang p
+
+    -- DATA PENUGASAN TERAKHIR TUKAR FAKTUR
     LEFT JOIN LATERAL (
         SELECT
             fp.faktur_petugas_id,
@@ -19465,8 +19495,11 @@ query.getDataFakturPetugas = `
             fp.faktur_petugas_id DESC
         LIMIT 1
     ) fp_tukar ON TRUE
+
     LEFT JOIN public.m_user mu_tukar
         ON mu_tukar.nip = fp_tukar.nip
+
+    -- DATA PENUGASAN TERAKHIR PENAGIHAN
     LEFT JOIN LATERAL (
         SELECT
             fp.faktur_petugas_id,
@@ -19486,22 +19519,71 @@ query.getDataFakturPetugas = `
             fp.faktur_petugas_id DESC
         LIMIT 1
     ) fp_penagihan ON TRUE
+
     LEFT JOIN public.m_user mu_penagihan
         ON mu_penagihan.nip = fp_penagihan.nip
+
+    -- RECORD TERAKHIR FAKTUR PETUGAS TUKAR FAKTUR
+    LEFT JOIN LATERAL (
+        SELECT
+            fp.faktur_petugas_id,
+            fp.piutang_id,
+            fp.kegiatan,
+            fp.kd_status,
+            fp.alasan_pengembalian,
+            fp.assigned_at,
+            fp.created_at,
+            fp.updated_at
+        FROM public.d_faktur_petugas fp
+        WHERE fp.piutang_id = p.piutang_id
+            AND fp.kegiatan = 'TUKAR_FAKTUR'
+        ORDER BY
+            COALESCE(fp.updated_at, fp.created_at) DESC NULLS LAST,
+            fp.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp_kembali_tukar
+        ON fp_kembali_tukar.kd_status = 'K'
+
+    -- RECORD TERAKHIR FAKTUR PETUGAS PENAGIHAN
+    LEFT JOIN LATERAL (
+        SELECT
+            fp.faktur_petugas_id,
+            fp.piutang_id,
+            fp.kegiatan,
+            fp.kd_status,
+            fp.alasan_pengembalian,
+            fp.assigned_at,
+            fp.created_at,
+            fp.updated_at
+        FROM public.d_faktur_petugas fp
+        WHERE fp.piutang_id = p.piutang_id
+            AND fp.kegiatan = 'PENAGIHAN'
+        ORDER BY
+            COALESCE(fp.updated_at, fp.created_at) DESC NULLS LAST,
+            fp.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp_kembali_penagihan
+        ON fp_kembali_penagihan.kd_status = 'K'
+
     LEFT JOIN public.m_customer mc
         ON mc.kode_customer = p.customer
+
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
+
     LEFT JOIN public.m_principle mp
         ON mp.principle = p.principle
+
     WHERE 1 = 1
         AND p.diterima = '1'
         :condition
+
     ORDER BY
         p.posting_date DESC NULLS LAST,
         p.no_faktur DESC NULLS LAST,
         p.piutang_id DESC
+
     LIMIT :limit
     OFFSET :offset
 `;
@@ -19509,7 +19591,10 @@ query.getDataFakturPetugas = `
 query.countDataFakturPetugas = `
     SELECT
         COUNT(*) AS total
+
     FROM public.d_piutang p
+
+    -- DATA PENUGASAN TERAKHIR TUKAR FAKTUR
     LEFT JOIN LATERAL (
         SELECT
             fp.faktur_petugas_id,
@@ -19524,6 +19609,8 @@ query.countDataFakturPetugas = `
             fp.faktur_petugas_id DESC
         LIMIT 1
     ) fp_tukar ON TRUE
+
+    -- DATA PENUGASAN TERAKHIR PENAGIHAN
     LEFT JOIN LATERAL (
         SELECT
             fp.faktur_petugas_id,
@@ -19538,13 +19625,49 @@ query.countDataFakturPetugas = `
             fp.faktur_petugas_id DESC
         LIMIT 1
     ) fp_penagihan ON TRUE
+
+    -- RECORD TERAKHIR FAKTUR KEMBALI TUKAR FAKTUR
+    LEFT JOIN LATERAL (
+        SELECT
+            fp.faktur_petugas_id,
+            fp.kd_status,
+            fp.alasan_pengembalian
+        FROM public.d_faktur_petugas fp
+        WHERE fp.piutang_id = p.piutang_id
+            AND fp.kegiatan = 'TUKAR_FAKTUR'
+        ORDER BY
+            COALESCE(fp.updated_at, fp.created_at) DESC NULLS LAST,
+            fp.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp_kembali_tukar
+        ON fp_kembali_tukar.kd_status = 'K'
+
+    -- RECORD TERAKHIR FAKTUR KEMBALI PENAGIHAN
+    LEFT JOIN LATERAL (
+        SELECT
+            fp.faktur_petugas_id,
+            fp.kd_status,
+            fp.alasan_pengembalian
+        FROM public.d_faktur_petugas fp
+        WHERE fp.piutang_id = p.piutang_id
+            AND fp.kegiatan = 'PENAGIHAN'
+        ORDER BY
+            COALESCE(fp.updated_at, fp.created_at) DESC NULLS LAST,
+            fp.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp_kembali_penagihan
+        ON fp_kembali_penagihan.kd_status = 'K'
+
     LEFT JOIN public.m_customer mc
         ON mc.kode_customer = p.customer
+
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
+
     LEFT JOIN public.m_principle mp
         ON mp.principle = p.principle
+
     WHERE 1 = 1
         AND p.diterima = '1'
         :condition
@@ -19553,21 +19676,40 @@ query.countDataFakturPetugas = `
 query.summaryDataFakturPetugas = `
     SELECT
         COUNT(*) AS total_faktur,
+
         COUNT(
             CASE
                 WHEN fp_tukar.faktur_petugas_id IS NOT NULL
                     OR fp_penagihan.faktur_petugas_id IS NOT NULL
-                    THEN 1
+                THEN 1
             END
         ) AS sudah_ditugaskan,
+
         COUNT(
             CASE
                 WHEN fp_tukar.faktur_petugas_id IS NULL
                     AND fp_penagihan.faktur_petugas_id IS NULL
-                    THEN 1
+                THEN 1
             END
-        ) AS belum_ditugaskan
+        ) AS belum_ditugaskan,
+
+        COUNT(
+            CASE
+                WHEN fp_kembali_tukar.faktur_petugas_id IS NOT NULL
+                THEN 1
+            END
+        ) AS total_faktur_kembali_tukar_faktur,
+
+        COUNT(
+            CASE
+                WHEN fp_kembali_penagihan.faktur_petugas_id IS NOT NULL
+                THEN 1
+            END
+        ) AS total_faktur_kembali_penagihan
+
     FROM public.d_piutang p
+
+    -- DATA PENUGASAN TERAKHIR TUKAR FAKTUR
     LEFT JOIN LATERAL (
         SELECT
             fp.faktur_petugas_id
@@ -19581,6 +19723,8 @@ query.summaryDataFakturPetugas = `
             fp.faktur_petugas_id DESC
         LIMIT 1
     ) fp_tukar ON TRUE
+
+    -- DATA PENUGASAN TERAKHIR PENAGIHAN
     LEFT JOIN LATERAL (
         SELECT
             fp.faktur_petugas_id
@@ -19594,13 +19738,49 @@ query.summaryDataFakturPetugas = `
             fp.faktur_petugas_id DESC
         LIMIT 1
     ) fp_penagihan ON TRUE
+
+    -- RECORD TERAKHIR FAKTUR KEMBALI TUKAR FAKTUR
+    LEFT JOIN LATERAL (
+        SELECT
+            fp.faktur_petugas_id,
+            fp.kd_status,
+            fp.alasan_pengembalian
+        FROM public.d_faktur_petugas fp
+        WHERE fp.piutang_id = p.piutang_id
+            AND fp.kegiatan = 'TUKAR_FAKTUR'
+        ORDER BY
+            COALESCE(fp.updated_at, fp.created_at) DESC NULLS LAST,
+            fp.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp_kembali_tukar
+        ON fp_kembali_tukar.kd_status = 'K'
+
+    -- RECORD TERAKHIR FAKTUR KEMBALI PENAGIHAN
+    LEFT JOIN LATERAL (
+        SELECT
+            fp.faktur_petugas_id,
+            fp.kd_status,
+            fp.alasan_pengembalian
+        FROM public.d_faktur_petugas fp
+        WHERE fp.piutang_id = p.piutang_id
+            AND fp.kegiatan = 'PENAGIHAN'
+        ORDER BY
+            COALESCE(fp.updated_at, fp.created_at) DESC NULLS LAST,
+            fp.faktur_petugas_id DESC
+        LIMIT 1
+    ) fp_kembali_penagihan
+        ON fp_kembali_penagihan.kd_status = 'K'
+
     LEFT JOIN public.m_customer mc
         ON mc.kode_customer = p.customer
+
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
+
     LEFT JOIN public.m_principle mp
         ON mp.principle = p.principle
+
     WHERE 1 = 1
         AND p.diterima = '1'
         :condition
@@ -23838,8 +24018,30 @@ SELECT
     ) AS total_piutang,
 
     COALESCE(
-        SUM(p.total_collection), 0
-    ) AS total_collection,
+        SUM(
+            CASE
+                WHEN p.jatuh_tempo < CURRENT_DATE
+                THEN p.total_piutang_calc
+                ELSE 0
+            END
+        ), 0
+    ) AS saldo_overdue,
+    COALESCE(
+        ROUND(
+            (
+                SUM(
+                    CASE
+                        WHEN p.jatuh_tempo < CURRENT_DATE
+                        THEN p.total_piutang_calc
+                        ELSE 0
+                    END
+                ) * 100.0
+            ) / NULLIF(
+                SUM(p.total_piutang_calc), 0
+            ),
+            2
+        ), 0
+    ) AS persentase_overdue,
 
     COALESCE(
         SUM(p.saldo_piutang_calc), 0
@@ -23852,6 +24054,42 @@ WHERE ${DASHBOARD_CONDITION}
 GROUP BY DATE_TRUNC('month', p.posting_date)
 
 ORDER BY DATE_TRUNC('month', p.posting_date)
+`;
+
+query.getTrenPencairanPiutang = `
+${PIUTANG_CTE}
+
+SELECT
+    TO_CHAR(
+        DATE_TRUNC('month', p.posting_date),
+        'Mon'
+    ) AS bulan,
+
+    COALESCE(
+        SUM(p.total_collection), 0
+    ) / 1000000.0 AS realisasi,
+
+    COALESCE(
+        ROUND(
+            (
+                SUM(p.total_collection) * 100.0
+            ) / NULLIF(
+                SUM(p.total_piutang_calc), 0
+            ),
+            2
+        ),
+        0
+    ) AS "achPencairan"
+
+FROM piutang_data p
+
+WHERE ${DASHBOARD_CONDITION}
+
+GROUP BY
+    DATE_TRUNC('month', p.posting_date)
+
+ORDER BY
+    DATE_TRUNC('month', p.posting_date)
 `;
 
 // =====================================================
@@ -24705,6 +24943,256 @@ query.getAgingPiutangDashboard = `
         ON a.urutan = c.urutan
     CROSS JOIN total_summary t
     ORDER BY c.urutan
+`;
+
+query.getDataDoar = `
+WITH customer_monthly AS (
+    SELECT
+        p.customer,
+        DATE_TRUNC('month', p.posting_date)::DATE AS periode,
+
+        SUM(
+            COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)
+        ) AS total_piutang,
+
+        SUM(
+            COALESCE(p.dpp, 0)
+        ) AS total_dpp
+
+    FROM public.d_piutang p
+
+    WHERE p.posting_date >= MAKE_DATE(
+        EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER - 1,
+        12,
+        1
+    )
+    AND p.posting_date < (
+        DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
+    )
+
+    GROUP BY
+        p.customer,
+        DATE_TRUNC('month', p.posting_date)::DATE
+),
+
+customer_doar AS (
+    SELECT
+        c.customer,
+
+        COALESCE(
+            (
+                SELECT cm_awal.total_piutang
+                FROM customer_monthly cm_awal
+                WHERE cm_awal.customer
+                    IS NOT DISTINCT FROM c.customer
+                  AND cm_awal.total_piutang <> 0
+                ORDER BY cm_awal.periode ASC
+                LIMIT 1
+            ),
+            0
+        ) AS piutang_akhir_tahun,
+
+        COALESCE(
+            SUM(cm.total_piutang) FILTER (
+                WHERE cm.periode =
+                    DATE_TRUNC('month', CURRENT_DATE)::DATE
+            ),
+            0
+        ) AS piutang_bulan_ini,
+
+        COALESCE(
+            SUM(cm.total_dpp) FILTER (
+                WHERE cm.periode >= MAKE_DATE(
+                    EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+                    1,
+                    1
+                )
+                AND cm.periode <=
+                    DATE_TRUNC('month', CURRENT_DATE)::DATE
+            ),
+            0
+        ) AS penjualan_mtd
+
+    FROM (
+        SELECT DISTINCT customer
+        FROM public.d_piutang
+    ) c
+
+    LEFT JOIN customer_monthly cm
+        ON cm.customer IS NOT DISTINCT FROM c.customer
+
+    GROUP BY c.customer
+),
+
+tanggal_acuan AS (
+    SELECT (
+        DATE_TRUNC('month', CURRENT_DATE)
+        + INTERVAL '1 month'
+        - INTERVAL '1 day'
+    )::DATE AS tanggal_akhir_bulan
+),
+
+-- Ambil data principle dari d_penjualan dan m_produk
+billing_produk AS (
+    SELECT
+        dp.billing_no AS no_billing,
+        MAX(mp.principle) AS principle,
+        MAX(mp.nama_principle) AS nama_principle
+    FROM public.d_penjualan dp
+
+    LEFT JOIN public.m_produk mp
+        ON mp.material = dp.material
+
+    GROUP BY dp.billing_no
+),
+
+-- Satu baris untuk satu customer
+customer_data AS (
+    SELECT
+        p.customer,
+
+        MAX(p.cabang) AS cabang,
+
+        MAX(bp.principle) AS principle,
+        MAX(bp.nama_principle) AS nama_principle,
+
+        MAX(p.desc_cust_grp3) AS desc_cust_grp3,
+        MAX(p.channel_id) AS channel_id,
+
+        MAX(p.posting_date) AS posting_date,
+
+        COALESCE(MAX(cd.piutang_akhir_tahun), 0)
+            AS piutang_akhir_tahun,
+
+        COALESCE(MAX(cd.piutang_bulan_ini), 0)
+            AS piutang_bulan_ini,
+
+        COALESCE(MAX(cd.penjualan_mtd), 0)
+            AS penjualan_mtd,
+
+        CASE
+            WHEN COALESCE(MAX(cd.penjualan_mtd), 0) > 0
+            THEN ROUND(
+                (
+                    (
+                        COALESCE(MAX(cd.piutang_akhir_tahun), 0)
+                        + COALESCE(MAX(cd.piutang_bulan_ini), 0)
+                    ) / 2.0
+                    *
+                    EXTRACT(DAY FROM MAX(ta.tanggal_akhir_bulan))
+                )
+                / MAX(cd.penjualan_mtd),
+                0
+            )
+            ELSE 0
+        END AS doar
+
+    FROM public.d_piutang p
+
+    LEFT JOIN customer_doar cd
+        ON cd.customer IS NOT DISTINCT FROM p.customer
+
+    LEFT JOIN billing_produk bp
+        ON bp.no_billing = p.no_billing
+
+    CROSS JOIN tanggal_acuan ta
+
+    GROUP BY p.customer
+)
+
+SELECT
+    p.cabang AS profit_center,
+    mr_cabang.ur_ref AS nama_cabang,
+
+    p.customer AS customer_code,
+    mc.name AS customer_name,
+
+    p.principle AS kode_principle,
+    p.nama_principle AS nama_principle,
+
+    mt.lini,
+
+    p.piutang_akhir_tahun,
+    p.piutang_bulan_ini,
+    p.penjualan_mtd,
+    p.doar
+
+FROM customer_data p
+
+LEFT JOIN public.m_customer mc
+    ON mc.kode_customer = p.customer
+
+LEFT JOIN public.m_referensi mr_cabang
+    ON mr_cabang.kd_ref = p.cabang
+   AND mr_cabang.jns_ref = 'cabang_id'
+
+LEFT JOIN public.m_top mt
+    ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') =
+       REPLACE(LOWER(p.desc_cust_grp3), ' ', '')
+
+WHERE 1 = 1
+    :condition
+
+ORDER BY
+    mc.name ASC NULLS LAST,
+    p.customer ASC
+
+LIMIT :limit
+OFFSET :offset
+`;
+
+query.countDataDoar = `
+WITH billing_produk AS (
+    SELECT
+        dp.billing_no AS no_billing,
+        MAX(mp.principle) AS principle,
+        MAX(mp.nama_principle) AS nama_principle
+    FROM public.d_penjualan dp
+
+    LEFT JOIN public.m_produk mp
+        ON mp.material = dp.material
+
+    GROUP BY dp.billing_no
+),
+
+customer_data AS (
+    SELECT
+        p.customer,
+
+        MAX(p.cabang) AS cabang,
+
+        MAX(bp.principle) AS principle,
+        MAX(bp.nama_principle) AS nama_principle,
+
+        MAX(p.channel_id) AS channel_id,
+        MAX(p.posting_date) AS posting_date,
+        MAX(p.desc_cust_grp3) AS desc_cust_grp3
+
+    FROM public.d_piutang p
+
+    LEFT JOIN billing_produk bp
+        ON bp.no_billing = p.no_billing
+
+    GROUP BY p.customer
+)
+
+SELECT COUNT(*) AS total
+
+FROM customer_data p
+
+LEFT JOIN public.m_customer mc
+    ON mc.kode_customer = p.customer
+
+LEFT JOIN public.m_referensi mr_cabang
+    ON mr_cabang.kd_ref = p.cabang
+   AND mr_cabang.jns_ref = 'cabang_id'
+
+LEFT JOIN public.m_top mt
+    ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') =
+       REPLACE(LOWER(p.desc_cust_grp3), ' ', '')
+
+WHERE 1 = 1
+    :condition
 `;
 
 module.exports = query;
