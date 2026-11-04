@@ -380,7 +380,7 @@ const columnMap = {
     prod_hierarchy3: 'Prod. Hierarchy3',
     principle: 'Principle',
     name_principle: 'Name Principle',
-    desc_cust_grp4: 'Desc. Cust. Grp4',
+    desc_cust_grp3: 'Desc. Cust. Grp3',
     salesman: 'Salesman',
     name_salesman: 'Name Salesman',
     po_number: 'PO Number',
@@ -541,7 +541,7 @@ exports.insertPenjualanArray2 = async (payload, transaction) => {
 
     const createdAt = new Date();
 
-    const dataInsert = payload?.filter(a => a.sales_office !== '2000' || !['KFA', 'KFD'].includes(a.desc_cust_grp4))?.map?.((item) => ({
+    const dataInsert = payload?.filter(a => a.sales_office !== '2000' || !['KFA', 'KFD'].includes(a.desc_cust_grp3))?.map?.((item) => ({
         penjualan_id: item.penjualan_id,
         sales_office: item.sales_office ?? null,
         desc_s_office: item.desc_s_office ?? null,
@@ -605,7 +605,7 @@ exports.insertPenjualanArray2 = async (payload, transaction) => {
         prod_hierarchy3: item.prod_hierarchy3 ?? null,
         principle: item.principle ?? null,
         name_principle: item.name_principle ?? null,
-        desc_cust_grp4: item.desc_cust_grp4 ? item?.desc_cust_grp3 : null,
+        desc_cust_grp3: item.desc_cust_grp4 ? item?.desc_cust_grp3 : null,
         salesman: item.salesman ?? null,
         name_salesman: item.name_salesman ?? null,
 
@@ -705,7 +705,7 @@ exports.insertDataPiutang = async (
         const dataInsert = piutangRows.map((item) => ({
             piutang_id: uuidv4(),
             no_faktur: item.billing_no ?? null,
-            desc_cust_grp3: item.desc_cust_grp4 ?? null,
+            desc_cust_grp3: item.desc_cust_grp3 ?? null,
             channel_id: item.channel_id ?? null,
             no_billing: item.billing_no ?? null,
             document_type: item.document_type ?? null,
@@ -1840,7 +1840,7 @@ exports.getDataPenjualan = async (params) => {
             )
         ) {
             condition += `
-                AND dp.desc_cust_grp4 IN (:customer_groups)
+                AND dp.desc_cust_grp3 IN (:customer_groups)
             `;
 
             replacements.customer_groups = customerGroups;
@@ -2410,7 +2410,6 @@ exports.getDataPiutang = async (params) => {
                     OR p.customer ILIKE :keyword
                     OR p.sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR p.posting_date::text ILIKE :keyword
                     OR p.jatuh_tempo::text ILIKE :keyword
                     OR p.dpp::text ILIKE :keyword
@@ -2439,8 +2438,8 @@ exports.getDataPiutang = async (params) => {
                     )
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword
-                        WHERE mp_keyword.principle = p.principle
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
                         AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
@@ -2490,7 +2489,13 @@ exports.getDataPiutang = async (params) => {
             !customerGroups.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
-                AND p.channel_id IN (:customer_groups)
+                AND EXISTS (
+                        SELECT 1
+                        FROM m_top mt left join m_referensi mr on 
+                        mr.ur_ref = mt.lini and mr.jns_ref = 'channel_id'
+                        where mt.desc_cust_grp3 = p.desc_cust_grp3 and 
+                        mr.kd_ref IN (:customer_groups)
+                    )
             `;
             bind.customer_groups = customerGroups;
         }
@@ -2500,7 +2505,12 @@ exports.getDataPiutang = async (params) => {
             !principles.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
-                AND p.principle IN (:principles)
+                AND EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.principle IN (:principles)
+                    )
             `;
             bind.principles = principles;
         }
@@ -2641,7 +2651,6 @@ exports.getDataKreasiFaktur = async (params) => {
                     OR p.sales ILIKE :keyword
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR p.posting_date::text ILIKE :keyword
                     OR p.jatuh_tempo::text ILIKE :keyword
                     OR p.dpp::text ILIKE :keyword
@@ -2670,9 +2679,9 @@ exports.getDataKreasiFaktur = async (params) => {
                     )
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword
-                        WHERE mp_keyword.principle = p.principle
-                          AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -2725,25 +2734,33 @@ exports.getDataKreasiFaktur = async (params) => {
         // FILTER CUSTOMER GROUP
         if (
             customerGroups.length &&
-            !customerGroups.some((value) => value.toUpperCase() === 'ALL')
+            !customerGroups.some((item) => item.toUpperCase() === 'ALL')
         ) {
-            condition += ` AND p.channel_id IN (:customer_groups)`;
-            summaryCondition += ` AND p.channel_id IN (:customer_groups)`;
-
+            condition += `
+                AND EXISTS (
+                        SELECT 1
+                        FROM m_top mt left join m_referensi mr on 
+                        mr.ur_ref = mt.lini and mr.jns_ref = 'channel_id'
+                        where mt.desc_cust_grp3 = p.desc_cust_grp3 and 
+                        mr.kd_ref IN (:customer_groups)
+                    )
+            `;
             bind.customer_groups = customerGroups;
-            summaryBind.customer_groups = customerGroups;
         }
-
         // FILTER PRINCIPLE
         if (
             principles.length &&
-            !principles.some((value) => value.toUpperCase() === 'ALL')
+            !principles.some((item) => item.toUpperCase() === 'ALL')
         ) {
-            condition += ` AND p.principle IN (:principles)`;
-            summaryCondition += ` AND p.principle IN (:principles)`;
-
+            condition += `
+                AND EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.principle IN (:principles)
+                    )
+            `;
             bind.principles = principles;
-            summaryBind.principles = principles;
         }
 
         // FILTER TANGGAL AWAL
@@ -2772,14 +2789,14 @@ exports.getDataKreasiFaktur = async (params) => {
         // FILTER STATUS PENERIMAAN FAKTUR
         if (statusTerimaFaktur === 'BELUM_DITERIMA') {
             condition += `
-        AND COALESCE(p.diterima::text, '0') = '0'
+        AND p.diterima = '0'
     `;
         } else if (
             statusTerimaFaktur === 'DITERIMA' ||
             statusTerimaFaktur === 'SUDAH_DITERIMA'
         ) {
             condition += `
-        AND COALESCE(p.diterima::text, '0') = '1'
+        AND p.diterima = '1'
     `;
         } else if (
             statusTerimaFaktur !== 'ALL' &&
@@ -2939,21 +2956,24 @@ exports.getListPrinciple = async (params) => {
     }
 }
 
+
 exports.getDataPelanggan = async (params) => {
     try {
         // =========================
         // PARAMETER
         // =========================
-        const page = Number(params?.page) || 1
-        const limit = Number(params?.limit) || 10
-        const offset = (page - 1) * limit
-        const keyword = String(params?.keyword || '').trim()
-        const status = String(params?.status || '').trim()
-        const salesOffice = String(params?.sales_office || '').trim()
+        const page = Math.max(1, Number(params?.page) || 1);
+        const limit = Math.max(1, Number(params?.limit) || 10);
+        const offset = (page - 1) * limit;
+
+        const keyword = String(params?.keyword || '').trim();
+        const status = String(params?.status || '').trim();
+
         // Filter cabang dari frontend (multi-select)
         const cabangId = Array.isArray(params?.cabang_id)
             ? params.cabang_id.filter(
-                (item) => item !== null &&
+                (item) =>
+                    item !== null &&
                     item !== undefined &&
                     String(item).trim() !== ''
             )
@@ -2961,179 +2981,246 @@ exports.getDataPelanggan = async (params) => {
                 params?.cabang_id !== undefined &&
                 String(params.cabang_id).trim() !== ''
                 ? [params.cabang_id]
-                : []
-        const sortBy = String(params?.sortBy || '').trim()
+                : [];
+
+        const sortBy = String(params?.sortBy || '').trim();
+
         // =========================
         // CONDITION
         // =========================
-        let condition = ``
+        let condition = '';
+
         const bind = {
             limit,
             offset
-        }
+        };
+
         // =========================
-        // KEYWORD
+        // KEYWORD SEARCH
         // =========================
         if (keyword) {
             condition += `
                 AND (
-                    mc.kode_customer ILIKE :keyword
+                    mc.customer_id::TEXT ILIKE :keyword
+                    OR mc.kode_customer ILIKE :keyword
                     OR mc.name ILIKE :keyword
-                    OR mc.sales_office ILIKE :keyword
-                    OR mc.sales_office_description ILIKE :keyword
-                    OR mc.status_outlet ILIKE :keyword
-                    OR mc.address ILIKE :keyword
-                    OR mc.city ILIKE :keyword
+                    OR mc.plant ILIKE :keyword
+                    OR m1.ur_ref ILIKE :keyword
+
+                    OR mc.customer_groups_1 ILIKE :keyword
                     OR mc.customer_groups_1_description ILIKE :keyword
+
+                    OR mc.customer_groups_2 ILIKE :keyword
                     OR mc.customer_groups_2_description ILIKE :keyword
+
+                    OR mc.customer_groups_3 ILIKE :keyword
                     OR mc.customer_groups_3_description ILIKE :keyword
+
+                    OR mc.customer_groups_4 ILIKE :keyword
                     OR mc.customer_groups_4_description ILIKE :keyword
-                    OR mc.no_npwp ILIKE :keyword
-                    OR mc.nama_npwp ILIKE :keyword
-                    OR mc.division ILIKE :keyword
-                    OR mc.channel_tw_alpian ILIKE :keyword
-                    OR mc.lini_custom_asha ILIKE :keyword
-                    OR mc.channel_nopalpadil ILIKE :keyword
-                    OR mc.ket_payer ILIKE :keyword
+
+                    OR mc.customer_groups_5 ILIKE :keyword
+                    OR mc.customer_groups_5_description ILIKE :keyword
+
+                    OR mc.street ILIKE :keyword
+                    OR mc.city ILIKE :keyword
+                    OR mc.top_desc ILIKE :keyword
+                    OR mc.postal_code ILIKE :keyword
+
+                    OR mc.tax_number ILIKE :keyword
+                    OR mc.telephone ILIKE :keyword
+                    OR mc.mobile_phone ILIKE :keyword
+                    OR mc.email ILIKE :keyword
+                    OR mc.nik_npwp_16 ILIKE :keyword
+
+                    OR mc.gps_tag ILIKE :keyword
+                    OR mc.id_sarana_bpom ILIKE :keyword
+                    OR mc.sla_pengiriman ILIKE :keyword
                 )
-            `
-            bind.keyword = `%${keyword}%`
+            `;
+
+            bind.keyword = `%${keyword}%`;
         }
+
         // =========================
         // FILTER STATUS
         // =========================
-        if (status) {
-            // condition += `
-            //     AND UPPER(
-            //         TRIM(
-            //             COALESCE(mc.status_outlet, '')
-            //         )
-            //     ) = UPPER(:status)
-            // `
-            bind.status = status
-        }
-        // =========================
-        // FILTER SALES OFFICE
-        // =========================
-        if (salesOffice && cabangId.length === 0) {
+        if (status && status !== 'ALL') {
             condition += `
-                AND mc.sales_office = :sales_office
-            `
-            bind.sales_office = salesOffice
+                AND UPPER(
+                    TRIM(
+                        COALESCE(mc.flag_aktif, '')
+                    )
+                ) = UPPER(:status)
+            `;
+
+            bind.status = status;
         }
+
         // =========================
-        // FILTER CABANG ID (MULTI-SELECT)
+        // FILTER CABANG
         // =========================
-        if (cabangId.length > 0) {
+        console.log(cabangId, 'cabangId');
+        
+        if (cabangId.length > 0 && cabangId[0] !== 'ALL') {
             condition += `
-                AND mc.sales_office IN (:cabang_id)
-            `
-            bind.cabang_id = cabangId
+                AND mc.plant IN (:cabang_id)
+            `;
+
+            bind.cabang_id = cabangId;
         }
+
         // =========================
         // SORTING
         // =========================
         let orderBy = `
             mc.created_at DESC NULLS LAST,
             mc.name ASC NULLS LAST
-        `
-        /*
-         * Whitelist sorting.
-         * Jangan langsung masukkan sortBy
-         * dari frontend ke raw query.
-         */
+        `;
+
         const sortMapping = {
             customer_id: 'mc.customer_id',
-            sales_office: 'mc.sales_office',
-            sales_office_description: 'mc.sales_office_description',
             kode_customer: 'mc.kode_customer',
             name: 'mc.name',
-            status_outlet: 'mc.status_outlet',
-            address: 'mc.address',
-            city: 'mc.city',
+            plant: 'mc.plant',
+            nama_plant: 'm1.ur_ref',
+
+            customer_groups_1: 'mc.customer_groups_1',
             customer_groups_1_description: 'mc.customer_groups_1_description',
+
+            customer_groups_2: 'mc.customer_groups_2',
             customer_groups_2_description: 'mc.customer_groups_2_description',
+
+            customer_groups_3: 'mc.customer_groups_3',
             customer_groups_3_description: 'mc.customer_groups_3_description',
+
+            customer_groups_4: 'mc.customer_groups_4',
             customer_groups_4_description: 'mc.customer_groups_4_description',
-            top: 'mc.top',
-            no_npwp: 'mc.no_npwp',
-            tgl_registrasi: 'mc.tgl_registrasi',
-            division: 'mc.division',
+
+            customer_groups_5: 'mc.customer_groups_5',
+            customer_groups_5_description: 'mc.customer_groups_5_description',
+
+            street: 'mc.street',
+            city: 'mc.city',
+            top_desc: 'mc.top_desc',
+            postal_code: 'mc.postal_code',
+
+            sales_order_block_all_sales_area:
+                'mc.sales_order_block_all_sales_area',
+
+            sales_order_block_selected_sales_area:
+                'mc.sales_order_block_selected_sales_area',
+
+            tax_number: 'mc.tax_number',
+            telephone: 'mc.telephone',
+            mobile_phone: 'mc.mobile_phone',
+            email: 'mc.email',
+            nik_npwp_16: 'mc.nik_npwp_16',
+
+            created_on: 'mc.created_on',
+            change_on: 'mc.change_on',
+            gps_tag: 'mc.gps_tag',
+            id_sarana_bpom: 'mc.id_sarana_bpom',
+            sla_pengiriman: 'mc.sla_pengiriman',
+
             created_at: 'mc.created_at',
-            updated_at: 'mc.updated_at'
-        }
+            updated_at: 'mc.updated_at',
+            flag_aktif: 'mc.flag_aktif'
+        };
+
         if (sortBy) {
-            let sortColumn = sortBy
-            let sortDirection = 'ASC'
+            let sortColumn = sortBy;
+            let sortDirection = 'ASC';
+
             // Format: name:asc atau name:desc
             if (sortBy.includes(':')) {
-                const parts = sortBy.split(':')
-                sortColumn = parts[0]
-                sortDirection = String(parts[1] || 'ASC').toUpperCase()
+                const parts = sortBy.split(':');
+
+                sortColumn = parts[0].trim();
+                sortDirection = String(
+                    parts[1] || 'ASC'
+                ).toUpperCase();
             }
+
             // Format: name desc
             else if (/\s+DESC$/i.test(sortBy)) {
-                sortColumn = sortBy.replace(/\s+DESC$/i, '').trim()
-                sortDirection = 'DESC'
+                sortColumn = sortBy
+                    .replace(/\s+DESC$/i, '')
+                    .trim();
+
+                sortDirection = 'DESC';
             }
+
             // Format: name asc
             else if (/\s+ASC$/i.test(sortBy)) {
-                sortColumn = sortBy.replace(/\s+ASC$/i, '').trim()
-                sortDirection = 'ASC'
+                sortColumn = sortBy
+                    .replace(/\s+ASC$/i, '')
+                    .trim();
+
+                sortDirection = 'ASC';
             }
-            // Validasi kolom dan arah sorting
+
             if (sortMapping[sortColumn]) {
                 if (!['ASC', 'DESC'].includes(sortDirection)) {
-                    sortDirection = 'ASC'
+                    sortDirection = 'ASC';
                 }
+
                 orderBy = `
                     ${sortMapping[sortColumn]}
                     ${sortDirection}
                     NULLS LAST
-                `
+                `;
             }
         }
+
         // =====================================================
         // 1. GET LIST DATA
         // =====================================================
         const LIST_QUERY = query.getDataPelanggan
             .replace(/:condition/g, condition)
-            .replace(/:sortBy/g, orderBy)
+            .replace(/:sortBy/g, orderBy);
+
         const listData = await db.query(
             LIST_QUERY,
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT,
-                // logging: console.log
             }
-        )
+        );
+
         // =====================================================
         // 2. GET TOTAL DATA
         // =====================================================
         const COUNT_QUERY = query.countDataPelanggan
-            .replace(/:condition/g, condition)
+            .replace(/:condition/g, condition);
+
         const countData = await db.query(
             COUNT_QUERY,
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT
             }
-        )
-        const totalData = Number(countData?.[0]?.total || 0)
-        const totalHalaman = Math.ceil(totalData / limit)
+        );
+
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
+
         // =====================================================
         // 3. GET SUMMARY
         // =====================================================
         const SUMMARY_QUERY = query.summaryDataPelanggan
-            .replace(/:condition/g, condition)
+            .replace(/:condition/g, condition);
+
         const summaryData = await db.query(
             SUMMARY_QUERY,
             {
                 replacements: bind,
                 type: db.QueryTypes.SELECT
             }
-        )
-        const summary = summaryData?.[0] || {}
+        );
+
+        const summary = summaryData?.[0] || {};
+
         // =====================================================
         // RETURN
         // =====================================================
@@ -3142,19 +3229,26 @@ exports.getDataPelanggan = async (params) => {
             total_halaman: totalHalaman,
             limit,
             page,
+
             list_data: listData,
+
             summary: {
                 total: Number(summary?.total_pelanggan || 0),
                 aktif: Number(summary?.total_aktif || 0),
                 nonaktif: Number(summary?.total_nonaktif || 0),
                 cabang: Number(summary?.total_cabang || 0)
             }
-        }
+        };
+
     } catch (error) {
-        console.error('ERROR SERVICE GET DATA PELANGGAN:', error)
-        throw error
+        console.error(
+            'ERROR SERVICE GET DATA PELANGGAN:',
+            error
+        );
+
+        throw error;
     }
-}
+};
 
 exports.insertUser = async (payload, transaction) => {
     const checkNip = await model.m_user.count({
@@ -3870,13 +3964,17 @@ exports.getDataFakturPetugas = async (params) => {
                     OR p.sales ILIKE :keyword
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR p.document_type ILIKE :keyword
                     OR p.posting_date::text ILIKE :keyword
                     OR p.jatuh_tempo::text ILIKE :keyword
                     OR mc.name ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
-                    OR mp.nama_principle ILIKE :keyword
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
+                    )
                 )
             `;
 
@@ -4165,13 +4263,17 @@ exports.getDataTukarFaktur = async (params) => {
                     OR p.sales ILIKE :keyword
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR p.document_type ILIKE :keyword
                     OR p.posting_date::text ILIKE :keyword
                     OR p.jatuh_tempo::text ILIKE :keyword
                     OR mc.name ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
-                    OR mp.nama_principle ILIKE :keyword
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
+                    )
                 )
             `;
 
@@ -4501,14 +4603,18 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
                     OR p.sales ILIKE :keyword
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR p.document_type ILIKE :keyword
                     OR p.posting_date::text ILIKE :keyword
                     OR p.jatuh_tempo::text ILIKE :keyword
                     OR mc.name ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
-                    OR mp.nama_principle ILIKE :keyword
-                    OR fp.kd_status ILIKE :keyword
+                    OR fp.kd_status ILIKE :keyword 
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
+                    )
                 )
             `;
 
@@ -4771,6 +4877,12 @@ exports.getDataVerifikasiPembayaran = async (params) => {
                     OR COALESCE(dp.metode_pembayaran,'') ILIKE :keyword
                     OR COALESCE(ds.kd_status,'') ILIKE :keyword
                     OR COALESCE(ds.keterangan,'') ILIKE :keyword
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
+                    )
                 )
             `;
             bind.keyword = `%${keyword}%`;
@@ -7349,14 +7461,12 @@ exports.getDataBayarFaktur = async (params) => {
                     OR p.sales ILIKE :keyword
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR p.document_type ILIKE :keyword
                     OR p.posting_date::text ILIKE :keyword
                     OR p.jatuh_tempo::text ILIKE :keyword
 
                     OR mc.name ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
-                    OR mp.nama_principle ILIKE :keyword
 
                     OR fp.nip ILIKE :keyword
                     OR mu.nama ILIKE :keyword
@@ -7370,6 +7480,12 @@ exports.getDataBayarFaktur = async (params) => {
 
                     OR verifikasi.kd_status_verifikasi
                        ILIKE :keyword
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
+                    )
                 )
             `;
 
@@ -8974,9 +9090,13 @@ exports.getMonitoringPenugasan = async (params = {}) => {
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
-                    OR p.principle ILIKE :keyword
-                    OR mp.nama_principle ILIKE :keyword
-                    OR COALESCE(fp_tagih.petugas, '') ILIKE :keyword
+                    OR COALESCE(fp_tagih.petugas, '') ILIKE :keyword 
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
+                    )
                 )
             `;
 
@@ -9283,9 +9403,14 @@ exports.getDataReportSales = async (params) => {
                 AND (
                     p.no_billing ILIKE :keyword
                     OR p.customer ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR p.sales ILIKE :keyword
-                    OR p.nama_sales ILIKE :keyword
+                    OR p.nama_sales ILIKE :keyword 
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
+                    )
                 )
             `;
 
@@ -9310,7 +9435,12 @@ exports.getDataReportSales = async (params) => {
         }
 
         if (!isAll(principles)) {
-            condition += ` AND p.principle IN (:principles) `;
+            condition += ` AND EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.principle (:principles)
+                    ) `;
             filterBind.principles = principles;
         }
 
@@ -9611,9 +9741,6 @@ exports.getDataKonfirmasiPiutang = async (params) => {
                     OR COALESCE(p.cabang::TEXT, '')
                         ILIKE :keyword
 
-                    OR COALESCE(p.principle::TEXT, '')
-                        ILIKE :keyword
-
                     OR COALESCE(kp.created_by::TEXT, '')
                         ILIKE :keyword
 
@@ -9644,9 +9771,9 @@ exports.getDataKonfirmasiPiutang = async (params) => {
 
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword
-                        WHERE mp_keyword.principle = p.principle
-                          AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -12958,11 +13085,15 @@ exports.getDataDoar = async (params) => {
                 AND (
                     p.customer ILIKE :keyword
                     OR p.cabang ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR mc.name ILIKE :keyword
                     OR mr_cabang.ur_ref ILIKE :keyword
-                    OR mp.nama_principle ILIKE :keyword
                     OR mt.lini ILIKE :keyword
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        WHERE dpp.piutang_id = p.piutang_id
+                        AND mp_keyword.nama_principle ILIKE :keyword
+                    )
                 )
             `;
 

@@ -4845,9 +4845,9 @@ exports.D_PENJUALAN = db.define(
             field: 'name_principle'
         },
 
-        desc_cust_grp4: {
+        desc_cust_grp3: {
             type: DataTypes.STRING,
-            field: 'desc_cust_grp4'
+            field: 'desc_cust_grp3'
         },
 
         salesman: {

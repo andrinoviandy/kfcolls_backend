@@ -18203,7 +18203,7 @@ query.getDataPenjualan = `
         dp.prod_hierarchy3,
         dp.principle,
         dp.name_principle,
-        dp.desc_cust_grp4,
+        dp.desc_cust_grp3,
         dp.salesman,
         dp.name_salesman,
         dp.po_number,
@@ -18216,7 +18216,7 @@ query.getDataPenjualan = `
         mt.top 
     FROM public.d_penjualan dp LEFT JOIN public.m_top mt
         ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') =
-       REPLACE(LOWER(dp.desc_cust_grp4), ' ', '')
+       REPLACE(LOWER(dp.desc_cust_grp3), ' ', '')
     WHERE 1 = 1
         :condition
     ORDER BY
@@ -18654,7 +18654,6 @@ piutang_data AS (
         p.document_type,
         p.customer,
         p.cabang,
-        p.principle,
         p.sales,
         p.nama_sales,
         p.posting_date,
@@ -18837,11 +18836,9 @@ SELECT
     p.document_type,
     p.customer,
     p.cabang,
-    p.principle,
 
     mc.name AS customer_name,
     mr_cabang.ur_ref AS name_cabang,
-    mp.nama_principle AS name_principle,
 
     p.sales,
     p.nama_sales,
@@ -18884,9 +18881,6 @@ LEFT JOIN public.m_customer mc
 LEFT JOIN public.m_referensi mr_cabang
     ON mr_cabang.kd_ref = p.cabang
    AND mr_cabang.jns_ref = 'cabang_id'
-
-LEFT JOIN public.m_principle mp
-    ON mp.principle = p.principle
 
 WHERE 1 = 1
     :condition
@@ -18938,7 +18932,6 @@ query.countDataPiutang = `
             p.no_billing,
             p.customer,
             p.cabang,
-            p.principle,
             p.sales,
             p.posting_date,
             p.jatuh_tempo,
@@ -19009,7 +19002,6 @@ query.summaryDataPiutang = `
             p.no_billing,
             p.customer,
             p.cabang,
-            p.principle,
             p.sales,
             p.posting_date,
             p.jatuh_tempo,
@@ -19168,14 +19160,14 @@ query.getUploadedDataPiutang = `
             dp.bill_to_party,
             dp.salesman,
             dp.name_salesman,
-            dp.desc_cust_grp4,
+            dp.desc_cust_grp3,
             m1.kd_ref as channel_id,
             -- dp.principle,
             COALESCE(SUM(dp.total_penjualan), 0) AS dpp,
             COALESCE(SUM(dp.tax_amount), 0) AS ppn,
             mt.top 
         FROM public.d_penjualan dp LEFT JOIN m_top mt 
-            ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') = REPLACE(LOWER(dp.desc_cust_grp4), ' ', '') 
+            ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') = REPLACE(LOWER(dp.desc_cust_grp3), ' ', '') 
             LEFT JOIN m_referensi m1 
             ON REPLACE(LOWER(m1.ur_ref), ' ', '') = REPLACE(LOWER(mt.lini), ' ', '') AND m1.jns_ref = 'channel_id' 
         WHERE dp.is_upload = 1
@@ -19186,7 +19178,7 @@ query.getUploadedDataPiutang = `
             dp.sales_office,
             dp.posting_date,
             dp.bill_to_party,
-            dp.desc_cust_grp4,
+            dp.desc_cust_grp3,
             -- dp.principle,
             m1.kd_ref,
             dp.salesman,
@@ -19295,44 +19287,24 @@ query.getListPrinciple = `
     OFFSET :offset
 `,
 
-    query.countListPrinciple = `
+query.countListPrinciple = `
     SELECT COUNT(*) AS total
     FROM public.m_principle mp
     WHERE 1 = 1
         :condition
 `,
 
-    query.getDataPelanggan = `
+
+query.getDataPelanggan = `
     SELECT
-        mc.customer_id,
-        mc.sales_office,
-        mc.sales_office_description,
-        mc.kode_customer,
-        mc.name,
-        mc.status_outlet,
-        mc.address,
-        mc.city,
-        mc.customer_groups_1_description,
-        mc.customer_groups_2_description,
-        mc.customer_groups_3_description,
-        mc.customer_groups_4_description,
-        mc.top,
-        mc.no_npwp,
-        mc.kode_taxable_payer,
-        mc.nama_npwp,
-        mc.alamat_npwp,
-        mc.tgl_registrasi,
-        mc.channel_tw_alpian,
-        mc.division,
-        mc.lini_custom_asha,
-        mc.channel_nopalpadil,
-        mc.ket_payer,
-        mc.created_by,
-        mc.created_at,
-        mc.updated_by,
-        mc.updated_at
+        mc.*,
+        m1.ur_ref AS nama_plant
 
     FROM public.m_customer mc
+
+    LEFT JOIN public.m_referensi m1
+        ON m1.kd_ref = mc.plant
+        AND m1.jns_ref = 'cabang_id'
 
     WHERE 1 = 1
         :condition
@@ -19351,6 +19323,10 @@ query.countDataPelanggan = `
 
     FROM public.m_customer mc
 
+    LEFT JOIN public.m_referensi m1
+        ON m1.kd_ref = mc.plant
+        AND m1.jns_ref = 'cabang_id'
+
     WHERE 1 = 1
         :condition
 `;
@@ -19364,12 +19340,9 @@ query.summaryDataPelanggan = `
             CASE
                 WHEN UPPER(
                     TRIM(
-                        COALESCE(
-                            mc.status_outlet,
-                            ''
-                        )
+                        COALESCE(mc.flag_aktif, '')
                     )
-                ) = 'AKTIF'
+                ) = 'Y'
                 THEN 1
             END
         ) AS total_aktif,
@@ -19378,12 +19351,9 @@ query.summaryDataPelanggan = `
             CASE
                 WHEN UPPER(
                     TRIM(
-                        COALESCE(
-                            mc.status_outlet,
-                            ''
-                        )
+                        COALESCE(mc.flag_aktif, '')
                     )
-                ) = 'NONAKTIF'
+                ) = 'T'
                 THEN 1
             END
         ) AS total_nonaktif,
@@ -19391,10 +19361,7 @@ query.summaryDataPelanggan = `
         COUNT(
             DISTINCT NULLIF(
                 TRIM(
-                    COALESCE(
-                        mc.sales_office,
-                        ''
-                    )
+                    COALESCE(mc.plant, '')
                 ),
                 ''
             )
@@ -19402,10 +19369,13 @@ query.summaryDataPelanggan = `
 
     FROM public.m_customer mc
 
+    LEFT JOIN public.m_referensi m1
+        ON m1.kd_ref = mc.plant
+        AND m1.jns_ref = 'cabang_id'
+
     WHERE 1 = 1
         :condition
 `;
-
 
 query.getDataFakturPetugas = `
     SELECT
@@ -19419,8 +19389,6 @@ query.getDataFakturPetugas = `
         p.nama_sales,
         p.cabang,
         mr.ur_ref AS nama_cabang,
-        p.principle,
-        mp.nama_principle,
         p.posting_date,
         p.jatuh_tempo,
         p.dpp,
@@ -19572,9 +19540,6 @@ query.getDataFakturPetugas = `
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     WHERE 1 = 1
         AND p.diterima = '1'
         :condition
@@ -19664,9 +19629,6 @@ query.countDataFakturPetugas = `
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
-
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
 
     WHERE 1 = 1
         AND p.diterima = '1'
@@ -19778,9 +19740,6 @@ query.summaryDataFakturPetugas = `
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     WHERE 1 = 1
         AND p.diterima = '1'
         :condition
@@ -19798,8 +19757,6 @@ query.getDataTukarFaktur = `
         p.nama_sales,
         p.cabang,
         mr.ur_ref AS nama_cabang,
-        p.principle,
-        mp.nama_principle,
         p.posting_date,
         p.jatuh_tempo,
         p.dpp,
@@ -19923,9 +19880,6 @@ query.getDataTukarFaktur = `
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     /*
      * DATA PENUGASAN FAKTUR
      *
@@ -20000,9 +19954,6 @@ query.countDataTukarFaktur = `
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
-
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
 
     INNER JOIN public.d_faktur_petugas fp
         ON fp.piutang_id = p.piutang_id
@@ -20084,9 +20035,6 @@ query.summaryDataTukarFaktur = `
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     INNER JOIN public.d_faktur_petugas fp
         ON fp.piutang_id = p.piutang_id
         AND fp.kegiatan = 'TUKAR_FAKTUR'
@@ -20146,7 +20094,6 @@ query.getDataKreasiFaktur = `
             p.document_type,
             p.customer,
             p.cabang,
-            p.principle,
             p.sales,
             p.nama_sales,
             p.posting_date,
@@ -20198,8 +20145,6 @@ query.getDataKreasiFaktur = `
         p.customer AS kode_customer,
         p.cabang,
         mr_cabang.ur_ref AS name_cabang,
-        p.principle,
-        mp.nama_principle AS name_principle,
         p.sales,
         p.nama_sales,
         p.posting_date,
@@ -20252,9 +20197,6 @@ query.getDataKreasiFaktur = `
         ON mr_cabang.kd_ref = p.cabang
        AND mr_cabang.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     -- RIWAYAT PENERIMAAN FAKTUR TERAKHIR
     LEFT JOIN LATERAL (
         SELECT
@@ -20285,8 +20227,6 @@ query.getDataKreasiFaktur = `
     LIMIT :limit
     OFFSET :offset
 `;
-
-
 
 /* =========================================================
  * QUERY COUNT DATA KREASI FAKTUR
@@ -20330,7 +20270,6 @@ query.countDataKreasiFaktur = `
             p.document_type,
             p.customer,
             p.cabang,
-            p.principle,
             p.sales,
             p.nama_sales,
             p.posting_date,
@@ -20409,7 +20348,6 @@ query.summaryDataKreasiFaktur = `
             p.no_billing,
             p.customer,
             p.cabang,
-            p.principle,
             p.sales,
             p.nama_sales,
             p.posting_date,
@@ -20468,8 +20406,6 @@ query.getDataVerifikasiTukarFaktur = `
         p.nama_sales,
         p.cabang,
         mr.ur_ref AS nama_cabang,
-        p.principle,
-        mp.nama_principle,
         p.posting_date,
         p.jatuh_tempo,
         p.dpp,
@@ -20605,9 +20541,6 @@ query.getDataVerifikasiTukarFaktur = `
         ON mrs.kd_ref = fp.kd_status
         AND mrs.jns_ref = 'kd_status'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     LEFT JOIN public.m_user mu
         ON mu.nip = fp.nip
 
@@ -20654,9 +20587,6 @@ query.countDataVerifikasiTukarFaktur = `
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
-
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
 
     LEFT JOIN public.m_user mu
         ON mu.nip = fp.nip
@@ -20717,9 +20647,6 @@ query.summaryDataVerifikasiTukarFaktur = `
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     LEFT JOIN public.m_user mu
         ON mu.nip = fp.nip
 
@@ -20743,9 +20670,6 @@ query.getDataBayarFaktur = `
 
         p.cabang,
         mr.ur_ref AS nama_cabang,
-
-        p.principle,
-        mp.nama_principle,
 
         p.posting_date,
         p.jatuh_tempo,
@@ -21216,12 +21140,6 @@ query.getDataBayarFaktur = `
         AND mr.jns_ref = 'cabang_id'
 
     /*
-     * PRINCIPLE
-     */
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
-    /*
      * USER / PETUGAS
      */
     LEFT JOIN public.m_user mu
@@ -21322,13 +21240,6 @@ query.countDataBayarFaktur = `
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
-
-    /*
-     * PRINCIPLE
-     */
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     /*
      * USER / PETUGAS
      */
@@ -21566,10 +21477,6 @@ query.summaryDataBayarFaktur = `
         ON mr.kd_ref = p.cabang
        AND mr.jns_ref = 'cabang_id'
 
-    /* PRINCIPLE */
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     /* PETUGAS PENAGIHAN */
     LEFT JOIN public.d_faktur_petugas fp
         ON fp.piutang_id = p.piutang_id
@@ -21661,8 +21568,6 @@ SELECT
     p.nama_sales,
     p.cabang,
     mr.ur_ref AS nama_cabang,
-    p.principle,
-    mp.nama_principle,
     p.posting_date,
     p.jatuh_tempo,
     p.dpp,
@@ -21691,7 +21596,6 @@ LEFT JOIN LATERAL (
         p1.sales,
         p1.nama_sales,
         p1.cabang,
-        p1.principle,
         p1.posting_date,
         p1.jatuh_tempo,
         p1.dpp,
@@ -21709,8 +21613,6 @@ LEFT JOIN public.m_customer mc
 LEFT JOIN public.m_referensi mr
     ON mr.kd_ref = p.cabang
     AND mr.jns_ref = 'cabang_id'
-LEFT JOIN public.m_principle mp
-    ON mp.principle = p.principle
 LEFT JOIN public.d_faktur_petugas fp
     ON fp.piutang_id = p.piutang_id
     AND fp.kegiatan = 'PENAGIHAN'
@@ -21750,7 +21652,6 @@ LEFT JOIN LATERAL (
         p1.sales,
         p1.nama_sales,
         p1.cabang,
-        p1.principle,
         p1.posting_date,
         p1.jatuh_tempo,
         p1.dpp,
@@ -21768,8 +21669,6 @@ LEFT JOIN public.m_customer mc
 LEFT JOIN public.m_referensi mr
     ON mr.kd_ref = p.cabang
     AND mr.jns_ref = 'cabang_id'
-LEFT JOIN public.m_principle mp
-    ON mp.principle = p.principle
 LEFT JOIN public.d_faktur_petugas fp
     ON fp.piutang_id = p.piutang_id
     AND fp.kegiatan = 'PENAGIHAN'
@@ -21822,7 +21721,6 @@ LEFT JOIN LATERAL (
         p1.sales,
         p1.nama_sales,
         p1.cabang,
-        p1.principle,
         p1.posting_date,
         p1.jatuh_tempo,
         p1.dpp,
@@ -21840,8 +21738,6 @@ LEFT JOIN public.m_customer mc
 LEFT JOIN public.m_referensi mr
     ON mr.kd_ref = p.cabang
     AND mr.jns_ref = 'cabang_id'
-LEFT JOIN public.m_principle mp
-    ON mp.principle = p.principle
 LEFT JOIN public.d_faktur_petugas fp
     ON fp.piutang_id = p.piutang_id
     AND fp.kegiatan = 'PENAGIHAN'
@@ -21868,9 +21764,6 @@ query.getMonitoringPenugasan = `
 
         p.cabang,
         mr.ur_ref AS nama_cabang,
-
-        p.principle,
-        mp.nama_principle,
 
         p.posting_date,
         p.jatuh_tempo,
@@ -22079,12 +21972,6 @@ query.getMonitoringPenugasan = `
         AND mr.jns_ref = 'cabang_id'
 
     /*
-     * PRINCIPLE
-     */
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
-    /*
      * TUKAR FAKTUR TERAKHIR
      */
     LEFT JOIN LATERAL (
@@ -22244,9 +22131,6 @@ query.countMonitoringPenugasan = `
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
-
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
 
     /*
      * TUKAR FAKTUR TERAKHIR
@@ -22423,9 +22307,6 @@ query.summaryMonitoringPenugasan = `
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     /*
      * TUKAR FAKTUR TERAKHIR
      */
@@ -22578,7 +22459,7 @@ query.getDataReportSales = `
             nip,
             COALESCE(SUM(nominal), 0) AS total_pencairan
         FROM payment_rows
-        GROUP BY no_billing
+        GROUP BY no_billing, nip
     ),
 
     invoice_data AS (
@@ -22587,7 +22468,6 @@ query.getDataReportSales = `
             p.no_billing,
             p.customer,
             p.cabang,
-            p.principle,
             p.sales,
             p.nama_sales,
             p.channel_id,
@@ -22606,7 +22486,6 @@ query.getDataReportSales = `
             sales,
             nama_sales,
             cabang,
-            principle,
 
             COUNT(DISTINCT no_billing) AS total_transaksi,
             COUNT(DISTINCT customer) AS total_customer,
@@ -22619,15 +22498,13 @@ query.getDataReportSales = `
         GROUP BY
             sales,
             nama_sales,
-            cabang,
-            principle
+            cabang
     )
 
     SELECT
         sales,
         nama_sales,
         cabang,
-        principle,
         total_transaksi,
         total_customer,
         total_penjualan,
@@ -22648,7 +22525,6 @@ query.countDataReportSales = `
             p.no_billing,
             p.customer,
             p.cabang,
-            p.principle,
             p.sales,
             p.nama_sales
         FROM public.d_piutang p
@@ -22660,14 +22536,12 @@ query.countDataReportSales = `
         SELECT
             sales,
             nama_sales,
-            cabang,
-            principle
+            cabang 
         FROM invoice_data
         GROUP BY
             sales,
             nama_sales,
-            cabang,
-            principle
+            cabang
     )
 
     SELECT COUNT(*) AS total_data
@@ -22743,7 +22617,7 @@ query.getDetailPenjualan = `
     p.nama_sales AS "Name Salesman",
     p.sales AS "Salesman",
     p.cabang AS "Desc. S.Office",
-    p.principle AS "Name Principle",
+    -- p.principle AS "Name Principle",
 
     p.posting_date AS "Posting Date",
     p.jatuh_tempo AS "Jatuh Tempo",
@@ -22804,7 +22678,7 @@ query.getDetailPencairan = `
     p.nama_sales AS "Name Salesman",
     p.sales AS "Salesman",
     p.cabang AS "Desc. S.Office",
-    p.principle AS "Name Principle",
+    -- p.principle AS "Name Principle",
     p.posting_date AS "Posting Date",
     p.jatuh_tempo AS "Jatuh Tempo",
 
@@ -22834,7 +22708,6 @@ query.getDataKonfirmasiPiutang = `
         -- Data master
         mc.name AS nama_customer,
         mr.ur_ref AS nama_cabang,
-        mp.nama_principle,
 
         -- Nominal piutang dari DPP
         COALESCE(p.dpp, 0) AS nominal_piutang,
@@ -22943,9 +22816,6 @@ query.getDataKonfirmasiPiutang = `
         ON mr.kd_ref = p.cabang
        AND mr.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     WHERE 1 = 1
         :condition
 
@@ -23018,9 +22888,6 @@ query.countDataKonfirmasiPiutang = `
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
        AND mr.jns_ref = 'cabang_id'
-
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
 
     WHERE 1 = 1
         :condition
@@ -23118,9 +22985,6 @@ query.summaryDataKonfirmasiPiutang = `
         ON mr.kd_ref = p.cabang
        AND mr.jns_ref = 'cabang_id'
 
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
-
     WHERE 1 = 1
         :condition
 `;
@@ -23195,8 +23059,6 @@ query.getDataLaporan = `
         p.nama_sales,
         p.cabang,
         mr.ur_ref AS nama_cabang,
-        p.principle,
-        mp.nama_principle AS nama_principle,
         p.posting_date,
         p.jatuh_tempo,
         p.dpp,
@@ -23380,9 +23242,6 @@ query.getDataLaporan = `
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
         AND mr.jns_ref = 'cabang_id'
-
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
 
     -- =============================================
     -- DATA KONFIRMASI TERAKHIR YANG AKTIF
@@ -23770,8 +23629,6 @@ piutang_data AS (
 
         mr.ur_ref AS nama_cabang,
 
-        mp.nama_principle,
-
         COALESCE(pay.dibayar, 0) AS total_collection,
 
         COALESCE(p.dpp + p.ppn, 0)
@@ -23807,9 +23664,6 @@ piutang_data AS (
     LEFT JOIN public.m_referensi mr
         ON mr.kd_ref = p.cabang
        AND mr.jns_ref = 'cabang_id'
-
-    LEFT JOIN public.m_principle mp
-        ON mp.principle = p.principle
 )
 `;
 
@@ -23824,7 +23678,13 @@ const DASHBOARD_CONDITION = `
 
     AND (
         :principal_all = TRUE
-        OR p.principle IN (:principal)
+        OR EXISTS (
+                        SELECT 1
+                        FROM d_penjualan dpp 
+                        WHERE dpp.billing_no = p.no_billing 
+                        AND dpp.principle IN (:principal)
+                    )
+        -- p.principle IN (:principal)
     )
 
     AND (
@@ -24416,7 +24276,7 @@ penjualan_billing AS (
                 + COALESCE(dp.tax_amount, 0)::numeric
             ) AS total_penjualan_tax_billing,
             MAX(dp.posting_date)::date AS posting_date,
-            MAX(dp.desc_cust_grp4) AS desc_cust_grp4
+            MAX(dp.desc_cust_grp3) AS desc_cust_grp3
         FROM public.d_penjualan dp
         GROUP BY dp.billing_no
     ) pb
@@ -24427,7 +24287,7 @@ penjualan_billing AS (
             ) AS top_hari
         FROM public.m_top mt
         WHERE REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') =
-              REPLACE(LOWER(pb.desc_cust_grp4), ' ', '')
+              REPLACE(LOWER(pb.desc_cust_grp3), ' ', '')
     ) mt ON TRUE
 ),
 
@@ -24500,7 +24360,7 @@ detail_rows AS (
         dp.bill_to_party AS customer_id,
         dp.name_bill_to AS customer,
 
-        dp.desc_cust_grp4 AS channel,
+        dp.desc_cust_grp3 AS channel,
 
         COALESCE(
             dp.total_penjualan,
@@ -24678,7 +24538,7 @@ detail_rows AS (
 
       AND (
           :channel_all = TRUE
-          OR dp.desc_cust_grp4 IN (:channel)
+          OR dp.desc_cust_grp3 IN (:channel)
       )
 
       AND (
@@ -25050,7 +24910,7 @@ tanggal_acuan AS (
 billing_produk AS (
     SELECT
         dp.billing_no AS no_billing,
-        MAX(mp.principle) AS principle,
+        MAX(mp.kode_principle) AS principle,
         MAX(mp.nama_principle) AS nama_principle
     FROM public.d_penjualan dp
 
@@ -25159,7 +25019,7 @@ query.countDataDoar = `
 WITH billing_produk AS (
     SELECT
         dp.billing_no AS no_billing,
-        MAX(mp.principle) AS principle,
+        MAX(mp.kode_principle) AS principle,
         MAX(mp.nama_principle) AS nama_principle
     FROM public.d_penjualan dp
 
@@ -25216,7 +25076,13 @@ const DASHBOARD_CONDITION_NO_DATE = `
     )
     AND (
         :principal_all = TRUE
-        OR p.principle IN (:principal)
+        OR EXISTS (
+                        SELECT 1
+                        FROM d_penjualan dpp 
+                        WHERE dpp.billing_no = p.no_billing 
+                        AND dpp.principle IN (:principal)
+                    )
+        --p.principle IN (:principal)
     )
     AND (
         :channel_all = TRUE
@@ -25348,7 +25214,6 @@ piutang_data AS (
         p.no_billing,
         p.customer,
         p.cabang,
-        p.principle,
         p.channel_id,
         DATE_TRUNC('day', p.posting_date) AS posting_date,
         DATE_TRUNC('day', p.jatuh_tempo) AS jatuh_tempo,
@@ -25910,7 +25775,6 @@ filtered_piutang AS (
         p.no_billing,
         p.customer,
         p.cabang,
-        p.principle,
         p.channel_id,
 
         p.posting_date::DATE AS posting_date,
@@ -25946,7 +25810,13 @@ filtered_piutang AS (
         -- FILTER PRINCIPAL
         AND (
             :principal_all = 1
-            OR p.principle IN (:principal)
+            OR EXISTS (
+                        SELECT 1
+                        FROM d_penjualan dpp 
+                        WHERE dpp.billing_no = p.no_billing 
+                        AND dpp.principle IN (:principal)
+                    )
+            -- p.principle IN (:principal)
         )
 
         -- FILTER CHANNEL
@@ -26042,7 +25912,6 @@ piutang_outstanding AS (
         p.no_billing,
         p.customer,
         p.cabang,
-        p.principle,
         p.channel_id,
 
         p.posting_date,

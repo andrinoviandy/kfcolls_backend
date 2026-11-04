@@ -132,15 +132,15 @@ app.use((err, req, res, next) => {
 });
 
 // Cron job untuk pengiriman email
-// cron.schedule('0 3 * * *', async () => {
-//   try {
-//     const result = await getDataSales();
-//   } catch (error) {
-//     console.log(error);
-//   }
-// }, {
-//   timezone: 'Asia/Jakarta'
-// });
+cron.schedule('55 21 * * *', async () => {
+  try {
+    const result = await getDataSales();
+  } catch (error) {
+    console.log(error);
+  }
+}, {
+  timezone: 'Asia/Jakarta'
+});
 
 // cron.schedule('0 0 * * *', async () => {
 //   console.log('.................Check Pelunasan Invoice...............');

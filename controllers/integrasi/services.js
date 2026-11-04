@@ -135,7 +135,8 @@ exports.getDataSales = async (payload) => {
                 !Number.isInteger(totalPages) ||
                 totalPages < 1
             ) {
-                throw new Error("Total pages tidak valid");
+                console.log('Data Kosong')
+                // throw new Error("Total pages tidak valid");
             }
 
             if (Number(responseData?.page) !== page) {
@@ -252,7 +253,7 @@ exports.getDataSales = async (payload) => {
                     code_pelayanan,
                     principle,
                     name_principle,
-                    desc_cust_grp4,
+                    desc_cust_grp3,
                     salesman,
                     name_salesman,
                     po_number,
@@ -267,10 +268,10 @@ exports.getDataSales = async (payload) => {
                     d.posting_status,
                     d.customer_bill_no,
                     f.name,
-                    f.address,
+                    f.street,
                     d.material,
-                    g.material_group_1,
-                    g.mg1_description,
+                    '-' material_group_1,
+                    '-' mg1_description,
                     g.material_description,
                     d.qty_penjualan,
                     d.sales_unit_penjualan,
@@ -282,9 +283,9 @@ exports.getDataSales = async (payload) => {
                     d.bill_qty_sku,
                     d.base_uom_sku,
                     d.pelayanan_code,
-                    g.principle,
+                    g.kode_principle,
                     g.nama_principle,
-                    '-' AS desc_cust_grp4,
+                    f.customer_groups_3_description AS desc_cust_grp3,
                     d.salesman,
                     NULL AS name_salesman,
                     d.po_no,
@@ -337,7 +338,6 @@ exports.getDataSales = async (payload) => {
                         sales,
                         nama_sales,
                         cabang,
-                        principle,
                         posting_date,
                         jatuh_tempo,
                         dpp,
@@ -347,8 +347,8 @@ exports.getDataSales = async (payload) => {
                         status_piutang,
                         created_by,
                         created_at,
-                        desc_cust_grp3,
-                        channel_id
+                        desc_cust_grp3
+                        -- channel_id
                     )
                     SELECT
                         x.billing_no AS no_faktur,
@@ -358,7 +358,6 @@ exports.getDataSales = async (payload) => {
                         x.salesman AS sales,
                         x.name_salesman AS nama_sales,
                         x.sales_office AS cabang,
-                        x.principle,
                         x.posting_date,
                         x.jatuh_tempo,
                         x.dpp,
@@ -368,8 +367,8 @@ exports.getDataSales = async (payload) => {
                         x.status_piutang,
                         'SYSTEM' AS created_by,
                         CURRENT_TIMESTAMP AS created_at,
-                        x.desc_cust_grp4 AS desc_cust_grp3,
-                        x.channel_id
+                        x.desc_cust_grp3 AS desc_cust_grp3
+                        -- x.channel_id
 
                     FROM (
                         SELECT
@@ -460,7 +459,7 @@ exports.getDataSales = async (payload) => {
                                 ELSE 'OUTSTANDING'
                             END AS status_piutang,
 
-                            dp.desc_cust_grp4,
+                            dp.desc_cust_grp3,
                             m1.kd_ref AS channel_id
 
                         FROM public.d_penjualan dp
@@ -471,7 +470,7 @@ exports.getDataSales = async (payload) => {
                                 ' ',
                                 ''
                             ) = REPLACE(
-                                LOWER(dp.desc_cust_grp4),
+                                LOWER(dp.desc_cust_grp3),
                                 ' ',
                                 ''
                             )
@@ -486,7 +485,7 @@ exports.getDataSales = async (payload) => {
                                 ' ',
                                 ''
                             )
-                            AND m1.jns_ref = 'channel_id'
+                            AND m1.jns_ref = 'lini_id'
 
                         LEFT JOIN (
                             SELECT
@@ -526,7 +525,7 @@ exports.getDataSales = async (payload) => {
                             dp.name_salesman,
                             dp.sales_office,
                             dp.principle,
-                            dp.desc_cust_grp4,
+                            dp.desc_cust_grp3,
                             m1.kd_ref,
                             mt.top,
                             pb.dibayar
