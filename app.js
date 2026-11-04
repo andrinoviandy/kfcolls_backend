@@ -14,7 +14,7 @@ const { createServer } = require("http");
 const indexRouter = require('./routes/index');
 const usersRouter = require('./routes/users');
 const logging = require('./middlewares/logging');
-const { checkRemind, updateRemind, getListNotificationByNIP, checkPelunasan, checkPelunasanFromSAP, clearSession } = require("./controllers/main/main");
+const { getDataSales } = require("./controllers/integrasi/main");
 const { sendEmail } = require("./controllers/main/sendMail");
 
 const cron = require('node-cron');
@@ -132,15 +132,15 @@ app.use((err, req, res, next) => {
 });
 
 // Cron job untuk pengiriman email
-cron.schedule('30 17 * * *', async () => {
-  try {
-    const result = await clearSession();
-  } catch (error) {
-    console.log(error);
-  }
-}, {
-  timezone: 'Asia/Jakarta'
-});
+// cron.schedule('0 3 * * *', async () => {
+//   try {
+//     const result = await getDataSales();
+//   } catch (error) {
+//     console.log(error);
+//   }
+// }, {
+//   timezone: 'Asia/Jakarta'
+// });
 
 // cron.schedule('0 0 * * *', async () => {
 //   console.log('.................Check Pelunasan Invoice...............');

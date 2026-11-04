@@ -443,7 +443,8 @@ exports.getDataDoar = async (req, res) => {
 exports.getDataKreasiFaktur = async (req, res) => {
     try {
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         }
 
         console.log(
@@ -479,7 +480,8 @@ exports.getDataKreasiFaktur = async (req, res) => {
 exports.getDataReportSales = async (req, res) => {
     try {
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         }
 
         console.log(
@@ -754,7 +756,8 @@ exports.getDataFakturPetugas = async (req, res) => {
     try {
 
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         };
 
         console.log(
@@ -876,7 +879,8 @@ exports.getDataTukarFaktur = async (req, res) => {
     try {
 
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         };
 
         console.log(
@@ -914,7 +918,8 @@ exports.getDataVerifikasiTukarFaktur = async (req, res) => {
     try {
 
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         };
 
         console.log(
@@ -952,7 +957,8 @@ exports.getDataVerifikasiPembayaran = async (req, res) => {
     try {
 
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         };
 
         console.log(
@@ -990,7 +996,8 @@ exports.getDataBayarFaktur = async (req, res) => {
     try {
 
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         };
 
         console.log(
@@ -1930,7 +1937,8 @@ exports.getDataPenerimaanLain = async (req, res) => {
 exports.getDataLaporan = async (req, res) => {
     try {
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         }
 
         console.log(

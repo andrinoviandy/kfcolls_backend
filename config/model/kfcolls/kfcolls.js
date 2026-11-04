@@ -6215,3 +6215,162 @@ exports.M_TARGET = db.define(
         timestamps: false,
     }
 );
+
+exports.D_DWH = db.define(
+    "d_dwh",
+    {
+        dwh_id: {
+            type: DataTypes.BIGINT,
+            field: "dwh_id",
+            primaryKey: true,
+            autoIncrement: true,
+        },
+        sales_id: {
+            type: DataTypes.STRING(50),
+            field: "sales_id",
+        },
+        entitas_code: {
+            type: DataTypes.STRING(20),
+            field: "entitas_code",
+        },
+        plant: {
+            type: DataTypes.STRING(20),
+            field: "plant",
+        },
+        posting_date: {
+            type: DataTypes.DATE,
+            field: "posting_date",
+        },
+        billing_no: {
+            type: DataTypes.STRING(50),
+            field: "billing_no",
+        },
+        so_type: {
+            type: DataTypes.STRING(20),
+            field: "so_type",
+        },
+        customer_no: {
+            type: DataTypes.STRING(30),
+            field: "customer_no",
+        },
+        customer_bill_no: {
+            type: DataTypes.STRING(30),
+            field: "customer_bill_no",
+        },
+        material: {
+            type: DataTypes.STRING(30),
+            field: "material",
+        },
+        bill_qty_sku: {
+            type: DataTypes.DECIMAL(18, 3),
+            field: "bill_qty_sku",
+        },
+        base_uom_sku: {
+            type: DataTypes.STRING(20),
+            field: "base_uom_sku",
+        },
+        qty_penjualan: {
+            type: DataTypes.DECIMAL(18, 3),
+            field: "qty_penjualan",
+        },
+        sales_unit_penjualan: {
+            type: DataTypes.STRING(20),
+            field: "sales_unit_penjualan",
+        },
+        unit_price_penjualan: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "unit_price_penjualan",
+        },
+        uom_price_penjualan: {
+            type: DataTypes.STRING(20),
+            field: "uom_price_penjualan",
+        },
+        total_discount: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "total_discount",
+        },
+        surchage: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "surchage",
+        },
+        total_penjualan: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "total_penjualan",
+        },
+        total_cogs: {
+            type: DataTypes.DECIMAL(18, 2),
+            field: "total_cogs",
+        },
+        currency: {
+            type: DataTypes.STRING(10),
+            field: "currency",
+        },
+        pelayanan_code: {
+            type: DataTypes.STRING(20),
+            field: "pelayanan_code",
+        },
+        salesman: {
+            type: DataTypes.STRING(30),
+            field: "salesman",
+        },
+        order_reason: {
+            type: DataTypes.TEXT,
+            field: "order_reason",
+        },
+        so_no: {
+            type: DataTypes.STRING(50),
+            field: "so_no",
+        },
+        po_no: {
+            type: DataTypes.STRING(100),
+            field: "po_no",
+        },
+        do_no: {
+            type: DataTypes.STRING(50),
+            field: "do_no",
+        },
+        batch: {
+            type: DataTypes.STRING(50),
+            field: "batch",
+        },
+        sled_date: {
+            type: DataTypes.DATE,
+            field: "sled_date",
+        },
+        posting_status: {
+            type: DataTypes.STRING(10),
+            field: "posting_status",
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: "created_at",
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: "updated_at",
+        },
+        upload_date: {
+            type: DataTypes.DATE,
+            field: "upload_date",
+        },
+        upload_id: {
+            type: DataTypes.STRING(50),
+            field: "upload_id",
+        },
+        uploaded_at: {
+            type: DataTypes.DATE,
+            field: "uploaded_at",
+            defaultValue: DataTypes.NOW,
+        },
+        is_get: {
+            type: DataTypes.STRING(1),
+            field: "is_get",
+            defaultValue: 'Y',
+        },
+    },
+    {
+        schema: "public",
+        freezeTableName: true,
+        timestamps: false,
+    }
+);

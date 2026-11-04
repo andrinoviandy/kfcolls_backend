@@ -22548,12 +22548,15 @@ query.getDataReportSales = `
     WITH payment_rows AS (
         SELECT
             dp.no_billing,
+            fp.nip,
             dp.nominal_bayar AS nominal
-        FROM public.d_pembayaran dp
+        FROM public.d_pembayaran dp left join d_piutang p 
+            on p.no_billing = dp.no_billing left join 
+            d_faktur_petugas fp on fp.piutang_id = p.piutang_id 
         JOIN LATERAL (
             SELECT ds.kd_status
             FROM public.d_status ds
-            WHERE ds.foreign_id = dp.pembayaran_id
+            WHERE ds.foreign_id = fp.faktur_petugas_id
               AND ds.kegiatan = 'PENAGIHAN'
             ORDER BY ds.created_at DESC NULLS LAST
             LIMIT 1
@@ -22564,6 +22567,7 @@ query.getDataReportSales = `
 
         SELECT
             dc.no_billing,
+            NULL AS nip,
             dc.nominal_billing AS nominal
         FROM public.d_cod dc
     ),
@@ -22571,6 +22575,7 @@ query.getDataReportSales = `
     payment_totals AS (
         SELECT
             no_billing,
+            nip,
             COALESCE(SUM(nominal), 0) AS total_pencairan
         FROM payment_rows
         GROUP BY no_billing

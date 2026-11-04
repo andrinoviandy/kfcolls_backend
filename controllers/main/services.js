@@ -2627,6 +2627,10 @@ exports.getDataKreasiFaktur = async (params) => {
         const bind = { limit, offset };
         const summaryBind = {};
 
+        if (['02', '03'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        }
+
         // FILTER KEYWORD
         if (keyword) {
             const keywordCondition = `
@@ -3852,6 +3856,10 @@ exports.getDataFakturPetugas = async (params) => {
             offset
         };
 
+        if (['02', '03'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        }
+
         // FILTER KEYWORD
         if (keyword) {
             condition += `
@@ -4142,6 +4150,9 @@ exports.getDataTukarFaktur = async (params) => {
             offset
         };
 
+        if (['05', '04'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' AND mu.nip = '${params?.dataUser?.nip}' `;
+        }
         /*
          * SEARCH
          */
@@ -4467,6 +4478,10 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
             offset
         };
 
+        if (['02', '03'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        }
+
         /*
          * HANYA DATA YANG SUDAH MELAKUKAN TUKAR FAKTUR
          */
@@ -4734,6 +4749,10 @@ exports.getDataVerifikasiPembayaran = async (params) => {
             limit,
             offset
         };
+
+        if (['02', '03'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        }
         /*
          * SEARCH
          */
@@ -7256,6 +7275,12 @@ exports.getDataBayarFaktur = async (params) => {
          */
         let condition = '';
 
+        if (['05', '04'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' AND mu.nip = '${params?.dataUser?.nip}' `;
+        }
+        if (['02', '03'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        }
         /*
          * =====================================================
          * BIND
@@ -9247,6 +9272,10 @@ exports.getDataReportSales = async (params) => {
         // =========================================
         let condition = "";
 
+        if (['04', '05'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' AND pay.nip = '${params?.dataUser?.nip}' `;
+        }
+
         const filterBind = {};
 
         if (keyword) {
@@ -10037,6 +10066,10 @@ exports.getDataLaporan = async (params) => {
 
         let condition = '';
         const filterBind = {};
+
+        if (['02', '03'].includes(params?.dataUser?.role_id)) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        }
 
         // FILTER KEYWORD
         if (keyword) {
