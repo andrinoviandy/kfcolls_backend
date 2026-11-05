@@ -2358,49 +2358,69 @@ exports.getDataMasterTarget = async (params = {}) => {
     }
 };
 
+
 exports.getDataPiutang = async (params) => {
     try {
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value) ? value : [value];
+
             return values
                 .filter((item) => item !== undefined && item !== null)
                 .map((item) => String(item).trim())
                 .filter(Boolean);
         };
-        const page = Number(params?.page) || 1;
-        const limit = Number(params?.limit) || 10;
-        const offset = (page - 1) * limit;
+
+        const page = Math.max(
+            1,
+            Math.trunc(Number(params?.page) || 1)
+        );
+
+        const limit = Math.max(
+            1,
+            Math.trunc(Number(params?.limit) || 10)
+        );
+
         const keyword = String(params?.keyword || '').trim();
+
         // SALES OFFICE
         const salesOffices = normalizeFilterValues(
             params?.sales_office ?? params?.['sales_office[]']
         );
+
         // CUSTOMER
-        // Mendukung customer dan customer[]
         const customers = normalizeFilterValues(
             params?.customer ?? params?.['customer[]']
         );
+
         // STATUS
         const status = String(params?.status || 'ALL').trim();
+
         // POSTING STATUS
-        const postingStatus = String(params?.posting_status || 'ALL').trim();
+        const postingStatus = String(
+            params?.posting_status || 'ALL'
+        ).trim();
+
         // CUSTOMER GROUP
         const customerGroups = normalizeFilterValues(
             params?.customer_group ?? params?.['customer_group[]']
         );
+
         // PRINCIPLE
         const principles = normalizeFilterValues(
             params?.principle ?? params?.['principle[]']
         );
+
         // START DATE
         const startDate = String(params?.start_date || '').trim();
+
         // END DATE
         const endDate = String(params?.end_date || '').trim();
+
         let condition = '';
-        const bind = {
-            limit,
-            offset
-        };
+
+        // BIND FILTER
+        const bind = {};
+
         // KEYWORD
         if (keyword) {
             condition += `
@@ -2423,142 +2443,207 @@ exports.getDataPiutang = async (params) => {
                     OR p.created_at::text ILIKE :keyword
                     OR p.updated_by ILIKE :keyword
                     OR p.updated_at::text ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_customer mc_keyword
                         WHERE mc_keyword.kode_customer = p.customer
-                        AND mc_keyword.name ILIKE :keyword
+                          AND mc_keyword.name ILIKE :keyword
                     )
+
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_referensi mr_keyword
                         WHERE mr_keyword.kd_ref = p.cabang
-                        AND mr_keyword.jns_ref = 'cabang_id'
-                        AND mr_keyword.ur_ref ILIKE :keyword
+                          AND mr_keyword.jns_ref = 'cabang_id'
+                          AND mr_keyword.ur_ref ILIKE :keyword
                     )
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+                        FROM public.m_principle mp_keyword
+                        LEFT JOIN public.d_penjualan dd
+                            ON dd.principle = mp_keyword.principle
+                        JOIN public.d_piutang dpp
+                            ON dpp.no_billing = dd.billing_no
                         WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                          AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
+
             bind.keyword = `%${keyword}%`;
         }
+
         // FILTER SALES OFFICE
         if (
             salesOffices.length &&
-            !salesOffices.some((item) => item.toUpperCase() === 'ALL')
+            !salesOffices.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
         ) {
             condition += `
                 AND p.cabang IN (:sales_offices)
             `;
+
             bind.sales_offices = salesOffices;
         }
+
         // FILTER CUSTOMER
-        // Filter menggunakan kolom customer dari d_piutang.
-        // Alias p harus sesuai dengan alias pada query.getDataPiutang,
-        // query.countDataPiutang, dan query.summaryDataPiutang.
         if (
             customers.length &&
-            !customers.some((item) => item.toUpperCase() === 'ALL')
+            !customers.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
         ) {
             condition += `
                 AND p.customer IN (:customers)
             `;
+
             bind.customers = customers;
         }
+
         // FILTER STATUS PIUTANG
         if (status && status.toUpperCase() !== 'ALL') {
             condition += `
                 AND UPPER(p.status_piutang) = UPPER(:status)
             `;
+
             bind.status = status;
         }
+
         // FILTER POSTING STATUS
-        if (postingStatus && postingStatus.toUpperCase() !== 'ALL') {
+        if (
+            postingStatus &&
+            postingStatus.toUpperCase() !== 'ALL'
+        ) {
             condition += `
                 AND p.posting_status = :posting_status
             `;
+
             bind.posting_status = postingStatus;
         }
+
         // FILTER CUSTOMER GROUP
         if (
             customerGroups.length &&
-            !customerGroups.some((item) => item.toUpperCase() === 'ALL')
+            !customerGroups.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
         ) {
             condition += `
                 AND EXISTS (
-                        SELECT 1
-                        FROM m_top mt left join m_referensi mr on 
-                        mr.ur_ref = mt.lini and mr.jns_ref = 'channel_id'
-                        where mt.desc_cust_grp3 = p.desc_cust_grp3 and 
-                        mr.kd_ref IN (:customer_groups)
-                    )
+                    SELECT 1
+                    FROM public.m_top mt
+                    LEFT JOIN public.m_referensi mr
+                        ON mr.ur_ref = mt.lini
+                       AND mr.jns_ref = 'channel_id'
+                    WHERE mt.desc_cust_grp3 = p.desc_cust_grp3
+                      AND mr.kd_ref IN (:customer_groups)
+                )
             `;
+
             bind.customer_groups = customerGroups;
         }
+
         // FILTER PRINCIPLE
         if (
             principles.length &&
-            !principles.some((item) => item.toUpperCase() === 'ALL')
+            !principles.some(
+                (item) => item.toUpperCase() === 'ALL'
+            )
         ) {
             condition += `
                 AND EXISTS (
-                        SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.principle IN (:principles)
-                    )
+                    SELECT 1
+                    FROM public.m_principle mp_keyword
+                    LEFT JOIN public.d_penjualan dd
+                        ON dd.principle = mp_keyword.principle
+                    JOIN public.d_piutang dpp
+                        ON dpp.no_billing = dd.billing_no
+                    WHERE dpp.piutang_id = p.piutang_id
+                      AND mp_keyword.principle IN (:principles)
+                )
             `;
+
             bind.principles = principles;
         }
+
         // FILTER START DATE
         if (startDate) {
             condition += `
                 AND p.posting_date >= :start_date
             `;
+
             bind.start_date = startDate;
         }
+
         // FILTER END DATE
         if (endDate) {
             condition += `
                 AND p.posting_date <= :end_date
             `;
+
             bind.end_date = endDate;
         }
+
+        // =====================================================
         // 1. GET LIST DATA
+        // =====================================================
+
         const LIST_QUERY = query.getDataPiutang.replace(
             /:condition/g,
             condition
         );
+
+        // Pagination hanya untuk query list
+        const listBind = {
+            ...bind,
+            page,
+            limit
+        };
+
         const listData = await db.query(LIST_QUERY, {
-            replacements: bind,
+            replacements: listBind,
             type: db.QueryTypes.SELECT
         });
-        console.log(listData.length, 'wkwkwk');
 
+        // =====================================================
         // 2. GET TOTAL DATA
+        // =====================================================
+
         const COUNT_QUERY = query.countDataPiutang.replace(
             /:condition/g,
             condition
         );
+
         const countData = await db.query(COUNT_QUERY, {
             replacements: bind,
             type: db.QueryTypes.SELECT
         });
-        const totalData = Number(countData?.[0]?.total || 0);
-        const totalHalaman = Math.ceil(totalData / limit);
+
+        const totalData = Number(
+            countData?.[0]?.total || 0
+        );
+
+        const totalHalaman = Math.ceil(
+            totalData / limit
+        );
+
+        // =====================================================
         // 3. GET SUMMARY
+        // =====================================================
+
         const SUMMARY_QUERY = query.summaryDataPiutang.replace(
             /:condition/g,
             condition
         );
+
         const summaryResult = await db.query(SUMMARY_QUERY, {
             replacements: bind,
             type: db.QueryTypes.SELECT
         });
+
         const summary = summaryResult?.[0] || {
             total_piutang: 0,
             sudah_dibayar: 0,
@@ -2572,7 +2657,11 @@ exports.getDataPiutang = async (params) => {
             sudah_jatuh_tempo_count: 0,
             total_data: 0
         };
+
+        // =====================================================
         // RETURN
+        // =====================================================
+
         return {
             total_data: totalData,
             total_halaman: totalHalaman,
@@ -2581,11 +2670,17 @@ exports.getDataPiutang = async (params) => {
             list_data: listData,
             summary
         };
+
     } catch (error) {
-        console.error('ERROR SERVICE GET DATA PIUTANG:', error);
+        console.error(
+            'ERROR SERVICE GET DATA PIUTANG:',
+            error
+        );
+
         throw error;
     }
 };
+
 
 exports.getDataKreasiFaktur = async (params) => {
     try {
