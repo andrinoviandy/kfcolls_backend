@@ -1656,7 +1656,6 @@ exports.getDataPenjualan = async (params) => {
     try {
         // =====================================================
         // HELPER NORMALIZE FILTER
-        // Mendukung nilai tunggal maupun array
         // =====================================================
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value)
@@ -1673,17 +1672,26 @@ exports.getDataPenjualan = async (params) => {
                 .filter(Boolean);
         };
 
+        const isAllSelected = (values) => {
+            return values.some(
+                (item) => item.toUpperCase() === 'ALL'
+            );
+        };
+
         // =====================================================
-        // PARAMETER PAGINATION
+        // PAGINATION
         // =====================================================
         const page = Math.max(
-            Number(params?.page) || 1,
-            1
+            1,
+            Math.trunc(Number(params?.page) || 1)
         );
 
-        const limit = Math.max(
-            Number(params?.limit) || 10,
-            1
+        const limit = Math.min(
+            1000,
+            Math.max(
+                1,
+                Math.trunc(Number(params?.limit) || 10)
+            )
         );
 
         const offset = (page - 1) * limit;
@@ -1693,7 +1701,7 @@ exports.getDataPenjualan = async (params) => {
         ).trim();
 
         // =====================================================
-        // SALES OFFICE
+        // FILTER SALES OFFICE
         // =====================================================
         const salesOffices = normalizeFilterValues(
             params?.sales_office ??
@@ -1701,9 +1709,7 @@ exports.getDataPenjualan = async (params) => {
         );
 
         // =====================================================
-        // CUSTOMER
-        // Nilai dari frontend adalah kode_customer
-        // Dicocokkan dengan dp.bill_to_party
+        // FILTER CUSTOMER
         // =====================================================
         const customers = normalizeFilterValues(
             params?.customer ??
@@ -1711,7 +1717,7 @@ exports.getDataPenjualan = async (params) => {
         );
 
         // =====================================================
-        // POSTING STATUS
+        // FILTER POSTING STATUS
         // =====================================================
         const postingStatuses = normalizeFilterValues(
             params?.posting_status ??
@@ -1719,7 +1725,7 @@ exports.getDataPenjualan = async (params) => {
         );
 
         // =====================================================
-        // CUSTOMER GROUP
+        // FILTER CUSTOMER GROUP
         // =====================================================
         const customerGroups = normalizeFilterValues(
             params?.customer_group ??
@@ -1727,7 +1733,7 @@ exports.getDataPenjualan = async (params) => {
         );
 
         // =====================================================
-        // PRINCIPLE
+        // FILTER PRINCIPLE
         // =====================================================
         const principles = normalizeFilterValues(
             params?.principle ??
@@ -1735,7 +1741,7 @@ exports.getDataPenjualan = async (params) => {
         );
 
         // =====================================================
-        // DATE FILTER
+        // FILTER DATE
         // =====================================================
         const startDate = String(
             params?.start_date || ''
@@ -1746,17 +1752,14 @@ exports.getDataPenjualan = async (params) => {
         ).trim();
 
         // =====================================================
-        // CONDITION DAN REPLACEMENTS
+        // CONDITION
         // =====================================================
         let condition = '';
 
-        const replacements = {
-            limit,
-            offset
-        };
+        const filterReplacements = {};
 
         // =====================================================
-        // KEYWORD SEARCH
+        // KEYWORD
         // =====================================================
         if (keyword) {
             condition += `
@@ -1777,147 +1780,151 @@ exports.getDataPenjualan = async (params) => {
                 )
             `;
 
-            replacements.keyword = `%${keyword}%`;
+            filterReplacements.keyword = `%${keyword}%`;
         }
 
         // =====================================================
-        // FILTER SALES OFFICE
-        // Mempertahankan kolom filter sebelumnya
+        // SALES OFFICE
         // =====================================================
         if (
             salesOffices.length &&
-            !salesOffices.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(salesOffices)
         ) {
             condition += `
                 AND dp.sales_office IN (:sales_offices)
             `;
 
-            replacements.sales_offices = salesOffices;
+            filterReplacements.sales_offices = salesOffices;
         }
 
         // =====================================================
-        // FILTER CUSTOMER
-        // kode_customer -> dp.bill_to_party
+        // CUSTOMER
         // =====================================================
         if (
             customers.length &&
-            !customers.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(customers)
         ) {
             condition += `
                 AND dp.bill_to_party IN (:customers)
             `;
 
-            replacements.customers = customers;
+            filterReplacements.customers = customers;
         }
 
         // =====================================================
-        // FILTER POSTING STATUS
+        // POSTING STATUS
         // =====================================================
         if (
             postingStatuses.length &&
-            !postingStatuses.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(postingStatuses)
         ) {
             condition += `
                 AND dp.posting_status IN (:posting_statuses)
             `;
 
-            replacements.posting_statuses = postingStatuses;
+            filterReplacements.posting_statuses = postingStatuses;
         }
 
         // =====================================================
-        // FILTER CUSTOMER GROUP
+        // CUSTOMER GROUP
         // =====================================================
         if (
             customerGroups.length &&
-            !customerGroups.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(customerGroups)
         ) {
             condition += `
                 AND dp.desc_cust_grp3 IN (:customer_groups)
             `;
 
-            replacements.customer_groups = customerGroups;
+            filterReplacements.customer_groups = customerGroups;
         }
 
         // =====================================================
-        // FILTER PRINCIPLE
+        // PRINCIPLE
         // =====================================================
         if (
             principles.length &&
-            !principles.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(principles)
         ) {
             condition += `
                 AND dp.principle IN (:principles)
             `;
 
-            replacements.principles = principles;
+            filterReplacements.principles = principles;
         }
 
         // =====================================================
-        // FILTER START DATE
+        // START DATE
         // =====================================================
         if (startDate) {
             condition += `
-                AND dp.posting_date >= :start_date
+                AND dp.posting_date >= CAST(:start_date AS date)
             `;
 
-            replacements.start_date = startDate;
+            filterReplacements.start_date = startDate;
         }
 
         // =====================================================
-        // FILTER END DATE
+        // END DATE
+        // Mencakup seluruh tanggal akhir
         // =====================================================
         if (endDate) {
             condition += `
-                AND dp.posting_date <= :end_date
+                AND dp.posting_date < (
+                    CAST(:end_date AS date) + INTERVAL '1 day'
+                )
             `;
 
-            replacements.end_date = endDate;
+            filterReplacements.end_date = endDate;
         }
 
         // =====================================================
-        // 1. GET LIST DATA
+        // QUERY LIST
         // =====================================================
-        const listQuery = query.getDataPenjualan.replace(
-            ':condition',
+        const LIST_QUERY = query.getDataPenjualan.replace(
+            /:condition/g,
             condition
         );
 
-        const listData = await db.query(
-            listQuery,
-            {
-                replacements,
-                type: db.QueryTypes.SELECT
-            }
-        );
-
         // =====================================================
-        // 2. GET TOTAL DATA
+        // QUERY SUMMARY + COUNT
         // =====================================================
-        const countQuery = query.countDataPenjualan.replace(
-            ':condition',
+        const SUMMARY_QUERY = query.summaryDataPenjualan.replace(
+            /:condition/g,
             condition
         );
 
-        const countData = await db.query(
-            countQuery,
-            {
-                replacements,
+        // =====================================================
+        // REPLACEMENTS LIST
+        // =====================================================
+        const listReplacements = {
+            ...filterReplacements,
+            limit,
+            offset
+        };
+
+        // =====================================================
+        // EKSEKUSI LIST DAN SUMMARY SECARA PARALEL
+        // =====================================================
+        const [listData, summaryResult] = await Promise.all([
+            db.query(LIST_QUERY, {
+                replacements: listReplacements,
                 type: db.QueryTypes.SELECT
-            }
-        );
+            }),
+
+            db.query(SUMMARY_QUERY, {
+                replacements: filterReplacements,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
+
+        // =====================================================
+        // SUMMARY
+        // =====================================================
+        const summary = summaryResult?.[0] || {};
 
         const totalData = Number(
-            countData?.[0]?.total || 0
+            summary.total_data || 0
         );
 
         const totalHalaman = Math.ceil(
@@ -1925,36 +1932,7 @@ exports.getDataPenjualan = async (params) => {
         );
 
         // =====================================================
-        // 3. GET SUMMARY DATA
-        // =====================================================
-        const summaryQuery =
-            query.summaryDataPenjualan.replace(
-                ':condition',
-                condition
-            );
-
-        const summaryResult = await db.query(
-            summaryQuery,
-            {
-                replacements,
-                type: db.QueryTypes.SELECT
-            }
-        );
-
-        const summary = summaryResult?.[0] || {
-            total_transaksi: 0,
-            total_billing: 0,
-            total_customer: 0,
-            total_quantity: 0,
-            total_penjualan: 0,
-            total_tax: 0,
-            total_cogs: 0,
-            total_discount: 0,
-            total_margin: 0
-        };
-
-        // =====================================================
-        // RETURN
+        // RESPONSE
         // =====================================================
         return {
             total_data: totalData,
@@ -1962,7 +1940,44 @@ exports.getDataPenjualan = async (params) => {
             limit,
             page,
             list_data: listData,
-            summary
+
+            summary: {
+                total_transaksi: Number(
+                    summary.total_transaksi || 0
+                ),
+
+                total_billing: Number(
+                    summary.total_billing || 0
+                ),
+
+                total_customer: Number(
+                    summary.total_customer || 0
+                ),
+
+                total_quantity: Number(
+                    summary.total_quantity || 0
+                ),
+
+                total_penjualan: Number(
+                    summary.total_penjualan || 0
+                ),
+
+                total_tax: Number(
+                    summary.total_tax || 0
+                ),
+
+                total_cogs: Number(
+                    summary.total_cogs || 0
+                ),
+
+                total_discount: Number(
+                    summary.total_discount || 0
+                ),
+
+                total_margin: Number(
+                    summary.total_margin || 0
+                )
+            }
         };
 
     } catch (error) {
@@ -2682,7 +2697,8 @@ exports.getDataPiutang = async (params) => {
 };
 
 
-exports.getDataKreasiFaktur = async (params) => {
+
+exports.getDataKreasiFaktur = async (params = {}) => {
     try {
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value) ? value : [value];
@@ -2693,47 +2709,74 @@ exports.getDataKreasiFaktur = async (params) => {
                 .filter(Boolean);
         };
 
-        const page = Math.max(Number(params?.page) || 1, 1);
-        const limit = Math.max(Number(params?.limit) || 10, 1);
-        const offset = (page - 1) * limit;
-        const keyword = String(params?.keyword || '').trim();
+        // PAGINATION
+        const page = Math.max(
+            1,
+            Math.trunc(Number(params.page) || 1)
+        );
 
+        const limit = Math.min(
+            1000,
+            Math.max(1, Math.trunc(Number(params.limit) || 10))
+        );
+
+        const offset = (page - 1) * limit;
+        const keyword = String(params.keyword || '').trim();
+
+        // FILTER
         const salesOffices = normalizeFilterValues(
-            params?.sales_office ?? params?.['sales_office[]']
+            params.sales_office ?? params['sales_office[]']
         );
 
         const customers = normalizeFilterValues(
-            params?.customer ?? params?.['customer[]']
+            params.customer ?? params['customer[]']
         );
 
         const customerGroups = normalizeFilterValues(
-            params?.customer_group ?? params?.['customer_group[]']
+            params.customer_group ?? params['customer_group[]']
         );
 
         const principles = normalizeFilterValues(
-            params?.principle ?? params?.['principle[]']
+            params.principle ?? params['principle[]']
         );
 
-        const statusPiutang = String(params?.status || 'ALL').trim();
-        const postingStatus = String(
-            params?.posting_status || 'ALL'
+        const statusPiutang = String(
+            params.status || 'ALL'
         ).trim();
 
         const statusTerimaFaktur = String(
-            params?.status_terima_faktur || 'ALL'
+            params.status_terima_faktur || 'ALL'
         ).trim().toUpperCase();
 
-        const startDate = String(params?.start_date || '').trim();
-        const endDate = String(params?.end_date || '').trim();
+        const startDate = String(params.start_date || '').trim();
+        const endDate = String(params.end_date || '').trim();
 
         let condition = '';
         let summaryCondition = '';
 
-        const bind = { limit, offset };
+        const bind = {
+            limit,
+            offset
+        };
+
         const summaryBind = {};
 
-        if (['02', '03'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        // FILTER CABANG BERDASARKAN ROLE
+        if (
+            ['02', '03'].includes(
+                String(params?.dataUser?.role_id || '')
+            )
+        ) {
+            condition += `
+                AND p.cabang = :role_cabang
+            `;
+
+            summaryCondition += `
+                AND p.cabang = :role_cabang
+            `;
+
+            bind.role_cabang = params.dataUser.cabang_id;
+            summaryBind.role_cabang = params.dataUser.cabang_id;
         }
 
         // FILTER KEYWORD
@@ -2759,12 +2802,14 @@ exports.getDataKreasiFaktur = async (params) => {
                     OR p.created_at::text ILIKE :keyword
                     OR p.updated_by ILIKE :keyword
                     OR p.updated_at::text ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_customer mc_keyword
                         WHERE mc_keyword.kode_customer = p.customer
                           AND mc_keyword.name ILIKE :keyword
                     )
+
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_referensi mr_keyword
@@ -2772,11 +2817,14 @@ exports.getDataKreasiFaktur = async (params) => {
                           AND mr_keyword.jns_ref = 'cabang_id'
                           AND mr_keyword.ur_ref ILIKE :keyword
                     )
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        JOIN public.m_principle mp_keyword
+                          ON mp_keyword.principle = dd.principle
+                        WHERE dd.billing_no = p.no_billing
+                          AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -2791,10 +2839,15 @@ exports.getDataKreasiFaktur = async (params) => {
         // FILTER SALES OFFICE
         if (
             salesOffices.length &&
-            !salesOffices.some((value) => value.toUpperCase() === 'ALL')
+            !salesOffices.some((v) => v.toUpperCase() === 'ALL')
         ) {
-            condition += ` AND p.cabang IN (:sales_offices)`;
-            summaryCondition += ` AND p.cabang IN (:sales_offices)`;
+            condition += `
+                AND p.cabang IN (:sales_offices)
+            `;
+
+            summaryCondition += `
+                AND p.cabang IN (:sales_offices)
+            `;
 
             bind.sales_offices = salesOffices;
             summaryBind.sales_offices = salesOffices;
@@ -2803,10 +2856,15 @@ exports.getDataKreasiFaktur = async (params) => {
         // FILTER CUSTOMER
         if (
             customers.length &&
-            !customers.some((value) => value.toUpperCase() === 'ALL')
+            !customers.some((v) => v.toUpperCase() === 'ALL')
         ) {
-            condition += ` AND p.customer IN (:customers)`;
-            summaryCondition += ` AND p.customer IN (:customers)`;
+            condition += `
+                AND p.customer IN (:customers)
+            `;
+
+            summaryCondition += `
+                AND p.customer IN (:customers)
+            `;
 
             bind.customers = customers;
             summaryBind.customers = customers;
@@ -2829,39 +2887,50 @@ exports.getDataKreasiFaktur = async (params) => {
         // FILTER CUSTOMER GROUP
         if (
             customerGroups.length &&
-            !customerGroups.some((item) => item.toUpperCase() === 'ALL')
+            !customerGroups.some((v) => v.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND EXISTS (
-                        SELECT 1
-                        FROM m_top mt left join m_referensi mr on 
-                        mr.ur_ref = mt.lini and mr.jns_ref = 'channel_id'
-                        where mt.desc_cust_grp3 = p.desc_cust_grp3 and 
-                        mr.kd_ref IN (:customer_groups)
-                    )
+                    SELECT 1
+                    FROM public.m_top mt_filter
+                    JOIN public.m_referensi mr_filter
+                      ON mr_filter.ur_ref = mt_filter.lini
+                     AND mr_filter.jns_ref = 'channel_id'
+                    WHERE REPLACE(LOWER(mt_filter.desc_cust_grp3), ' ', '') =
+                          REPLACE(LOWER(p.desc_cust_grp3), ' ', '')
+                      AND mr_filter.kd_ref IN (:customer_groups)
+                )
             `;
+
             bind.customer_groups = customerGroups;
         }
+
         // FILTER PRINCIPLE
         if (
             principles.length &&
-            !principles.some((item) => item.toUpperCase() === 'ALL')
+            !principles.some((v) => v.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND EXISTS (
-                        SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.principle IN (:principles)
-                    )
+                    SELECT 1
+                    FROM public.d_penjualan dd_filter
+                    WHERE dd_filter.billing_no = p.no_billing
+                      AND dd_filter.principle IN (:principles)
+                )
             `;
+
             bind.principles = principles;
         }
 
         // FILTER TANGGAL AWAL
         if (startDate) {
-            condition += ` AND p.posting_date >= :start_date`;
-            summaryCondition += ` AND p.posting_date >= :start_date`;
+            condition += `
+                AND p.posting_date >= :start_date
+            `;
+
+            summaryCondition += `
+                AND p.posting_date >= :start_date
+            `;
 
             bind.start_date = startDate;
             summaryBind.start_date = startDate;
@@ -2870,11 +2939,15 @@ exports.getDataKreasiFaktur = async (params) => {
         // FILTER TANGGAL AKHIR
         if (endDate) {
             condition += `
-                AND p.posting_date < (:end_date::date + INTERVAL '1 day')
+                AND p.posting_date < (
+                    CAST(:end_date AS date) + INTERVAL '1 day'
+                )
             `;
 
             summaryCondition += `
-                AND p.posting_date < (:end_date::date + INTERVAL '1 day')
+                AND p.posting_date < (
+                    CAST(:end_date AS date) + INTERVAL '1 day'
+                )
             `;
 
             bind.end_date = endDate;
@@ -2884,15 +2957,15 @@ exports.getDataKreasiFaktur = async (params) => {
         // FILTER STATUS PENERIMAAN FAKTUR
         if (statusTerimaFaktur === 'BELUM_DITERIMA') {
             condition += `
-        AND p.diterima = '0'
-    `;
+                AND COALESCE(p.diterima::text, '0') = '0'
+            `;
         } else if (
             statusTerimaFaktur === 'DITERIMA' ||
             statusTerimaFaktur === 'SUDAH_DITERIMA'
         ) {
             condition += `
-        AND p.diterima = '1'
-    `;
+                AND COALESCE(p.diterima::text, '0') = '1'
+            `;
         } else if (
             statusTerimaFaktur !== 'ALL' &&
             statusTerimaFaktur !== ''
@@ -2902,44 +2975,45 @@ exports.getDataKreasiFaktur = async (params) => {
             );
         }
 
-        // 1. GET LIST DATA
+        // SIAPKAN QUERY
         const LIST_QUERY = query.getDataKreasiFaktur.replace(
             /:condition/g,
             condition
         );
 
-        const listData = await db.query(LIST_QUERY, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        });
-
-        // 2. GET TOTAL DATA
         const COUNT_QUERY = query.countDataKreasiFaktur.replace(
             /:condition/g,
             condition
         );
 
-        const countData = await db.query(COUNT_QUERY, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        });
-
-        const totalData = Number(countData?.[0]?.total || 0);
-        const totalHalaman = Math.ceil(totalData / limit);
-
-        // 3. GET SUMMARY
-        // Summary memakai filter lain, tetapi tidak dibatasi oleh
-        // statusTerimaFaktur agar kedua kartu tetap menampilkan jumlahnya.
         const SUMMARY_QUERY = query.summaryDataKreasiFaktur.replace(
             /:condition/g,
             summaryCondition
         );
 
-        const summaryResult = await db.query(SUMMARY_QUERY, {
-            replacements: summaryBind,
-            type: db.QueryTypes.SELECT
-        });
+        // JALANKAN QUERY SECARA PARALEL
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(LIST_QUERY, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }),
 
+            db.query(COUNT_QUERY, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(SUMMARY_QUERY, {
+                replacements: summaryBind,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
+
+        // COUNT
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
+
+        // SUMMARY
         const rawSummary = summaryResult?.[0] || {};
 
         const summary = {
@@ -2953,11 +3027,16 @@ exports.getDataKreasiFaktur = async (params) => {
             total_halaman: totalHalaman,
             limit,
             page,
-            list_data: listData,
+            list_data: listData || [],
             summary
         };
+
     } catch (error) {
-        console.error('ERROR SERVICE GET DATA KREASI FAKTUR:', error);
+        console.error(
+            'ERROR SERVICE GET DATA KREASI FAKTUR:',
+            error
+        );
+
         throw error;
     }
 };
@@ -3661,51 +3740,139 @@ exports.getListUserManagement = async ({
 
 };
 
-exports.getListDataCod = async ({ keyword = null, page = 1, limit = 10 } = {}) => {
-    let condition = '';
-    const bindList = {
-        page: Math.max(Number(page) || 1, 1),
-        limit: Math.max(Number(limit) || 10, 1),
-    };
+exports.getListDataCod = async ({
+    keyword = null,
+    page = 1,
+    limit = 10
+} = {}) => {
+    try {
+        // =====================================================
+        // PAGINATION
+        // =====================================================
+        const currentPage = Math.max(
+            1,
+            Math.trunc(Number(page) || 1)
+        );
 
-    if (keyword && keyword.trim() !== '') {
-        condition = ` AND (
-            cod_id::text ILIKE :keyword
-            OR no_billing ILIKE :keyword
-            OR tanggal_pelunasan::text ILIKE :keyword
-            OR nominal_billing::text ILIKE :keyword
-            OR created_by ILIKE :keyword
-            OR created_at::text ILIKE :keyword
-            OR updated_at::text ILIKE :keyword
-            OR updated_by ILIKE :keyword
-        )`;
-        bindList.keyword = `%${keyword.trim()}%`;
+        const currentLimit = Math.min(
+            1000,
+            Math.max(
+                1,
+                Math.trunc(Number(limit) || 10)
+            )
+        );
+
+        const offset = (currentPage - 1) * currentLimit;
+
+        // =====================================================
+        // KEYWORD
+        // =====================================================
+        const searchKeyword = String(
+            keyword || ''
+        ).trim();
+
+        let condition = '';
+
+        const filterReplacements = {};
+
+        if (searchKeyword) {
+            condition = `
+                AND (
+                    cod.cod_id::text ILIKE :keyword
+                    OR cod.no_billing ILIKE :keyword
+                    OR cod.tanggal_pelunasan::text ILIKE :keyword
+                    OR cod.nominal_billing::text ILIKE :keyword
+                    OR cod.created_by ILIKE :keyword
+                    OR cod.created_at::text ILIKE :keyword
+                    OR cod.updated_at::text ILIKE :keyword
+                    OR cod.updated_by ILIKE :keyword
+                )
+            `;
+
+            filterReplacements.keyword = `%${searchKeyword}%`;
+        }
+
+        // =====================================================
+        // QUERY LIST
+        // =====================================================
+        const LIST_QUERY = query.getListDataCod.replace(
+            /:condition/g,
+            condition
+        );
+
+        // =====================================================
+        // QUERY COUNT
+        // =====================================================
+        const COUNT_QUERY = query.countListDataCod.replace(
+            /:condition/g,
+            condition
+        );
+
+        // =====================================================
+        // BIND LIST
+        // =====================================================
+        const listBind = {
+            ...filterReplacements,
+            offset,
+            limit: currentLimit
+        };
+
+        // =====================================================
+        // BIND COUNT
+        // =====================================================
+        const countBind = {
+            ...filterReplacements
+        };
+
+        // =====================================================
+        // EKSEKUSI LIST DAN COUNT PARALEL
+        // =====================================================
+        const [listData, countData] = await Promise.all([
+            db.query(LIST_QUERY, {
+                replacements: listBind,
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(COUNT_QUERY, {
+                replacements: countBind,
+                type: db.QueryTypes.SELECT,
+                plain: true
+            })
+        ]);
+
+        // =====================================================
+        // TOTAL DATA
+        // =====================================================
+        const totalData = Number(
+            countData?.total_data || 0
+        );
+
+        const totalHalaman = Math.ceil(
+            totalData / currentLimit
+        );
+
+        // =====================================================
+        // RESPONSE
+        // =====================================================
+        return {
+            status: true,
+            data: {
+                total_data: totalData,
+                total_halaman: totalHalaman,
+                limit: currentLimit,
+                page: currentPage,
+                list_data: listData || []
+            }
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET LIST DATA COD:',
+            error
+        );
+
+        throw error;
     }
-
-    const listQuery = query.getListDataCod.replace(/:condition/g, condition);
-    const countQuery = query.countListDataCod.replace(/:condition/g, condition);
-
-    const listData = await db.query(listQuery, {
-        replacements: bindList,
-        type: db.QueryTypes.SELECT,
-        // logging: console.log, // Enable logging for debugging
-    });
-
-    const countData = await db.query(countQuery, {
-        replacements: bindList,
-        type: db.QueryTypes.SELECT,
-        plain: true,
-    });
-
-    return {
-        status: true,
-        data: {
-            total_data: Number(countData?.total_data || 0),
-            total_halaman: Number(countData?.total_halaman || 0),
-            limit: bindList.limit,
-            list_data: listData || [],
-        },
-    };
 };
 
 exports.insertDataCod = async (payload) => {
@@ -4008,7 +4175,8 @@ exports.updateFakturPetugas = async (payload, transaction) => {
 };
 
 
-exports.getDataFakturPetugas = async (params) => {
+
+exports.getDataFakturPetugas = async (params = {}) => {
     try {
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value) ? value : [value];
@@ -4019,24 +4187,39 @@ exports.getDataFakturPetugas = async (params) => {
                 .filter(Boolean);
         };
 
-        const page = Number(params?.page) || 1;
-        const limit = Number(params?.limit) || 10;
+        // PAGINATION
+        const page = Math.max(
+            1,
+            Math.trunc(Number(params.page) || 1)
+        );
+
+        const limit = Math.min(
+            1000,
+            Math.max(1, Math.trunc(Number(params.limit) || 10))
+        );
+
         const offset = (page - 1) * limit;
 
-        const keyword = String(params?.keyword || '').trim();
-        const kegiatan = String(params?.kegiatan || 'ALL').trim().toUpperCase();
+        // FILTER
+        const keyword = String(params.keyword || '').trim();
+        const kegiatan = String(
+            params.kegiatan || 'ALL'
+        ).trim().toUpperCase();
 
         const salesOffices = normalizeFilterValues(
-            params?.sales_office ?? params?.['sales_office[]']
+            params.sales_office ?? params['sales_office[]']
         );
 
         const customers = normalizeFilterValues(
-            params?.customer ?? params?.['customer[]']
+            params.customer ?? params['customer[]']
         );
 
-        const status = String(params?.status || 'ALL').trim().toUpperCase();
-        const startDate = String(params?.start_date || '').trim();
-        const endDate = String(params?.end_date || '').trim();
+        const status = String(
+            params.status || 'ALL'
+        ).trim().toUpperCase();
+
+        const startDate = String(params.start_date || '').trim();
+        const endDate = String(params.end_date || '').trim();
 
         let condition = '';
 
@@ -4045,8 +4228,17 @@ exports.getDataFakturPetugas = async (params) => {
             offset
         };
 
-        if (['02', '03'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        // FILTER CABANG BERDASARKAN ROLE
+        if (
+            ['02', '03'].includes(
+                String(params?.dataUser?.role_id || '')
+            )
+        ) {
+            condition += `
+                AND p.cabang = :role_cabang
+            `;
+
+            bind.role_cabang = params.dataUser.cabang_id;
         }
 
         // FILTER KEYWORD
@@ -4064,11 +4256,14 @@ exports.getDataFakturPetugas = async (params) => {
                     OR p.jatuh_tempo::text ILIKE :keyword
                     OR mc.name ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        JOIN public.m_principle mp
+                          ON mp.principle = dd.principle
+                        WHERE dd.billing_no = p.no_billing
+                          AND mp.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -4108,23 +4303,21 @@ exports.getDataFakturPetugas = async (params) => {
                 );
             }
 
-            bind.kegiatan = kegiatan;
-
             if (kegiatan === 'TUKAR_FAKTUR') {
                 condition += `
-                    AND fp_tukar.faktur_petugas_id IS NOT NULL
+                    AND fp.fp_tukar_id IS NOT NULL
                 `;
             }
 
             if (kegiatan === 'PENAGIHAN') {
                 condition += `
-                    AND fp_penagihan.faktur_petugas_id IS NOT NULL
+                    AND fp.fp_penagihan_id IS NOT NULL
                 `;
             }
         }
 
         // FILTER STATUS
-        if (status && status !== 'ALL') {
+        if (status !== 'ALL') {
             const allowedStatus = [
                 'BELUM_DITUGASKAN',
                 'SUDAH_DITUGASKAN',
@@ -4133,63 +4326,55 @@ exports.getDataFakturPetugas = async (params) => {
             ];
 
             if (!allowedStatus.includes(status)) {
-                throw new Error(
-                    `Status tidak valid: ${status}`
-                );
+                throw new Error(`Status tidak valid: ${status}`);
             }
 
             if (status === 'FAKTUR_KEMBALI_TUKAR_FAKTUR') {
                 condition += `
-                    AND fp_kembali_tukar.faktur_petugas_id IS NOT NULL
+                    AND fp.fp_kembali_tukar_id IS NOT NULL
                 `;
             } else if (status === 'FAKTUR_KEMBALI_PENAGIHAN') {
                 condition += `
-                    AND fp_kembali_penagihan.faktur_petugas_id IS NOT NULL
+                    AND fp.fp_kembali_penagihan_id IS NOT NULL
                 `;
             } else if (kegiatan === 'TUKAR_FAKTUR') {
                 if (status === 'BELUM_DITUGASKAN') {
                     condition += `
-                        AND fp_tukar.faktur_petugas_id IS NULL
+                        AND fp.fp_tukar_id IS NULL
                     `;
-                }
-
-                if (status === 'SUDAH_DITUGASKAN') {
+                } else {
                     condition += `
-                        AND fp_tukar.faktur_petugas_id IS NOT NULL
+                        AND fp.fp_tukar_id IS NOT NULL
                     `;
                 }
             } else if (kegiatan === 'PENAGIHAN') {
                 if (status === 'BELUM_DITUGASKAN') {
                     condition += `
-                        AND fp_penagihan.faktur_petugas_id IS NULL
+                        AND fp.fp_penagihan_id IS NULL
                     `;
-                }
-
-                if (status === 'SUDAH_DITUGASKAN') {
+                } else {
                     condition += `
-                        AND fp_penagihan.faktur_petugas_id IS NOT NULL
+                        AND fp.fp_penagihan_id IS NOT NULL
                     `;
                 }
             } else {
                 if (status === 'BELUM_DITUGASKAN') {
                     condition += `
-                        AND fp_tukar.faktur_petugas_id IS NULL
-                        AND fp_penagihan.faktur_petugas_id IS NULL
+                        AND fp.fp_tukar_id IS NULL
+                        AND fp.fp_penagihan_id IS NULL
                     `;
-                }
-
-                if (status === 'SUDAH_DITUGASKAN') {
+                } else {
                     condition += `
                         AND (
-                            fp_tukar.faktur_petugas_id IS NOT NULL
-                            OR fp_penagihan.faktur_petugas_id IS NOT NULL
+                            fp.fp_tukar_id IS NOT NULL
+                            OR fp.fp_penagihan_id IS NOT NULL
                         )
                     `;
                 }
             }
         }
 
-        // FILTER TANGGAL
+        // FILTER TANGGAL AWAL
         if (startDate) {
             condition += `
                 AND p.posting_date >= :start_date
@@ -4198,50 +4383,56 @@ exports.getDataFakturPetugas = async (params) => {
             bind.start_date = startDate;
         }
 
+        // FILTER TANGGAL AKHIR
         if (endDate) {
             condition += `
-                AND p.posting_date <= :end_date
+                AND p.posting_date < (
+                    CAST(:end_date AS date) + INTERVAL '1 day'
+                )
             `;
 
             bind.end_date = endDate;
         }
 
-        // GET LIST DATA
+        // QUERY
         const listQuery = query.getDataFakturPetugas.replace(
-            ':condition',
+            /:condition/g,
             condition
         );
 
-        const listData = await db.query(listQuery, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        });
-
-        // GET COUNT DATA
         const countQuery = query.countDataFakturPetugas.replace(
-            ':condition',
+            /:condition/g,
             condition
         );
 
-        const countData = await db.query(countQuery, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        });
+        const summaryQuery = query.summaryDataFakturPetugas.replace(
+            /:condition/g,
+            condition
+        );
 
+        // EKSEKUSI PARALEL
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(listQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(countQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(summaryQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
+
+        // PAGINATION RESULT
         const totalData = Number(countData?.[0]?.total || 0);
         const totalHalaman = Math.ceil(totalData / limit);
 
-        // GET SUMMARY DATA
-        const summaryQuery = query.summaryDataFakturPetugas.replace(
-            ':condition',
-            condition
-        );
-
-        const summaryResult = await db.query(summaryQuery, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        });
-
+        // SUMMARY
         const summary = summaryResult?.[0] || {};
 
         return {
@@ -4249,16 +4440,16 @@ exports.getDataFakturPetugas = async (params) => {
             total_halaman: totalHalaman,
             limit,
             page,
-            list_data: listData,
+            list_data: listData || [],
             summary: {
-                total_faktur: Number(summary?.total_faktur || 0),
-                sudah_ditugaskan: Number(summary?.sudah_ditugaskan || 0),
-                belum_ditugaskan: Number(summary?.belum_ditugaskan || 0),
+                total_faktur: Number(summary.total_faktur || 0),
+                sudah_ditugaskan: Number(summary.sudah_ditugaskan || 0),
+                belum_ditugaskan: Number(summary.belum_ditugaskan || 0),
                 total_faktur_kembali_tukar_faktur: Number(
-                    summary?.total_faktur_kembali_tukar_faktur || 0
+                    summary.total_faktur_kembali_tukar_faktur || 0
                 ),
                 total_faktur_kembali_penagihan: Number(
-                    summary?.total_faktur_kembali_penagihan || 0
+                    summary.total_faktur_kembali_penagihan || 0
                 )
             }
         };
@@ -4274,12 +4465,10 @@ exports.getDataFakturPetugas = async (params) => {
 };
 
 
-exports.getDataTukarFaktur = async (params) => {
+exports.getDataTukarFaktur = async (params = {}) => {
     try {
         const normalizeFilterValues = (value) => {
-            const values = Array.isArray(value)
-                ? value
-                : [value];
+            const values = Array.isArray(value) ? value : [value];
 
             return values
                 .filter((item) => item !== undefined && item !== null)
@@ -4287,54 +4476,40 @@ exports.getDataTukarFaktur = async (params) => {
                 .filter(Boolean);
         };
 
-        const page = Number(params?.page) || 1;
-        const limit = Number(params?.limit) || 10;
+        // PAGINATION
+        const page = Math.max(
+            1,
+            Math.trunc(Number(params.page) || 1)
+        );
+
+        const limit = Math.min(
+            1000,
+            Math.max(1, Math.trunc(Number(params.limit) || 10))
+        );
+
         const offset = (page - 1) * limit;
 
-        const keyword = String(
-            params?.keyword || ''
-        ).trim();
+        // FILTER
+        const keyword = String(params.keyword || '').trim();
 
         const salesOffices = normalizeFilterValues(
-            params?.sales_office ??
-            params?.['sales_office[]']
+            params.sales_office ?? params['sales_office[]']
         );
 
         const customers = normalizeFilterValues(
-            params?.customer ??
-            params?.['customer[]']
+            params.customer ?? params['customer[]']
         );
 
-        /*
-         * STATUS TUKAR FAKTUR
-         *
-         * ALL
-         * BELUM_DITUKAR
-         * SUDAH_DITUKAR
-         */
         const status = String(
-            params?.status || 'ALL'
+            params.status || 'ALL'
         ).trim().toUpperCase();
 
-        /*
-         * STATUS VERIFIKASI
-         *
-         * ALL
-         * MENUNGGU_VERIFIKASI
-         * DITERIMA
-         * DITOLAK
-         */
         const statusVerifikasi = String(
-            params?.status_verifikasi || 'ALL'
+            params.status_verifikasi || 'ALL'
         ).trim().toUpperCase();
 
-        const startDate = String(
-            params?.start_date || ''
-        ).trim();
-
-        const endDate = String(
-            params?.end_date || ''
-        ).trim();
+        const startDate = String(params.start_date || '').trim();
+        const endDate = String(params.end_date || '').trim();
 
         let condition = '';
 
@@ -4343,12 +4518,22 @@ exports.getDataTukarFaktur = async (params) => {
             offset
         };
 
-        if (['05', '04'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' AND mu.nip = '${params?.dataUser?.nip}' `;
+        // FILTER ROLE CABANG DAN PETUGAS
+        if (
+            ['05', '04'].includes(
+                String(params?.dataUser?.role_id || '')
+            )
+        ) {
+            condition += `
+                AND p.cabang = :role_cabang
+                AND mu.nip = :role_nip
+            `;
+
+            bind.role_cabang = params.dataUser.cabang_id;
+            bind.role_nip = params.dataUser.nip;
         }
-        /*
-         * SEARCH
-         */
+
+        // FILTER KEYWORD
         if (keyword) {
             condition += `
                 AND (
@@ -4363,11 +4548,14 @@ exports.getDataTukarFaktur = async (params) => {
                     OR p.jatuh_tempo::text ILIKE :keyword
                     OR mc.name ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        JOIN public.m_principle mp
+                          ON mp.principle = dd.principle
+                        WHERE dd.billing_no = p.no_billing
+                          AND mp.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -4375,14 +4563,10 @@ exports.getDataTukarFaktur = async (params) => {
             bind.keyword = `%${keyword}%`;
         }
 
-        /*
-         * FILTER CABANG
-         */
+        // FILTER CABANG
         if (
             salesOffices.length &&
-            !salesOffices.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !salesOffices.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND p.cabang IN (:sales_offices)
@@ -4391,14 +4575,10 @@ exports.getDataTukarFaktur = async (params) => {
             bind.sales_offices = salesOffices;
         }
 
-        /*
-         * FILTER CUSTOMER
-         */
+        // FILTER CUSTOMER
         if (
             customers.length &&
-            !customers.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !customers.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND p.customer IN (:customers)
@@ -4407,19 +4587,8 @@ exports.getDataTukarFaktur = async (params) => {
             bind.customers = customers;
         }
 
-        /*
-         * FILTER STATUS TUKAR FAKTUR
-         *
-         * BELUM_DITUKAR
-         * = belum mempunyai data d_tukar_faktur
-         *
-         * SUDAH_DITUKAR
-         * = sudah mempunyai data d_tukar_faktur
-         */
-        if (
-            status &&
-            status !== 'ALL'
-        ) {
+        // FILTER STATUS TUKAR FAKTUR
+        if (status !== 'ALL') {
             const allowedStatus = [
                 'BELUM_DITUKAR',
                 'SUDAH_DITUKAR'
@@ -4435,77 +4604,45 @@ exports.getDataTukarFaktur = async (params) => {
                 condition += `
                     AND tf.tukar_faktur_id IS NULL
                 `;
-            }
-
-            if (status === 'SUDAH_DITUKAR') {
+            } else {
                 condition += `
                     AND tf.tukar_faktur_id IS NOT NULL
                 `;
             }
         }
 
-        /*
-         * FILTER STATUS VERIFIKASI
-         *
-         * MENUNGGU_VERIFIKASI
-         * = fp.kd_status IS NULL
-         *
-         * DITERIMA
-         * = fp.kd_status = 'S'
-         *
-         * DITOLAK
-         * = fp.kd_status = 'T'
-         */
-        if (
-            statusVerifikasi &&
-            statusVerifikasi !== 'ALL'
-        ) {
+        // FILTER STATUS VERIFIKASI
+        if (statusVerifikasi !== 'ALL') {
             const allowedStatusVerifikasi = [
                 'MENUNGGU_VERIFIKASI',
                 'DITERIMA',
                 'DITOLAK'
             ];
 
-            if (
-                !allowedStatusVerifikasi.includes(
-                    statusVerifikasi
-                )
-            ) {
+            if (!allowedStatusVerifikasi.includes(statusVerifikasi)) {
                 throw new Error(
                     'Status verifikasi hanya boleh MENUNGGU_VERIFIKASI, DITERIMA atau DITOLAK'
                 );
             }
 
-            /*
-             * Menunggu Verifikasi
-             */
-            if (
-                statusVerifikasi === 'MENUNGGU_VERIFIKASI'
-            ) {
+            // MENUNGGU VERIFIKASI
+            if (statusVerifikasi === 'MENUNGGU_VERIFIKASI') {
                 condition += `
                     AND tf.tukar_faktur_id IS NOT NULL
                     AND fp.kd_status IS NULL
                 `;
             }
 
-            /*
-             * Diterima
-             */
-            if (
-                statusVerifikasi === 'DITERIMA'
-            ) {
+            // DITERIMA
+            if (statusVerifikasi === 'DITERIMA') {
                 condition += `
                     AND tf.tukar_faktur_id IS NOT NULL
                     AND fp.kd_status = 'S'
                 `;
             }
 
-            /*
-             * Ditolak
-             */
-            if (
-                statusVerifikasi === 'DITOLAK'
-            ) {
+            // DITOLAK
+            if (statusVerifikasi === 'DITOLAK') {
                 condition += `
                     AND tf.tukar_faktur_id IS NOT NULL
                     AND fp.kd_status = 'T'
@@ -4513,9 +4650,7 @@ exports.getDataTukarFaktur = async (params) => {
             }
         }
 
-        /*
-         * FILTER TANGGAL AWAL
-         */
+        // FILTER TANGGAL AWAL
         if (startDate) {
             condition += `
                 AND p.posting_date >= :start_date
@@ -4524,77 +4659,56 @@ exports.getDataTukarFaktur = async (params) => {
             bind.start_date = startDate;
         }
 
-        /*
-         * FILTER TANGGAL AKHIR
-         */
+        // FILTER TANGGAL AKHIR (INKLUSIF)
         if (endDate) {
             condition += `
-                AND p.posting_date <= :end_date
+                AND p.posting_date < (
+                    CAST(:end_date AS date) + INTERVAL '1 day'
+                )
             `;
 
             bind.end_date = endDate;
         }
 
-        /*
-         * LIST DATA
-         */
-        const listQuery = query.getDataTukarFaktur
-            .replace(
-                ':condition',
-                condition
-            );
-
-        const listData = await db.query(
-            listQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT,
-                // logging: console.log
-            }
+        // SIAPKAN QUERY
+        const listQuery = query.getDataTukarFaktur.replace(
+            /:condition/g,
+            condition
         );
 
-        /*
-         * COUNT DATA
-         */
-        const countQuery = query.countDataTukarFaktur
-            .replace(
-                ':condition',
-                condition
-            );
+        const countQuery = query.countDataTukarFaktur.replace(
+            /:condition/g,
+            condition
+        );
 
-        const countData = await db.query(
-            countQuery,
-            {
+        const summaryQuery = query.summaryDataTukarFaktur.replace(
+            /:condition/g,
+            condition
+        );
+
+        // EKSEKUSI PARALEL
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(listQuery, {
                 replacements: bind,
                 type: db.QueryTypes.SELECT
-            }
-        );
+            }),
 
-        const totalData = Number(
-            countData?.[0]?.total || 0
-        );
-
-        const totalHalaman = Math.ceil(
-            totalData / limit
-        );
-
-        /*
-         * SUMMARY
-         */
-        const summaryQuery = query.summaryDataTukarFaktur
-            .replace(
-                ':condition',
-                condition
-            );
-
-        const summaryResult = await db.query(
-            summaryQuery,
-            {
+            db.query(countQuery, {
                 replacements: bind,
                 type: db.QueryTypes.SELECT
-            }
-        );
+            }),
 
+            db.query(summaryQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
+
+        // PAGINATION
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
+
+        // SUMMARY
         const summary = summaryResult?.[0] || {};
 
         return {
@@ -4602,19 +4716,14 @@ exports.getDataTukarFaktur = async (params) => {
             total_halaman: totalHalaman,
             limit,
             page,
-            list_data: listData,
+            list_data: listData || [],
             summary: {
-                total_faktur: Number(
-                    summary?.total_faktur || 0
-                ),
-                sudah_ditukar: Number(
-                    summary?.sudah_ditukar || 0
-                ),
-                belum_ditukar: Number(
-                    summary?.belum_ditukar || 0
-                )
+                total_faktur: Number(summary.total_faktur || 0),
+                sudah_ditukar: Number(summary.sudah_ditukar || 0),
+                belum_ditukar: Number(summary.belum_ditukar || 0)
             }
         };
+
     } catch (error) {
         console.error(
             'ERROR SERVICE GET DATA TUKAR FAKTUR:',
@@ -4625,12 +4734,11 @@ exports.getDataTukarFaktur = async (params) => {
     }
 };
 
-exports.getDataVerifikasiTukarFaktur = async (params) => {
+
+exports.getDataVerifikasiTukarFaktur = async (params = {}) => {
     try {
         const normalizeFilterValues = (value) => {
-            const values = Array.isArray(value)
-                ? value
-                : [value];
+            const values = Array.isArray(value) ? value : [value];
 
             return values
                 .filter((item) => item !== undefined && item !== null)
@@ -4638,35 +4746,36 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
                 .filter(Boolean);
         };
 
-        const page = Number(params?.page) || 1;
-        const limit = Number(params?.limit) || 10;
+        // PAGINATION
+        const page = Math.max(
+            1,
+            Math.trunc(Number(params.page) || 1)
+        );
+
+        const limit = Math.min(
+            1000,
+            Math.max(1, Math.trunc(Number(params.limit) || 10))
+        );
+
         const offset = (page - 1) * limit;
 
-        const keyword = String(
-            params?.keyword || ''
-        ).trim();
+        // FILTER
+        const keyword = String(params.keyword || '').trim();
 
         const salesOffices = normalizeFilterValues(
-            params?.sales_office ??
-            params?.['sales_office[]']
+            params.sales_office ?? params['sales_office[]']
         );
 
         const customers = normalizeFilterValues(
-            params?.customer ??
-            params?.['customer[]']
+            params.customer ?? params['customer[]']
         );
 
         const status = String(
-            params?.status || 'ALL'
+            params.status || 'ALL'
         ).trim().toUpperCase();
 
-        const startDate = String(
-            params?.start_date || ''
-        ).trim();
-
-        const endDate = String(
-            params?.end_date || ''
-        ).trim();
+        const startDate = String(params.start_date || '').trim();
+        const endDate = String(params.end_date || '').trim();
 
         let condition = '';
 
@@ -4675,20 +4784,25 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
             offset
         };
 
-        if (['02', '03'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        // FILTER CABANG BERDASARKAN ROLE
+        if (
+            ['02', '03'].includes(
+                String(params?.dataUser?.role_id || '')
+            )
+        ) {
+            condition += `
+                AND p.cabang = :role_cabang
+            `;
+
+            bind.role_cabang = params.dataUser.cabang_id;
         }
 
-        /*
-         * HANYA DATA YANG SUDAH MELAKUKAN TUKAR FAKTUR
-         */
+        // HANYA DATA YANG SUDAH MELAKUKAN TUKAR FAKTUR
         condition += `
             AND tf.tukar_faktur_id IS NOT NULL
         `;
 
-        /*
-         * SEARCH
-         */
+        // FILTER KEYWORD
         if (keyword) {
             condition += `
                 AND (
@@ -4703,12 +4817,15 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
                     OR p.jatuh_tempo::text ILIKE :keyword
                     OR mc.name ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
-                    OR fp.kd_status ILIKE :keyword 
+                    OR fp.kd_status ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        JOIN public.m_principle mp
+                          ON mp.principle = dd.principle
+                        WHERE dd.billing_no = p.no_billing
+                          AND mp.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -4716,14 +4833,10 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
             bind.keyword = `%${keyword}%`;
         }
 
-        /*
-         * FILTER CABANG
-         */
+        // FILTER CABANG
         if (
             salesOffices.length &&
-            !salesOffices.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !salesOffices.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND p.cabang IN (:sales_offices)
@@ -4732,14 +4845,10 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
             bind.sales_offices = salesOffices;
         }
 
-        /*
-         * FILTER CUSTOMER
-         */
+        // FILTER CUSTOMER
         if (
             customers.length &&
-            !customers.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !customers.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND p.customer IN (:customers)
@@ -4748,19 +4857,8 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
             bind.customers = customers;
         }
 
-        /*
-         * FILTER STATUS VERIFIKASI
-         *
-         * fp.kd_status:
-         *
-         * NULL = MENUNGGU VERIFIKASI
-         * S    = DITERIMA
-         * T    = DITOLAK
-         */
-        if (
-            status &&
-            status !== 'ALL'
-        ) {
+        // FILTER STATUS VERIFIKASI
+        if (status !== 'ALL') {
             const allowedStatus = [
                 'MENUNGGU_VERIFIKASI',
                 'DITERIMA',
@@ -4773,34 +4871,22 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
                 );
             }
 
-            if (
-                status === 'MENUNGGU_VERIFIKASI'
-            ) {
+            if (status === 'MENUNGGU_VERIFIKASI') {
                 condition += `
                     AND fp.kd_status IS NULL
                 `;
-            }
-
-            if (
-                status === 'DITERIMA'
-            ) {
+            } else if (status === 'DITERIMA') {
                 condition += `
                     AND fp.kd_status = 'S'
                 `;
-            }
-
-            if (
-                status === 'DITOLAK'
-            ) {
+            } else if (status === 'DITOLAK') {
                 condition += `
                     AND fp.kd_status = 'T'
                 `;
             }
         }
 
-        /*
-         * FILTER TANGGAL AWAL
-         */
+        // FILTER TANGGAL AWAL
         if (startDate) {
             condition += `
                 AND p.posting_date >= :start_date
@@ -4809,106 +4895,74 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
             bind.start_date = startDate;
         }
 
-        /*
-         * FILTER TANGGAL AKHIR
-         */
+        // FILTER TANGGAL AKHIR
         if (endDate) {
             condition += `
                 AND p.posting_date < (
-                    CAST(:end_date AS DATE) + INTERVAL '1 day'
+                    CAST(:end_date AS date) + INTERVAL '1 day'
                 )
             `;
 
             bind.end_date = endDate;
         }
 
-        /*
-         * LIST DATA
-         */
-        const listQuery =
-            query.getDataVerifikasiTukarFaktur
-                .replace(
-                    ':condition',
-                    condition
-                );
-
-        const listData = await db.query(
-            listQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT,
-                // logging: console.log
-            }
+        // SIAPKAN QUERY
+        const listQuery = query.getDataVerifikasiTukarFaktur.replace(
+            /:condition/g,
+            condition
         );
 
-        /*
-         * COUNT DATA
-         */
-        const countQuery =
-            query.countDataVerifikasiTukarFaktur
-                .replace(
-                    ':condition',
-                    condition
-                );
+        const countQuery = query.countDataVerifikasiTukarFaktur.replace(
+            /:condition/g,
+            condition
+        );
 
-        const countData = await db.query(
-            countQuery,
-            {
+        const summaryQuery = query.summaryDataVerifikasiTukarFaktur.replace(
+            /:condition/g,
+            condition
+        );
+
+        // EKSEKUSI PARALEL
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(listQuery, {
                 replacements: bind,
                 type: db.QueryTypes.SELECT
-            }
-        );
+            }),
 
-        const totalData = Number(
-            countData?.[0]?.total || 0
-        );
-
-        const totalHalaman = Math.ceil(
-            totalData / limit
-        );
-
-        /*
-         * SUMMARY
-         */
-        const summaryQuery =
-            query.summaryDataVerifikasiTukarFaktur
-                .replace(
-                    ':condition',
-                    condition
-                );
-
-        const summaryResult = await db.query(
-            summaryQuery,
-            {
+            db.query(countQuery, {
                 replacements: bind,
                 type: db.QueryTypes.SELECT
-            }
-        );
+            }),
 
-        const summary =
-            summaryResult?.[0] || {};
+            db.query(summaryQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
+
+        // PAGINATION
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
+
+        // SUMMARY
+        const summary = summaryResult?.[0] || {};
 
         return {
             total_data: totalData,
             total_halaman: totalHalaman,
             limit,
             page,
-            list_data: listData,
+            list_data: listData || [],
             summary: {
-                total_faktur: Number(
-                    summary?.total_faktur || 0
-                ),
+                total_faktur: Number(summary.total_faktur || 0),
                 menunggu_verifikasi: Number(
-                    summary?.menunggu_verifikasi || 0
+                    summary.menunggu_verifikasi || 0
                 ),
-                diterima: Number(
-                    summary?.diterima || 0
-                ),
-                ditolak: Number(
-                    summary?.ditolak || 0
-                )
+                diterima: Number(summary.diterima || 0),
+                ditolak: Number(summary.ditolak || 0)
             }
         };
+
     } catch (error) {
         console.error(
             'ERROR SERVICE GET DATA VERIFIKASI TUKAR FAKTUR:',
@@ -4919,257 +4973,309 @@ exports.getDataVerifikasiTukarFaktur = async (params) => {
     }
 };
 
-exports.getDataVerifikasiPembayaran = async (params) => {
+exports.getDataVerifikasiPembayaran = async (params = {}) => {
     try {
+        // =====================================================
+        // NORMALIZE FILTER
+        // =====================================================
         const normalizeFilterValues = (value) => {
-            const values = Array.isArray(value)
-                ? value
-                : [value];
+            const values = Array.isArray(value) ? value : [value];
+
             return values
                 .filter((item) => item !== undefined && item !== null)
-                .map((item) => String(item).trim())
+                .flatMap((item) => {
+                    if (typeof item === 'string' && item.includes(',')) {
+                        return item.split(',').map((value) => String(value).trim());
+                    }
+
+                    return [String(item).trim()];
+                })
                 .filter(Boolean);
         };
-        const page = Number(params?.page) || 1;
-        const limit = Number(params?.limit) || 10;
+
+        // =====================================================
+        // PAGINATION
+        // =====================================================
+        const page = Math.max(
+            1,
+            Math.trunc(Number(params?.page) || 1)
+        );
+
+        const limit = Math.min(
+            1000,
+            Math.max(1, Math.trunc(Number(params?.limit) || 10))
+        );
+
         const offset = (page - 1) * limit;
+
+        // =====================================================
+        // FILTER
+        // =====================================================
         const keyword = String(params?.keyword || '').trim();
+
         const salesOffices = normalizeFilterValues(
-            params?.sales_office ??
-            params?.['sales_office[]']
+            params?.sales_office ?? params?.['sales_office[]']
         );
+
         const customers = normalizeFilterValues(
-            params?.customer ??
-            params?.['customer[]']
+            params?.customer ?? params?.['customer[]']
         );
-        const status = String(params?.status || 'ALL').trim().toUpperCase();
-        const startDate = String(params?.start_date || '').trim();
-        const endDate = String(params?.end_date || '').trim();
+
+        const status = String(
+            params?.status || 'ALL'
+        ).trim().toUpperCase();
+
+        const startDate = String(
+            params?.start_date || ''
+        ).trim();
+
+        const endDate = String(
+            params?.end_date || ''
+        ).trim();
+
+        // =====================================================
+        // CONDITION & BIND
+        // =====================================================
         let condition = '';
+
         const bind = {
             limit,
             offset
         };
 
-        if (['02', '03'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        // =====================================================
+        // FILTER ROLE
+        // =====================================================
+        const roleId = String(params?.dataUser?.role_id || '');
+
+        if (['02', '03'].includes(roleId)) {
+            condition += `
+                AND p.cabang = :role_cabang
+            `;
+
+            bind.role_cabang = params?.dataUser?.cabang_id;
         }
-        /*
-         * SEARCH
-         */
+
+        // =====================================================
+        // SEARCH KEYWORD
+        // =====================================================
         if (keyword) {
             condition += `
                 AND (
-                    COALESCE(dp.no_billing,'') ILIKE :keyword
-                    OR COALESCE(p.no_faktur,'') ILIKE :keyword
-                    OR COALESCE(p.customer,'') ILIKE :keyword
-                    OR COALESCE(mc.name,'') ILIKE :keyword
-                    OR COALESCE(p.sales,'') ILIKE :keyword
-                    OR COALESCE(p.nama_sales,'') ILIKE :keyword
-                    OR COALESCE(p.cabang,'') ILIKE :keyword
-                    OR COALESCE(mr.ur_ref,'') ILIKE :keyword
-                    OR COALESCE(mu.nama,'') ILIKE :keyword
-                    OR COALESCE(dp.metode_pembayaran,'') ILIKE :keyword
-                    OR COALESCE(ds.kd_status,'') ILIKE :keyword
-                    OR COALESCE(ds.keterangan,'') ILIKE :keyword
+                    COALESCE(dp.no_billing, '') ILIKE :keyword
+                    OR COALESCE(p.no_faktur, '') ILIKE :keyword
+                    OR COALESCE(p.customer, '') ILIKE :keyword
+                    OR COALESCE(mc.name, '') ILIKE :keyword
+                    OR COALESCE(p.sales, '') ILIKE :keyword
+                    OR COALESCE(p.nama_sales, '') ILIKE :keyword
+                    OR COALESCE(p.cabang, '') ILIKE :keyword
+                    OR COALESCE(mr.ur_ref, '') ILIKE :keyword
+                    OR COALESCE(mu.nama, '') ILIKE :keyword
+                    OR COALESCE(dp.metode_pembayaran, '') ILIKE :keyword
+                    OR COALESCE(ds.kd_status, '') ILIKE :keyword
+                    OR COALESCE(ds.keterangan, '') ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        INNER JOIN public.m_principle mp
+                            ON mp.principle = dd.principle
+                        WHERE dd.billing_no = dp.no_billing
+                            AND mp.nama_principle ILIKE :keyword
                     )
                 )
             `;
+
             bind.keyword = `%${keyword}%`;
         }
-        /*
-         * FILTER CABANG
-         */
+
+        // =====================================================
+        // FILTER CABANG
+        // =====================================================
         if (
             salesOffices.length &&
-            !salesOffices.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !salesOffices.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND p.cabang IN (:sales_offices)
             `;
+
             bind.sales_offices = salesOffices;
         }
-        /*
-         * FILTER CUSTOMER
-         */
+
+        // =====================================================
+        // FILTER CUSTOMER
+        // =====================================================
         if (
             customers.length &&
-            !customers.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !customers.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND p.customer IN (:customers)
             `;
+
             bind.customers = customers;
         }
-        /*
-         * FILTER STATUS
-         *
-         * NULL = MENUNGGU VERIFIKASI
-         * S    = PEMBAYARAN DITERIMA
-         * T    = PEMBAYARAN DITOLAK
-         */
-        if (
-            status &&
-            status !== 'ALL'
-        ) {
-            const allowedStatus = [
-                'MENUNGGU_VERIFIKASI',
-                'PEMBAYARAN_DITERIMA',
-                'PEMBAYARAN_DITOLAK'
-            ];
+
+        // =====================================================
+        // FILTER STATUS VERIFIKASI
+        // =====================================================
+        const allowedStatus = [
+            'MENUNGGU_VERIFIKASI',
+            'PEMBAYARAN_DITERIMA',
+            'PEMBAYARAN_DITOLAK'
+        ];
+
+        if (status && status !== 'ALL') {
             if (!allowedStatus.includes(status)) {
                 throw new Error(
                     'Status hanya boleh MENUNGGU_VERIFIKASI, PEMBAYARAN_DITERIMA atau PEMBAYARAN_DITOLAK'
                 );
             }
-            if (
-                status === 'MENUNGGU_VERIFIKASI'
-            ) {
-                condition += `
-                    AND ds.kd_status IS NULL
-                `;
-            }
-            if (
-                status === 'PEMBAYARAN_DITERIMA'
-            ) {
-                condition += `
-                    AND ds.kd_status = 'S'
-                `;
-            }
-            if (
-                status === 'PEMBAYARAN_DITOLAK'
-            ) {
-                condition += `
-                    AND ds.kd_status = 'T'
-                `;
+
+            switch (status) {
+                case 'MENUNGGU_VERIFIKASI':
+                    condition += `
+                        AND ds.kd_status IS NULL
+                    `;
+                    break;
+
+                case 'PEMBAYARAN_DITERIMA':
+                    condition += `
+                        AND ds.kd_status = 'S'
+                    `;
+                    break;
+
+                case 'PEMBAYARAN_DITOLAK':
+                    condition += `
+                        AND ds.kd_status = 'T'
+                    `;
+                    break;
             }
         }
-        /*
-         * FILTER TANGGAL PEMBAYARAN
-         */
+
+        // =====================================================
+        // FILTER TANGGAL PEMBAYARAN
+        // =====================================================
         if (startDate) {
             condition += `
-                AND dp.tanggal_pembayaran >= :start_date
+                AND dp.tanggal_pembayaran >= CAST(:start_date AS DATE)
             `;
+
             bind.start_date = startDate;
         }
+
         if (endDate) {
             condition += `
                 AND dp.tanggal_pembayaran < (
                     CAST(:end_date AS DATE) + INTERVAL '1 day'
                 )
             `;
+
             bind.end_date = endDate;
         }
-        /*
-         * LIST DATA
-         */
-        const listQuery =
-            query.getDataVerifikasiPembayaran
-                .replace(
-                    ':condition',
-                    condition
-                );
-        const listData = await db.query(
-            listQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT,
-                // logging: console.log
-            }
+
+        // =====================================================
+        // BUILD QUERY
+        // =====================================================
+        const listQuery = query.getDataVerifikasiPembayaran.replace(
+            /:condition/g,
+            condition
         );
-        /*
-         * COUNT DATA
-         */
-        const countQuery =
-            query.countDataVerifikasiPembayaran
-                .replace(
-                    ':condition',
-                    condition
-                );
-        const countData = await db.query(
-            countQuery,
-            {
+
+        const countQuery = query.countDataVerifikasiPembayaran.replace(
+            /:condition/g,
+            condition
+        );
+
+        const summaryQuery = query.summaryDataVerifikasiPembayaran.replace(
+            /:condition/g,
+            condition
+        );
+
+        // =====================================================
+        // EXECUTE PARALLEL
+        // =====================================================
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(listQuery, {
                 replacements: bind,
                 type: db.QueryTypes.SELECT
-            }
-        );
+            }),
+
+            db.query(countQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(summaryQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
+
+        // =====================================================
+        // TOTAL DATA
+        // =====================================================
         const totalData = Number(
             countData?.[0]?.total || 0
         );
+
         const totalHalaman = Math.ceil(
             totalData / limit
         );
-        /*
-         * SUMMARY
-         */
-        const summaryQuery =
-            query.summaryDataVerifikasiPembayaran
-                .replace(
-                    ':condition',
-                    condition
-                );
-        const summaryResult = await db.query(
-            summaryQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT
-            }
-        );
-        const summary =
-            summaryResult?.[0] || {};
+
+        // =====================================================
+        // SUMMARY
+        // =====================================================
+        const summary = summaryResult?.[0] || {};
+
+        // =====================================================
+        // RESPONSE
+        // =====================================================
         return {
             total_data: totalData,
             total_halaman: totalHalaman,
             limit,
             page,
-            list_data: listData,
+
+            list_data: listData || [],
+
             summary: {
-                total_verifikasi:
-                    Number(
-                        summary?.total_verifikasi ??
-                        summary?.total_faktur ??
-                        summary?.total_pembayaran ??
-                        0
-                    ),
-                menunggu_verifikasi:
-                    Number(
-                        summary?.menunggu_verifikasi ??
-                        0
-                    ),
-                pembayaran_diterima:
-                    Number(
-                        summary?.pembayaran_diterima ??
-                        summary?.diterima ??
-                        0
-                    ),
-                pembayaran_ditolak:
-                    Number(
-                        summary?.pembayaran_ditolak ??
-                        summary?.ditolak ??
-                        0
-                    ),
-                total_nominal_menunggu:
-                    Number(
-                        summary?.total_nominal_menunggu ??
-                        0
-                    )
+                total_verifikasi: Number(
+                    summary?.total_verifikasi ??
+                    summary?.total_faktur ??
+                    summary?.total_pembayaran ??
+                    0
+                ),
+
+                menunggu_verifikasi: Number(
+                    summary?.menunggu_verifikasi || 0
+                ),
+
+                pembayaran_diterima: Number(
+                    summary?.pembayaran_diterima ??
+                    summary?.diterima ??
+                    0
+                ),
+
+                pembayaran_ditolak: Number(
+                    summary?.pembayaran_ditolak ??
+                    summary?.ditolak ??
+                    0
+                ),
+
+                total_nominal_menunggu: Number(
+                    summary?.total_nominal_menunggu || 0
+                )
             }
         };
+
     } catch (error) {
         console.error(
             'ERROR SERVICE GET DATA VERIFIKASI PEMBAYARAN:',
             error
         );
+
         throw error;
     }
 };
@@ -7360,159 +7466,805 @@ exports.verifikasiTukarFaktur = async (
 // };
 
 
-exports.getDataBayarFaktur = async (params) => {
+// exports.getDataBayarFaktur = async (params) => {
+//     try {
+//         const penerimaanLainId =
+//             params?.penerimaan_lain_id || null;
+
+//         const normalizeFilterValues = (value) => {
+//             const values = Array.isArray(value)
+//                 ? value
+//                 : [value];
+
+//             return values
+//                 .filter(
+//                     (item) =>
+//                         item !== undefined &&
+//                         item !== null
+//                 )
+//                 .flatMap((item) => {
+//                     if (
+//                         typeof item === 'string' &&
+//                         item.includes(',')
+//                     ) {
+//                         return item
+//                             .split(',')
+//                             .map((value) =>
+//                                 String(value).trim()
+//                             );
+//                     }
+
+//                     return [
+//                         String(item).trim()
+//                     ];
+//                 })
+//                 .filter(Boolean);
+//         };
+
+//         /*
+//          * =====================================================
+//          * PAGINATION
+//          * =====================================================
+//          */
+//         const page = Math.max(
+//             Number(params?.page) || 1,
+//             1
+//         );
+
+//         const limit = Math.max(
+//             Number(params?.limit) || 10,
+//             1
+//         );
+
+//         const offset = (page - 1) * limit;
+
+//         /*
+//          * =====================================================
+//          * KEYWORD
+//          * =====================================================
+//          */
+//         const keyword = String(
+//             params?.keyword || ''
+//         ).trim();
+
+//         /*
+//          * =====================================================
+//          * SALES OFFICE
+//          * =====================================================
+//          */
+//         const salesOffices = normalizeFilterValues(
+//             params?.sales_office ??
+//             params?.['sales_office[]']
+//         );
+
+//         /*
+//          * =====================================================
+//          * CUSTOMER
+//          * =====================================================
+//          */
+//         const customers = normalizeFilterValues(
+//             params?.customer ??
+//             params?.['customer[]']
+//         );
+
+//         /*
+//          * =====================================================
+//          * STATUS PEMBAYARAN
+//          * =====================================================
+//          */
+//         const statusValues = normalizeFilterValues(
+//             params?.status ??
+//             params?.['status[]']
+//         ).map((item) => item.toUpperCase());
+
+//         /*
+//          * =====================================================
+//          * STATUS VERIFIKASI
+//          * =====================================================
+//          */
+//         const statusVerifikasiValues =
+//             normalizeFilterValues(
+//                 params?.status_verifikasi ??
+//                 params?.['status_verifikasi[]']
+//             ).map((item) => item.toUpperCase());
+
+//         /*
+//          * =====================================================
+//          * DATE
+//          * =====================================================
+//          */
+//         const startDate = String(
+//             params?.start_date || ''
+//         ).trim();
+
+//         const endDate = String(
+//             params?.end_date || ''
+//         ).trim();
+
+//         /*
+//          * =====================================================
+//          * CONDITION
+//          * =====================================================
+//          */
+//         let condition = '';
+
+//         if (['05', '04'].includes(params?.dataUser?.role_id)) {
+//             condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' AND mu.nip = '${params?.dataUser?.nip}' `;
+//         }
+//         if (['02', '03'].includes(params?.dataUser?.role_id)) {
+//             condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+//         }
+//         /*
+//          * =====================================================
+//          * BIND
+//          *
+//          * PENTING:
+//          * start_date dan end_date selalu dikirim.
+//          *
+//          * Jika tidak ada filter tanggal,
+//          * nilainya NULL agar query LATERAL
+//          * tetap dapat dijalankan.
+//          * =====================================================
+//          */
+//         const bind = {
+//             limit,
+//             offset,
+
+//             start_date: startDate || null,
+//             end_date: endDate || null
+//         };
+
+//         /*
+//          * =====================================================
+//          * FILTER PENERIMAAN LAIN
+//          * =====================================================
+//          */
+//         if (
+//             penerimaanLainId !== undefined &&
+//             penerimaanLainId !== null &&
+//             String(penerimaanLainId).trim() !== ''
+//         ) {
+//             condition += `
+//                 AND EXISTS (
+//                     SELECT 1
+//                     FROM public.d_pembayaran dp_penerimaan_lain
+
+//                     WHERE dp_penerimaan_lain.penerimaan_lain_id =
+//                           :penerimaan_lain_id
+
+//                       AND BTRIM(
+//                             COALESCE(
+//                                 dp_penerimaan_lain.no_billing,
+//                                 ''
+//                             )
+//                           ) =
+//                           BTRIM(
+//                             COALESCE(p.no_billing, '')
+//                           )
+//                 )
+//             `;
+
+//             bind.penerimaan_lain_id =
+//                 penerimaanLainId;
+//         }
+
+//         /*
+//          * =====================================================
+//          * SEARCH KEYWORD
+//          * =====================================================
+//          */
+//         if (keyword) {
+//             condition += `
+//                 AND (
+//                     p.no_faktur ILIKE :keyword
+//                     OR p.no_billing ILIKE :keyword
+//                     OR p.customer ILIKE :keyword
+//                     OR p.sales ILIKE :keyword
+//                     OR p.nama_sales ILIKE :keyword
+//                     OR p.cabang ILIKE :keyword
+//                     OR p.document_type ILIKE :keyword
+//                     OR p.posting_date::text ILIKE :keyword
+//                     OR p.jatuh_tempo::text ILIKE :keyword
+
+//                     OR mc.name ILIKE :keyword
+//                     OR mr.ur_ref ILIKE :keyword
+
+//                     OR fp.nip ILIKE :keyword
+//                     OR mu.nama ILIKE :keyword
+//                     OR fp.kd_status ILIKE :keyword
+
+//                     OR cod.total_nominal_billing::text
+//                        ILIKE :keyword
+
+//                     OR pay.total_nominal_bayar::text
+//                        ILIKE :keyword
+
+//                     OR verifikasi.kd_status_verifikasi
+//                        ILIKE :keyword
+//                     OR EXISTS (
+//                         SELECT 1
+//                         FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
+//                         WHERE dpp.piutang_id = p.piutang_id
+//                         AND mp_keyword.nama_principle ILIKE :keyword
+//                     )
+//                 )
+//             `;
+
+//             bind.keyword = `%${keyword}%`;
+//         }
+
+//         /*
+//          * =====================================================
+//          * FILTER CABANG
+//          * =====================================================
+//          */
+//         if (
+//             salesOffices.length &&
+//             !salesOffices.some(
+//                 (item) => item.toUpperCase() === 'ALL'
+//             )
+//         ) {
+//             condition += `
+//                 AND p.cabang IN (:sales_offices)
+//             `;
+
+//             bind.sales_offices = salesOffices;
+//         }
+
+//         /*
+//          * =====================================================
+//          * FILTER CUSTOMER
+//          * =====================================================
+//          */
+//         if (
+//             customers.length &&
+//             !customers.some(
+//                 (item) => item.toUpperCase() === 'ALL'
+//             )
+//         ) {
+//             condition += `
+//                 AND p.customer IN (:customers)
+//             `;
+
+//             bind.customers = customers;
+//         }
+
+//         /*
+//          * =====================================================
+//          * FILTER STATUS PEMBAYARAN
+//          * =====================================================
+//          */
+//         const allowedStatus = [
+//             'BELUM_DIBAYAR',
+//             'PARTIAL',
+//             'MENUNGGU_PEMBAYARAN',
+//             'SUDAH_DIBAYAR'
+//         ];
+
+//         const filteredStatusValues =
+//             statusValues.filter(
+//                 (item) => item !== 'ALL'
+//             );
+
+//         if (filteredStatusValues.length) {
+//             const invalidStatus =
+//                 filteredStatusValues.find(
+//                     (item) =>
+//                         !allowedStatus.includes(item)
+//                 );
+
+//             if (invalidStatus) {
+//                 throw new Error(
+//                     'Status hanya boleh BELUM_DIBAYAR, PARTIAL, MENUNGGU_PEMBAYARAN atau SUDAH_DIBAYAR'
+//                 );
+//             }
+
+//             const statusConditions = [];
+
+//             /*
+//              * BELUM DIBAYAR
+//              */
+//             if (
+//                 filteredStatusValues.includes(
+//                     'BELUM_DIBAYAR'
+//                 )
+//             ) {
+//                 statusConditions.push(`
+//                     (
+//                         COALESCE(
+//                             pay.total_nominal_bayar,
+//                             0
+//                         ) <= 0
+
+//                         AND COALESCE(p.dpp, 0) > 0
+//                     )
+//                 `);
+//             }
+
+//             /*
+//              * PARTIAL
+//              */
+//             if (
+//                 filteredStatusValues.includes('PARTIAL')
+//             ) {
+//                 statusConditions.push(`
+//                     (
+//                         COALESCE(
+//                             pay.total_nominal_bayar,
+//                             0
+//                         ) > 0
+
+//                         AND COALESCE(
+//                             pay.total_nominal_bayar,
+//                             0
+//                         ) < COALESCE(p.dpp, 0)
+//                     )
+//                 `);
+//             }
+
+//             /*
+//              * SUDAH DIBAYAR
+//              */
+//             if (
+//                 filteredStatusValues.includes(
+//                     'SUDAH_DIBAYAR'
+//                 )
+//             ) {
+//                 statusConditions.push(`
+//                     (
+//                         COALESCE(
+//                             pay.total_nominal_bayar,
+//                             0
+//                         ) >= COALESCE(p.dpp, 0)
+
+//                         AND COALESCE(p.dpp, 0) > 0
+//                     )
+//                 `);
+//             }
+
+//             /*
+//              * MENUNGGU PEMBAYARAN
+//              */
+//             if (
+//                 filteredStatusValues.includes(
+//                     'MENUNGGU_PEMBAYARAN'
+//                 )
+//             ) {
+//                 statusConditions.push(`
+//                     (
+//                         1 = 0
+//                     )
+//                 `);
+//             }
+
+//             if (statusConditions.length) {
+//                 condition += `
+//                     AND (
+//                         ${statusConditions.join(' OR ')}
+//                     )
+//                 `;
+//             }
+//         }
+
+//         /*
+//          * =====================================================
+//          * FILTER STATUS VERIFIKASI
+//          * =====================================================
+//          */
+//         const allowedVerificationStatus = [
+//             'VERIFIED',
+//             'BELUM_DIVERIFIKASI'
+//         ];
+
+//         const filteredVerificationValues =
+//             statusVerifikasiValues.filter(
+//                 (item) => item !== 'ALL'
+//             );
+
+//         if (filteredVerificationValues.length) {
+//             const invalidVerificationStatus =
+//                 filteredVerificationValues.find(
+//                     (item) =>
+//                         !allowedVerificationStatus.includes(item)
+//                 );
+
+//             if (invalidVerificationStatus) {
+//                 throw new Error(
+//                     'Status verifikasi hanya boleh VERIFIED atau BELUM_DIVERIFIKASI'
+//                 );
+//             }
+
+//             const verificationConditions = [];
+
+//             /*
+//              * VERIFIED
+//              */
+//             if (
+//                 filteredVerificationValues.includes(
+//                     'VERIFIED'
+//                 )
+//             ) {
+//                 verificationConditions.push(`
+//                     (
+//                         verifikasi.kd_status_verifikasi = 'S'
+//                     )
+//                 `);
+//             }
+
+//             /*
+//              * BELUM DIVERIFIKASI
+//              */
+//             if (
+//                 filteredVerificationValues.includes(
+//                     'BELUM_DIVERIFIKASI'
+//                 )
+//             ) {
+//                 verificationConditions.push(`
+//                     (
+//                         verifikasi.kd_status_verifikasi IS NULL
+//                     )
+//                 `);
+//             }
+
+//             if (verificationConditions.length) {
+//                 condition += `
+//                     AND (
+//                         ${verificationConditions.join(' OR ')}
+//                     )
+//                 `;
+//             }
+//         }
+
+//         /*
+//          * =====================================================
+//          * FILTER TANGGAL AWAL
+//          *
+//          * Filter data utama berdasarkan posting_date.
+//          * =====================================================
+//          */
+//         if (startDate) {
+//             condition += `
+//                 AND p.posting_date >= CAST(:start_date AS DATE)
+//             `;
+//         }
+
+//         /*
+//          * =====================================================
+//          * FILTER TANGGAL AKHIR
+//          *
+//          * Inklusif sampai tanggal end_date.
+//          * =====================================================
+//          */
+//         if (endDate) {
+//             condition += `
+//                 AND p.posting_date < (
+//                     CAST(:end_date AS DATE)
+//                     + INTERVAL '1 day'
+//                 )
+//             `;
+//         }
+
+//         /*
+//          * =====================================================
+//          * LIST DATA
+//          * =====================================================
+//          */
+//         const listQuery =
+//             query.getDataBayarFaktur.replace(
+//                 ':condition',
+//                 condition
+//             );
+
+//         const listData = await db.query(
+//             listQuery,
+//             {
+//                 replacements: bind,
+//                 type: db.QueryTypes.SELECT
+//                 // logging: console.log
+//             }
+//         );
+
+//         /*
+//          * =====================================================
+//          * HISTORY PEMBAYARAN
+//          * =====================================================
+//          */
+//         const getHistoryPembayaran = async (noBilling) => {
+//             try {
+//                 if (!noBilling) {
+//                     return [];
+//                 }
+
+//                 const result = await db.query(
+//                     query.getHistoryPembayaranBayarFaktur,
+//                     {
+//                         replacements: {
+//                             no_billing: noBilling
+//                         },
+//                         type: db.QueryTypes.SELECT
+//                     }
+//                 );
+
+//                 if (
+//                     Array.isArray(
+//                         result?.[0]?.h_pembayaran
+//                     )
+//                 ) {
+//                     return result[0].h_pembayaran;
+//                 }
+
+//                 if (
+//                     typeof result?.[0]?.h_pembayaran === 'string'
+//                 ) {
+//                     try {
+//                         const parsed = JSON.parse(
+//                             result[0].h_pembayaran
+//                         );
+
+//                         return Array.isArray(parsed)
+//                             ? parsed
+//                             : [];
+//                     } catch (error) {
+//                         return [];
+//                     }
+//                 }
+
+//                 if (Array.isArray(result)) {
+//                     return result;
+//                 }
+
+//                 return [];
+//             } catch (error) {
+//                 console.error(
+//                     'ERROR GET HISTORY PEMBAYARAN:',
+//                     {
+//                         no_billing: noBilling,
+//                         error: error?.message || error
+//                     }
+//                 );
+
+//                 return [];
+//             }
+//         };
+
+//         /*
+//          * =====================================================
+//          * TAMBAHKAN HISTORY
+//          * =====================================================
+//          */
+//         const listDataWithHistory = await Promise.all(
+//             (listData || []).map(async (item) => {
+//                 const h_pembayaran =
+//                     await getHistoryPembayaran(
+//                         item?.no_billing
+//                     );
+
+//                 return {
+//                     ...item,
+//                     h_pembayaran
+//                 };
+//             })
+//         );
+
+//         /*
+//          * =====================================================
+//          * COUNT
+//          * =====================================================
+//          */
+//         const countQuery =
+//             query.countDataBayarFaktur.replace(
+//                 ':condition',
+//                 condition
+//             );
+
+//         const countData = await db.query(
+//             countQuery,
+//             {
+//                 replacements: bind,
+//                 type: db.QueryTypes.SELECT
+//             }
+//         );
+
+//         const totalData = Number(
+//             countData?.[0]?.total || 0
+//         );
+
+//         const totalHalaman = Math.ceil(
+//             totalData / limit
+//         );
+
+//         /*
+//          * =====================================================
+//          * SUMMARY
+//          * =====================================================
+//          */
+//         const summaryQuery =
+//             query.summaryDataBayarFaktur.replace(
+//                 ':condition',
+//                 condition
+//             );
+
+//         const summaryResult = await db.query(
+//             summaryQuery,
+//             {
+//                 replacements: bind,
+//                 type: db.QueryTypes.SELECT
+//             }
+//         );
+
+//         const summary = summaryResult?.[0] || {};
+
+//         /*
+//          * =====================================================
+//          * RESPONSE
+//          * =====================================================
+//          */
+//         return {
+//             total_data: totalData,
+//             total_halaman: totalHalaman,
+//             limit,
+//             page,
+
+//             list_data: listDataWithHistory,
+
+//             summary: {
+//                 // 1. Total Faktur
+//                 total_faktur: Number(
+//                     summary?.total_faktur || 0
+//                 ),
+
+//                 total_nominal_faktur: Number(
+//                     summary?.total_nominal_faktur || 0
+//                 ),
+
+//                 // 2. Belum Dibayar
+//                 belum_dibayar: Number(
+//                     summary?.belum_dibayar || 0
+//                 ),
+
+//                 nominal_belum_dibayar: Number(
+//                     summary?.nominal_belum_dibayar || 0
+//                 ),
+
+//                 // 3. Collections Menunggu Verifikasi
+//                 total_data_menunggu_verifikasi: Number(
+//                     summary?.total_data_menunggu_verifikasi || 0
+//                 ),
+
+//                 total_collections_menunggu_verifikasi: Number(
+//                     summary?.total_collections_menunggu_verifikasi || 0
+//                 ),
+
+//                 // 4. Collections Tidak Terverifikasi
+//                 total_data_tidak_terverifikasi: Number(
+//                     summary?.total_data_tidak_terverifikasi || 0
+//                 ),
+
+//                 total_collections_tidak_terverifikasi: Number(
+//                     summary?.total_collections_tidak_terverifikasi || 0
+//                 ),
+
+//                 // 5. Collections Terverifikasi
+//                 total_data_terverifikasi: Number(
+//                     summary?.total_data_terverifikasi || 0
+//                 ),
+
+//                 total_collections_terverifikasi: Number(
+//                     summary?.total_collections_terverifikasi || 0
+//                 ),
+
+//                 // 6. Total Saldo Piutang
+//                 total_saldo_piutang: Number(
+//                     summary?.total_saldo_piutang || 0
+//                 ),
+
+//                 // 7. Total Penerimaan Lain
+//                 total_penerimaan_lain: Number(
+//                     summary?.total_penerimaan_lain || 0
+//                 )
+//             }
+//         };
+//     } catch (error) {
+//         console.error(
+//             'ERROR SERVICE GET DATA BAYAR FAKTUR:',
+//             error
+//         );
+
+//         throw error;
+//     }
+// };
+
+exports.getDataBayarFaktur = async (params = {}) => {
     try {
-        const penerimaanLainId =
-            params?.penerimaan_lain_id || null;
+        const penerimaanLainId = params?.penerimaan_lain_id || null;
 
         const normalizeFilterValues = (value) => {
-            const values = Array.isArray(value)
-                ? value
-                : [value];
+            const values = Array.isArray(value) ? value : [value];
 
             return values
-                .filter(
-                    (item) =>
-                        item !== undefined &&
-                        item !== null
-                )
+                .filter((item) => item !== undefined && item !== null)
                 .flatMap((item) => {
-                    if (
-                        typeof item === 'string' &&
-                        item.includes(',')
-                    ) {
-                        return item
-                            .split(',')
-                            .map((value) =>
-                                String(value).trim()
-                            );
+                    if (typeof item === 'string' && item.includes(',')) {
+                        return item.split(',').map((value) => String(value).trim());
                     }
 
-                    return [
-                        String(item).trim()
-                    ];
+                    return [String(item).trim()];
                 })
                 .filter(Boolean);
         };
 
-        /*
-         * =====================================================
-         * PAGINATION
-         * =====================================================
-         */
+        // =====================================================
+        // PAGINATION
+        // =====================================================
         const page = Math.max(
-            Number(params?.page) || 1,
-            1
+            1,
+            Math.trunc(Number(params?.page) || 1)
         );
 
-        const limit = Math.max(
-            Number(params?.limit) || 10,
-            1
+        const limit = Math.min(
+            1000,
+            Math.max(1, Math.trunc(Number(params?.limit) || 10))
         );
 
         const offset = (page - 1) * limit;
 
-        /*
-         * =====================================================
-         * KEYWORD
-         * =====================================================
-         */
-        const keyword = String(
-            params?.keyword || ''
-        ).trim();
+        // =====================================================
+        // FILTER
+        // =====================================================
+        const keyword = String(params?.keyword || '').trim();
 
-        /*
-         * =====================================================
-         * SALES OFFICE
-         * =====================================================
-         */
         const salesOffices = normalizeFilterValues(
-            params?.sales_office ??
-            params?.['sales_office[]']
+            params?.sales_office ?? params?.['sales_office[]']
         );
 
-        /*
-         * =====================================================
-         * CUSTOMER
-         * =====================================================
-         */
         const customers = normalizeFilterValues(
-            params?.customer ??
-            params?.['customer[]']
+            params?.customer ?? params?.['customer[]']
         );
 
-        /*
-         * =====================================================
-         * STATUS PEMBAYARAN
-         * =====================================================
-         */
         const statusValues = normalizeFilterValues(
-            params?.status ??
-            params?.['status[]']
+            params?.status ?? params?.['status[]']
         ).map((item) => item.toUpperCase());
 
-        /*
-         * =====================================================
-         * STATUS VERIFIKASI
-         * =====================================================
-         */
-        const statusVerifikasiValues =
-            normalizeFilterValues(
-                params?.status_verifikasi ??
-                params?.['status_verifikasi[]']
-            ).map((item) => item.toUpperCase());
+        const statusVerifikasiValues = normalizeFilterValues(
+            params?.status_verifikasi ?? params?.['status_verifikasi[]']
+        ).map((item) => item.toUpperCase());
 
-        /*
-         * =====================================================
-         * DATE
-         * =====================================================
-         */
-        const startDate = String(
-            params?.start_date || ''
-        ).trim();
+        const startDate = String(params?.start_date || '').trim();
+        const endDate = String(params?.end_date || '').trim();
 
-        const endDate = String(
-            params?.end_date || ''
-        ).trim();
-
-        /*
-         * =====================================================
-         * CONDITION
-         * =====================================================
-         */
+        // =====================================================
+        // CONDITION & BIND
+        // =====================================================
         let condition = '';
 
-        if (['05', '04'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' AND mu.nip = '${params?.dataUser?.nip}' `;
-        }
-        if (['02', '03'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
-        }
-        /*
-         * =====================================================
-         * BIND
-         *
-         * PENTING:
-         * start_date dan end_date selalu dikirim.
-         *
-         * Jika tidak ada filter tanggal,
-         * nilainya NULL agar query LATERAL
-         * tetap dapat dijalankan.
-         * =====================================================
-         */
         const bind = {
             limit,
             offset,
-
             start_date: startDate || null,
             end_date: endDate || null
         };
 
-        /*
-         * =====================================================
-         * FILTER PENERIMAAN LAIN
-         * =====================================================
-         */
+        const roleId = String(params?.dataUser?.role_id || '');
+
+        if (['05', '04'].includes(roleId)) {
+            condition += `
+                AND p.cabang = :role_cabang
+                AND mu.nip = :role_nip
+            `;
+
+            bind.role_cabang = params?.dataUser?.cabang_id;
+            bind.role_nip = params?.dataUser?.nip;
+        } else if (['02', '03'].includes(roleId)) {
+            condition += `
+                AND p.cabang = :role_cabang
+            `;
+
+            bind.role_cabang = params?.dataUser?.cabang_id;
+        }
+
+        // =====================================================
+        // FILTER PENERIMAAN LAIN
+        // =====================================================
         if (
             penerimaanLainId !== undefined &&
             penerimaanLainId !== null &&
@@ -7522,31 +8274,19 @@ exports.getDataBayarFaktur = async (params) => {
                 AND EXISTS (
                     SELECT 1
                     FROM public.d_pembayaran dp_penerimaan_lain
-
                     WHERE dp_penerimaan_lain.penerimaan_lain_id =
                           :penerimaan_lain_id
-
-                      AND BTRIM(
-                            COALESCE(
-                                dp_penerimaan_lain.no_billing,
-                                ''
-                            )
-                          ) =
-                          BTRIM(
-                            COALESCE(p.no_billing, '')
-                          )
+                      AND BTRIM(COALESCE(dp_penerimaan_lain.no_billing, '')) =
+                          BTRIM(COALESCE(p.no_billing, ''))
                 )
             `;
 
-            bind.penerimaan_lain_id =
-                penerimaanLainId;
+            bind.penerimaan_lain_id = penerimaanLainId;
         }
 
-        /*
-         * =====================================================
-         * SEARCH KEYWORD
-         * =====================================================
-         */
+        // =====================================================
+        // FILTER KEYWORD
+        // =====================================================
         if (keyword) {
             condition += `
                 AND (
@@ -7559,27 +8299,21 @@ exports.getDataBayarFaktur = async (params) => {
                     OR p.document_type ILIKE :keyword
                     OR p.posting_date::text ILIKE :keyword
                     OR p.jatuh_tempo::text ILIKE :keyword
-
                     OR mc.name ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
-
                     OR fp.nip ILIKE :keyword
                     OR mu.nama ILIKE :keyword
                     OR fp.kd_status ILIKE :keyword
-
-                    OR cod.total_nominal_billing::text
-                       ILIKE :keyword
-
-                    OR pay.total_nominal_bayar::text
-                       ILIKE :keyword
-
-                    OR verifikasi.kd_status_verifikasi
-                       ILIKE :keyword
+                    OR cod.total_nominal_billing::text ILIKE :keyword
+                    OR pay.total_nominal_bayar::text ILIKE :keyword
+                    OR verifikasi.kd_status_verifikasi ILIKE :keyword
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        INNER JOIN public.m_principle mp
+                            ON mp.principle = dd.principle
+                        WHERE dd.billing_no = p.no_billing
+                          AND mp.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -7587,16 +8321,12 @@ exports.getDataBayarFaktur = async (params) => {
             bind.keyword = `%${keyword}%`;
         }
 
-        /*
-         * =====================================================
-         * FILTER CABANG
-         * =====================================================
-         */
+        // =====================================================
+        // FILTER SALES OFFICE / CABANG
+        // =====================================================
         if (
             salesOffices.length &&
-            !salesOffices.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !salesOffices.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND p.cabang IN (:sales_offices)
@@ -7605,16 +8335,12 @@ exports.getDataBayarFaktur = async (params) => {
             bind.sales_offices = salesOffices;
         }
 
-        /*
-         * =====================================================
-         * FILTER CUSTOMER
-         * =====================================================
-         */
+        // =====================================================
+        // FILTER CUSTOMER
+        // =====================================================
         if (
             customers.length &&
-            !customers.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !customers.some((item) => item.toUpperCase() === 'ALL')
         ) {
             condition += `
                 AND p.customer IN (:customers)
@@ -7623,11 +8349,10 @@ exports.getDataBayarFaktur = async (params) => {
             bind.customers = customers;
         }
 
-        /*
-         * =====================================================
-         * FILTER STATUS PEMBAYARAN
-         * =====================================================
-         */
+        // =====================================================
+        // FILTER STATUS PEMBAYARAN
+        // Dasar tagihan: DPP + PPN
+        // =====================================================
         const allowedStatus = [
             'BELUM_DIBAYAR',
             'PARTIAL',
@@ -7635,17 +8360,14 @@ exports.getDataBayarFaktur = async (params) => {
             'SUDAH_DIBAYAR'
         ];
 
-        const filteredStatusValues =
-            statusValues.filter(
-                (item) => item !== 'ALL'
-            );
+        const filteredStatusValues = statusValues.filter(
+            (item) => item !== 'ALL'
+        );
 
         if (filteredStatusValues.length) {
-            const invalidStatus =
-                filteredStatusValues.find(
-                    (item) =>
-                        !allowedStatus.includes(item)
-                );
+            const invalidStatus = filteredStatusValues.find(
+                (item) => !allowedStatus.includes(item)
+            );
 
             if (invalidStatus) {
                 throw new Error(
@@ -7655,80 +8377,47 @@ exports.getDataBayarFaktur = async (params) => {
 
             const statusConditions = [];
 
-            /*
-             * BELUM DIBAYAR
-             */
-            if (
-                filteredStatusValues.includes(
-                    'BELUM_DIBAYAR'
+            const nominalTagihan = `
+                (
+                    COALESCE(p.dpp, 0) +
+                    COALESCE(p.ppn, 0)
                 )
-            ) {
+            `;
+
+            const nominalPembayaran = `
+                COALESCE(pay.total_nominal_bayar_verified, 0)
+            `;
+
+            if (filteredStatusValues.includes('BELUM_DIBAYAR')) {
                 statusConditions.push(`
                     (
-                        COALESCE(
-                            pay.total_nominal_bayar,
-                            0
-                        ) <= 0
-
-                        AND COALESCE(p.dpp, 0) > 0
+                        ${nominalPembayaran} <= 0
+                        AND ${nominalTagihan} > 0
                     )
                 `);
             }
 
-            /*
-             * PARTIAL
-             */
-            if (
-                filteredStatusValues.includes('PARTIAL')
-            ) {
+            if (filteredStatusValues.includes('PARTIAL')) {
                 statusConditions.push(`
                     (
-                        COALESCE(
-                            pay.total_nominal_bayar,
-                            0
-                        ) > 0
-
-                        AND COALESCE(
-                            pay.total_nominal_bayar,
-                            0
-                        ) < COALESCE(p.dpp, 0)
+                        ${nominalPembayaran} > 0
+                        AND ${nominalPembayaran} < ${nominalTagihan}
                     )
                 `);
             }
 
-            /*
-             * SUDAH DIBAYAR
-             */
-            if (
-                filteredStatusValues.includes(
-                    'SUDAH_DIBAYAR'
-                )
-            ) {
+            if (filteredStatusValues.includes('SUDAH_DIBAYAR')) {
                 statusConditions.push(`
                     (
-                        COALESCE(
-                            pay.total_nominal_bayar,
-                            0
-                        ) >= COALESCE(p.dpp, 0)
-
-                        AND COALESCE(p.dpp, 0) > 0
+                        ${nominalPembayaran} >= ${nominalTagihan}
+                        AND ${nominalTagihan} > 0
                     )
                 `);
             }
 
-            /*
-             * MENUNGGU PEMBAYARAN
-             */
-            if (
-                filteredStatusValues.includes(
-                    'MENUNGGU_PEMBAYARAN'
-                )
-            ) {
-                statusConditions.push(`
-                    (
-                        1 = 0
-                    )
-                `);
+            if (filteredStatusValues.includes('MENUNGGU_PEMBAYARAN')) {
+                // Mengikuti perilaku service sebelumnya.
+                statusConditions.push('(1 = 0)');
             }
 
             if (statusConditions.length) {
@@ -7740,29 +8429,24 @@ exports.getDataBayarFaktur = async (params) => {
             }
         }
 
-        /*
-         * =====================================================
-         * FILTER STATUS VERIFIKASI
-         * =====================================================
-         */
+        // =====================================================
+        // FILTER STATUS VERIFIKASI
+        // =====================================================
         const allowedVerificationStatus = [
             'VERIFIED',
             'BELUM_DIVERIFIKASI'
         ];
 
-        const filteredVerificationValues =
-            statusVerifikasiValues.filter(
-                (item) => item !== 'ALL'
-            );
+        const filteredVerificationValues = statusVerifikasiValues.filter(
+            (item) => item !== 'ALL'
+        );
 
         if (filteredVerificationValues.length) {
-            const invalidVerificationStatus =
-                filteredVerificationValues.find(
-                    (item) =>
-                        !allowedVerificationStatus.includes(item)
-                );
+            const invalidStatus = filteredVerificationValues.find(
+                (item) => !allowedVerificationStatus.includes(item)
+            );
 
-            if (invalidVerificationStatus) {
+            if (invalidStatus) {
                 throw new Error(
                     'Status verifikasi hanya boleh VERIFIED atau BELUM_DIVERIFIKASI'
                 );
@@ -7770,104 +8454,91 @@ exports.getDataBayarFaktur = async (params) => {
 
             const verificationConditions = [];
 
-            /*
-             * VERIFIED
-             */
-            if (
-                filteredVerificationValues.includes(
-                    'VERIFIED'
-                )
-            ) {
+            if (filteredVerificationValues.includes('VERIFIED')) {
                 verificationConditions.push(`
-                    (
-                        verifikasi.kd_status_verifikasi = 'S'
-                    )
+                    verifikasi.kd_status_verifikasi = 'S'
                 `);
             }
 
-            /*
-             * BELUM DIVERIFIKASI
-             */
             if (
                 filteredVerificationValues.includes(
                     'BELUM_DIVERIFIKASI'
                 )
             ) {
                 verificationConditions.push(`
-                    (
-                        verifikasi.kd_status_verifikasi IS NULL
-                    )
+                    verifikasi.kd_status_verifikasi IS NULL
                 `);
             }
 
-            if (verificationConditions.length) {
-                condition += `
-                    AND (
-                        ${verificationConditions.join(' OR ')}
-                    )
-                `;
-            }
+            condition += `
+                AND (
+                    ${verificationConditions.join(' OR ')}
+                )
+            `;
         }
 
-        /*
-         * =====================================================
-         * FILTER TANGGAL AWAL
-         *
-         * Filter data utama berdasarkan posting_date.
-         * =====================================================
-         */
+        // =====================================================
+        // FILTER TANGGAL
+        // =====================================================
         if (startDate) {
             condition += `
                 AND p.posting_date >= CAST(:start_date AS DATE)
             `;
         }
 
-        /*
-         * =====================================================
-         * FILTER TANGGAL AKHIR
-         *
-         * Inklusif sampai tanggal end_date.
-         * =====================================================
-         */
         if (endDate) {
             condition += `
                 AND p.posting_date < (
-                    CAST(:end_date AS DATE)
-                    + INTERVAL '1 day'
+                    CAST(:end_date AS DATE) + INTERVAL '1 day'
                 )
             `;
         }
 
-        /*
-         * =====================================================
-         * LIST DATA
-         * =====================================================
-         */
-        const listQuery =
-            query.getDataBayarFaktur.replace(
-                ':condition',
-                condition
-            );
-
-        const listData = await db.query(
-            listQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT
-                // logging: console.log
-            }
+        // =====================================================
+        // BUILD QUERY
+        // =====================================================
+        const listQuery = query.getDataBayarFaktur.replace(
+            /:condition/g,
+            condition
         );
 
-        /*
-         * =====================================================
-         * HISTORY PEMBAYARAN
-         * =====================================================
-         */
+        const countQuery = query.countDataBayarFaktur.replace(
+            /:condition/g,
+            condition
+        );
+
+        const summaryQuery = query.summaryDataBayarFaktur.replace(
+            /:condition/g,
+            condition
+        );
+
+        // =====================================================
+        // EXECUTE LIST, COUNT, SUMMARY
+        // =====================================================
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(listQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(countQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(summaryQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
+
+        // =====================================================
+        // HISTORY PEMBAYARAN
+        // Catatan: query history tetap memakai query existing.
+        // =====================================================
         const getHistoryPembayaran = async (noBilling) => {
             try {
-                if (!noBilling) {
-                    return [];
-                }
+                if (!noBilling) return [];
 
                 const result = await db.query(
                     query.getHistoryPembayaranBayarFaktur,
@@ -7879,35 +8550,22 @@ exports.getDataBayarFaktur = async (params) => {
                     }
                 );
 
-                if (
-                    Array.isArray(
-                        result?.[0]?.h_pembayaran
-                    )
-                ) {
-                    return result[0].h_pembayaran;
+                const history = result?.[0]?.h_pembayaran;
+
+                if (Array.isArray(history)) {
+                    return history;
                 }
 
-                if (
-                    typeof result?.[0]?.h_pembayaran === 'string'
-                ) {
+                if (typeof history === 'string') {
                     try {
-                        const parsed = JSON.parse(
-                            result[0].h_pembayaran
-                        );
-
-                        return Array.isArray(parsed)
-                            ? parsed
-                            : [];
-                    } catch (error) {
+                        const parsed = JSON.parse(history);
+                        return Array.isArray(parsed) ? parsed : [];
+                    } catch {
                         return [];
                     }
                 }
 
-                if (Array.isArray(result)) {
-                    return result;
-                }
-
-                return [];
+                return Array.isArray(result) ? result : [];
             } catch (error) {
                 console.error(
                     'ERROR GET HISTORY PEMBAYARAN:',
@@ -7921,78 +8579,20 @@ exports.getDataBayarFaktur = async (params) => {
             }
         };
 
-        /*
-         * =====================================================
-         * TAMBAHKAN HISTORY
-         * =====================================================
-         */
         const listDataWithHistory = await Promise.all(
-            (listData || []).map(async (item) => {
-                const h_pembayaran =
-                    await getHistoryPembayaran(
-                        item?.no_billing
-                    );
-
-                return {
-                    ...item,
-                    h_pembayaran
-                };
-            })
+            (listData || []).map(async (item) => ({
+                ...item,
+                h_pembayaran: await getHistoryPembayaran(item?.no_billing)
+            }))
         );
 
-        /*
-         * =====================================================
-         * COUNT
-         * =====================================================
-         */
-        const countQuery =
-            query.countDataBayarFaktur.replace(
-                ':condition',
-                condition
-            );
-
-        const countData = await db.query(
-            countQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT
-            }
-        );
-
-        const totalData = Number(
-            countData?.[0]?.total || 0
-        );
-
-        const totalHalaman = Math.ceil(
-            totalData / limit
-        );
-
-        /*
-         * =====================================================
-         * SUMMARY
-         * =====================================================
-         */
-        const summaryQuery =
-            query.summaryDataBayarFaktur.replace(
-                ':condition',
-                condition
-            );
-
-        const summaryResult = await db.query(
-            summaryQuery,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT
-            }
-        );
-
+        // =====================================================
+        // RESPONSE
+        // =====================================================
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
         const summary = summaryResult?.[0] || {};
 
-        /*
-         * =====================================================
-         * RESPONSE
-         * =====================================================
-         */
         return {
             total_data: totalData,
             total_halaman: totalHalaman,
@@ -8002,57 +8602,41 @@ exports.getDataBayarFaktur = async (params) => {
             list_data: listDataWithHistory,
 
             summary: {
-                // 1. Total Faktur
-                total_faktur: Number(
-                    summary?.total_faktur || 0
-                ),
-
+                total_faktur: Number(summary?.total_faktur || 0),
                 total_nominal_faktur: Number(
                     summary?.total_nominal_faktur || 0
                 ),
 
-                // 2. Belum Dibayar
-                belum_dibayar: Number(
-                    summary?.belum_dibayar || 0
-                ),
-
+                belum_dibayar: Number(summary?.belum_dibayar || 0),
                 nominal_belum_dibayar: Number(
                     summary?.nominal_belum_dibayar || 0
                 ),
 
-                // 3. Collections Menunggu Verifikasi
                 total_data_menunggu_verifikasi: Number(
                     summary?.total_data_menunggu_verifikasi || 0
                 ),
-
                 total_collections_menunggu_verifikasi: Number(
                     summary?.total_collections_menunggu_verifikasi || 0
                 ),
 
-                // 4. Collections Tidak Terverifikasi
                 total_data_tidak_terverifikasi: Number(
                     summary?.total_data_tidak_terverifikasi || 0
                 ),
-
                 total_collections_tidak_terverifikasi: Number(
                     summary?.total_collections_tidak_terverifikasi || 0
                 ),
 
-                // 5. Collections Terverifikasi
                 total_data_terverifikasi: Number(
                     summary?.total_data_terverifikasi || 0
                 ),
-
                 total_collections_terverifikasi: Number(
                     summary?.total_collections_terverifikasi || 0
                 ),
 
-                // 6. Total Saldo Piutang
                 total_saldo_piutang: Number(
                     summary?.total_saldo_piutang || 0
                 ),
 
-                // 7. Total Penerimaan Lain
                 total_penerimaan_lain: Number(
                     summary?.total_penerimaan_lain || 0
                 )
@@ -9115,6 +9699,7 @@ exports.konfirmasiCustomer = async (
     }
 };
 
+
 exports.getMonitoringPenugasan = async (params = {}) => {
     try {
         const normalizeFilterValues = (value) => {
@@ -9131,11 +9716,11 @@ exports.getMonitoringPenugasan = async (params = {}) => {
                 .filter(Boolean);
         };
 
+        // =========================
+        // PARAMETER
+        // =========================
         const page = Math.max(1, Number(params?.page) || 1);
-        const limit = Math.min(
-            100,
-            Math.max(1, Number(params?.limit) || 10)
-        );
+        const limit = Math.min(100, Math.max(1, Number(params?.limit) || 10));
         const offset = (page - 1) * limit;
 
         const keyword = String(params?.keyword || "").trim();
@@ -9161,6 +9746,9 @@ exports.getMonitoringPenugasan = async (params = {}) => {
         const startDate = String(params?.start_date || "").trim();
         const endDate = String(params?.end_date || "").trim();
 
+        // =========================
+        // CONDITION
+        // =========================
         let condition = "";
         let summaryCondition = "";
 
@@ -9171,9 +9759,9 @@ exports.getMonitoringPenugasan = async (params = {}) => {
 
         const summaryBind = {};
 
-        /*
-         * SEARCH
-         */
+        // =========================
+        // KEYWORD
+        // =========================
         if (keyword) {
             const searchCondition = `
                 AND (
@@ -9185,12 +9773,15 @@ exports.getMonitoringPenugasan = async (params = {}) => {
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
                     OR mr.ur_ref ILIKE :keyword
-                    OR COALESCE(fp_tagih.petugas, '') ILIKE :keyword 
+                    OR COALESCE(fp_tagih.petugas, '') ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        INNER JOIN public.m_principle mp_keyword
+                            ON mp_keyword.principle = dd.principle
+                        WHERE dd.billing_no = p.no_billing
+                            AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -9202,14 +9793,12 @@ exports.getMonitoringPenugasan = async (params = {}) => {
             summaryBind.keyword = `%${keyword}%`;
         }
 
-        /*
-         * FILTER CABANG
-         */
+        // =========================
+        // FILTER CABANG
+        // =========================
         if (
             salesOffices.length &&
-            !salesOffices.some(
-                (item) => item.toUpperCase() === "ALL"
-            )
+            !salesOffices.some((item) => item.toUpperCase() === "ALL")
         ) {
             const cabangCondition = `
                 AND p.cabang IN (:sales_offices)
@@ -9222,14 +9811,12 @@ exports.getMonitoringPenugasan = async (params = {}) => {
             summaryBind.sales_offices = salesOffices;
         }
 
-        /*
-         * FILTER CUSTOMER
-         */
+        // =========================
+        // FILTER CUSTOMER
+        // =========================
         if (
             customers.length &&
-            !customers.some(
-                (item) => item.toUpperCase() === "ALL"
-            )
+            !customers.some((item) => item.toUpperCase() === "ALL")
         ) {
             const customerCondition = `
                 AND p.customer IN (:customers)
@@ -9242,50 +9829,24 @@ exports.getMonitoringPenugasan = async (params = {}) => {
             summaryBind.customers = customers;
         }
 
-        /*
-         * FILTER STATUS TUKAR FAKTUR
-         *
-         * ALL
-         * BELUM_DITUKAR
-         * SUDAH_DITUKAR
-         */
+        // =========================
+        // FILTER STATUS TUKAR FAKTUR
+        // =========================
         if (statusTukar !== "ALL") {
-            if (
-                !["BELUM_DITUKAR", "SUDAH_DITUKAR"].includes(
-                    statusTukar
-                )
-            ) {
-                throw new Error(
-                    "Status tukar faktur tidak valid."
-                );
+            if (!["BELUM_DITUKAR", "SUDAH_DITUKAR"].includes(statusTukar)) {
+                throw new Error("Status tukar faktur tidak valid.");
             }
 
-            if (statusTukar === "BELUM_DITUKAR") {
-                condition += `
-                    AND tf.tukar_faktur_id IS NULL
-                `;
-            }
-
-            if (statusTukar === "SUDAH_DITUKAR") {
-                condition += `
-                    AND tf.tukar_faktur_id IS NOT NULL
-                `;
-            }
+            condition += statusTukar === "BELUM_DITUKAR"
+                ? ` AND tf.tukar_faktur_id IS NULL `
+                : ` AND tf.tukar_faktur_id IS NOT NULL `;
         }
 
-        /*
-         * FILTER STATUS PEMBAYARAN
-         *
-         * ALL
-         * BELUM_LUNAS
-         * SUDAH_LUNAS
-         */
+        // =========================
+        // FILTER STATUS PEMBAYARAN
+        // =========================
         if (statusPembayaran !== "ALL") {
-            if (
-                !["BELUM_LUNAS", "SUDAH_LUNAS"].includes(
-                    statusPembayaran
-                )
-            ) {
+            if (!["BELUM_LUNAS", "SUDAH_LUNAS"].includes(statusPembayaran)) {
                 throw new Error(
                     "Status pembayaran hanya boleh BELUM_LUNAS atau SUDAH_LUNAS."
                 );
@@ -9302,9 +9863,7 @@ exports.getMonitoringPenugasan = async (params = {}) => {
                 condition += `
                     AND ${collectionExpression} < COALESCE(p.dpp, 0)
                 `;
-            }
-
-            if (statusPembayaran === "SUDAH_LUNAS") {
+            } else {
                 condition += `
                     AND COALESCE(p.dpp, 0) > 0
                     AND ${collectionExpression} >= COALESCE(p.dpp, 0)
@@ -9312,12 +9871,12 @@ exports.getMonitoringPenugasan = async (params = {}) => {
             }
         }
 
-        /*
-         * FILTER TANGGAL AWAL
-         */
+        // =========================
+        // FILTER TANGGAL AWAL
+        // =========================
         if (startDate) {
             const startCondition = `
-                AND p.posting_date::date >= CAST(:start_date AS date)
+                AND p.posting_date >= CAST(:start_date AS DATE)
             `;
 
             condition += startCondition;
@@ -9327,12 +9886,14 @@ exports.getMonitoringPenugasan = async (params = {}) => {
             summaryBind.start_date = startDate;
         }
 
-        /*
-         * FILTER TANGGAL AKHIR
-         */
+        // =========================
+        // FILTER TANGGAL AKHIR
+        // =========================
         if (endDate) {
             const endCondition = `
-                AND p.posting_date::date <= CAST(:end_date AS date)
+                AND p.posting_date < (
+                    CAST(:end_date AS DATE) + INTERVAL '1 day'
+                )
             `;
 
             condition += endCondition;
@@ -9342,57 +9903,49 @@ exports.getMonitoringPenugasan = async (params = {}) => {
             summaryBind.end_date = endDate;
         }
 
-        /*
-         * LIST DATA
-         */
+        // =========================
+        // BUILD QUERY
+        // =========================
         const listQuery = query.getMonitoringPenugasan.replace(
-            ":condition",
+            /:condition/g,
             condition
         );
 
-        const listData = await db.query(listQuery, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT,
-        });
-
-        /*
-         * COUNT DATA
-         */
         const countQuery = query.countMonitoringPenugasan.replace(
-            ":condition",
+            /:condition/g,
             condition
         );
 
-        const countData = await db.query(countQuery, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT,
-        });
-
-        const totalData = Number(
-            countData?.[0]?.total || 0
+        const summaryQuery = query.summaryMonitoringPenugasan.replace(
+            /:condition/g,
+            summaryCondition
         );
 
-        const totalHalaman = Math.ceil(
-            totalData / limit
-        );
+        // =========================
+        // EXECUTE QUERY
+        // =========================
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(listQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+            }),
 
-        /*
-         * SUMMARY
-         *
-         * Mengikuti keyword, cabang, customer, dan tanggal.
-         * Tidak dipersempit oleh filter status agar kartu summary
-         * tetap menampilkan keseluruhan status sesuai filter umum.
-         */
-        const summaryQuery =
-            query.summaryMonitoringPenugasan.replace(
-                ":condition",
-                summaryCondition
-            );
+            db.query(countQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+            }),
 
-        const summaryResult = await db.query(summaryQuery, {
-            replacements: summaryBind,
-            type: db.QueryTypes.SELECT,
-        });
+            db.query(summaryQuery, {
+                replacements: summaryBind,
+                type: db.QueryTypes.SELECT,
+            }),
+        ]);
+
+        // =========================
+        // RESULT
+        // =========================
+        const totalData = Number(countData?.[0]?.total || 0);
+        const totalHalaman = Math.ceil(totalData / limit);
 
         const summary = summaryResult?.[0] || {};
 
@@ -9402,24 +9955,16 @@ exports.getMonitoringPenugasan = async (params = {}) => {
             limit,
             page,
             list_data: listData,
+
             summary: {
-                total_penugasan: Number(
-                    summary.total_penugasan || 0
-                ),
-                belum_tukar_faktur: Number(
-                    summary.belum_tukar_faktur || 0
-                ),
-                sudah_tukar_faktur: Number(
-                    summary.sudah_tukar_faktur || 0
-                ),
-                belum_penagihan: Number(
-                    summary.belum_penagihan || 0
-                ),
-                sudah_penagihan: Number(
-                    summary.sudah_penagihan || 0
-                ),
+                total_penugasan: Number(summary.total_penugasan || 0),
+                belum_tukar_faktur: Number(summary.belum_tukar_faktur || 0),
+                sudah_tukar_faktur: Number(summary.sudah_tukar_faktur || 0),
+                belum_penagihan: Number(summary.belum_penagihan || 0),
+                sudah_penagihan: Number(summary.sudah_penagihan || 0),
             },
         };
+
     } catch (error) {
         console.error(
             "ERROR SERVICE GET MONITORING PENUGASAN:",
@@ -9430,7 +9975,8 @@ exports.getMonitoringPenugasan = async (params = {}) => {
     }
 };
 
-exports.getDataReportSales = async (params) => {
+
+exports.getDataReportSales = async (params = {}) => {
     try {
         // =========================================
         // HELPER MULTIPLE FILTER
@@ -9440,6 +9986,11 @@ exports.getDataReportSales = async (params) => {
 
             return values
                 .filter((item) => item !== undefined && item !== null)
+                .flatMap((item) =>
+                    typeof item === "string" && item.includes(",")
+                        ? item.split(",")
+                        : [item]
+                )
                 .map((item) => String(item).trim())
                 .filter(Boolean);
         };
@@ -9449,14 +10000,17 @@ exports.getDataReportSales = async (params) => {
             values.some((item) => item.toUpperCase() === "ALL");
 
         // =========================================
-        // PAGINATION & SEARCH
+        // PAGINATION
         // =========================================
-        const page = Math.max(Number(params?.page) || 1, 1);
+        const page = Math.max(1, Number(params?.page) || 1);
+
         const limit = Math.min(
-            Math.max(Number(params?.limit) || 10, 1),
+            Math.max(1, Number(params?.limit) || 10),
             1000
         );
+
         const offset = (page - 1) * limit;
+
         const keyword = String(params?.keyword || "").trim();
 
         // =========================================
@@ -9482,29 +10036,78 @@ exports.getDataReportSales = async (params) => {
         const endDate = String(params?.end_date || "").trim();
 
         // =========================================
+        // USER ROLE
+        // =========================================
+        const roleId = String(params?.dataUser?.role_id || "");
+        const roleCabang = params?.dataUser?.cabang_id;
+        const roleNip = params?.dataUser?.nip;
+
+        const isPetugas = ["04", "05"].includes(roleId);
+
+        if (isPetugas && (!roleCabang || !roleNip)) {
+            throw new Error(
+                "Cabang dan NIP user wajib tersedia untuk role ini."
+            );
+        }
+
+        // =========================================
         // DYNAMIC CONDITION
-        // Alias p mengarah ke public.d_piutang
         // =========================================
         let condition = "";
 
-        if (['04', '05'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' AND pay.nip = '${params?.dataUser?.nip}' `;
-        }
-
         const filterBind = {};
 
+        // =========================================
+        // FILTER ROLE
+        // =========================================
+        if (isPetugas) {
+            condition += `
+                AND p.cabang = :role_cabang
+
+                AND EXISTS (
+                    SELECT 1
+                    FROM public.d_faktur_petugas fp_role
+                    JOIN LATERAL (
+                        SELECT
+                            ds_role.kd_status
+                        FROM public.d_status ds_role
+                        WHERE ds_role.foreign_id =
+                            fp_role.faktur_petugas_id
+                            AND ds_role.kegiatan = 'PENAGIHAN'
+                        ORDER BY
+                            ds_role.created_at DESC NULLS LAST
+                        LIMIT 1
+                    ) status_role ON TRUE
+                    WHERE fp_role.piutang_id = p.piutang_id
+                        AND fp_role.nip = :role_nip
+                        AND UPPER(
+                            COALESCE(status_role.kd_status, '')
+                        ) = 'S'
+                )
+            `;
+
+            filterBind.role_cabang = roleCabang;
+            filterBind.role_nip = roleNip;
+        }
+
+        // =========================================
+        // KEYWORD
+        // =========================================
         if (keyword) {
             condition += `
                 AND (
                     p.no_billing ILIKE :keyword
                     OR p.customer ILIKE :keyword
                     OR p.sales ILIKE :keyword
-                    OR p.nama_sales ILIKE :keyword 
+                    OR p.nama_sales ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        INNER JOIN public.m_principle mp_keyword
+                            ON mp_keyword.principle = dd.principle
+                        WHERE dd.billing_no = p.no_billing
+                            AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -9512,33 +10115,60 @@ exports.getDataReportSales = async (params) => {
             filterBind.keyword = `%${keyword}%`;
         }
 
-        // sales_office dipetakan ke cabang karena
-        // query d_piutang yang diberikan menggunakan kolom cabang.
+        // =========================================
+        // FILTER CABANG
+        // =========================================
         if (!isAll(salesOffices)) {
-            condition += ` AND p.cabang IN (:sales_offices) `;
+            condition += `
+                AND p.cabang IN (:sales_offices)
+            `;
+
             filterBind.sales_offices = salesOffices;
         }
 
+        // =========================================
+        // FILTER CUSTOMER
+        // =========================================
         if (!isAll(customers)) {
-            condition += ` AND p.customer IN (:customers) `;
+            condition += `
+                AND p.customer IN (:customers)
+            `;
+
             filterBind.customers = customers;
         }
 
+        // =========================================
+        // FILTER CHANNEL
+        // =========================================
         if (!isAll(channels)) {
-            condition += ` AND p.channel_id IN (:channels) `;
+            condition += `
+                AND p.channel_id IN (:channels)
+            `;
+
             filterBind.channels = channels;
         }
 
+        // =========================================
+        // FILTER PRINCIPLE
+        // =========================================
         if (!isAll(principles)) {
-            condition += ` AND EXISTS (
-                        SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.principle (:principles)
-                    ) `;
+            condition += `
+                AND EXISTS (
+                    SELECT 1
+                    FROM public.d_penjualan dd
+                    INNER JOIN public.m_principle mp
+                        ON mp.principle = dd.principle
+                    WHERE dd.billing_no = p.no_billing
+                        AND mp.principle IN (:principles)
+                )
+            `;
+
             filterBind.principles = principles;
         }
 
+        // =========================================
+        // FILTER TANGGAL AWAL
+        // =========================================
         if (startDate) {
             condition += `
                 AND p.posting_date >= CAST(:start_date AS DATE)
@@ -9547,53 +10177,76 @@ exports.getDataReportSales = async (params) => {
             filterBind.start_date = startDate;
         }
 
+        // =========================================
+        // FILTER TANGGAL AKHIR
+        // =========================================
         if (endDate) {
             condition += `
-                AND p.posting_date <
+                AND p.posting_date < (
                     CAST(:end_date AS DATE) + INTERVAL '1 day'
+                )
             `;
 
             filterBind.end_date = endDate;
         }
 
         // =========================================
-        // EXECUTE DATA, COUNT, SUMMARY
-        // Semua memakai filter dan bind yang sama
+        // PAYMENT ROLE CONDITION
+        // =========================================
+        const rolePaymentCondition = isPetugas
+            ? `AND fp.nip = :role_nip`
+            : "";
+
+        // =========================================
+        // BUILD QUERY
         // =========================================
         const dataSQL = query.getDataReportSales
-            .replace(/:condition/g, condition);
+            .replace(/:condition/g, condition)
+            .replace(
+                /\/\*ROLE_PAYMENT_CONDITION\*\//g,
+                rolePaymentCondition
+            );
 
         const countSQL = query.countDataReportSales
             .replace(/:condition/g, condition);
 
         const summarySQL = query.summaryDataReportSales
-            .replace(/:condition/g, condition);
+            .replace(/:condition/g, condition)
+            .replace(
+                /\/\*ROLE_PAYMENT_CONDITION\*\//g,
+                rolePaymentCondition
+            );
 
-        const [listData, countResult, summaryResult] =
-            await Promise.all([
-                db.query(dataSQL, {
-                    replacements: {
-                        ...filterBind,
-                        limit,
-                        offset,
-                    },
-                    type: db.QueryTypes.SELECT,
-                }),
+        // =========================================
+        // REPLACEMENTS
+        // =========================================
+        const replacements = {
+            ...filterBind,
+        };
 
-                db.query(countSQL, {
-                    replacements: {
-                        ...filterBind,
-                    },
-                    type: db.QueryTypes.SELECT,
-                }),
+        // =========================================
+        // EXECUTE
+        // =========================================
+        const [listData, countResult, summaryResult] = await Promise.all([
+            db.query(dataSQL, {
+                replacements: {
+                    ...replacements,
+                    limit,
+                    offset,
+                },
+                type: db.QueryTypes.SELECT,
+            }),
 
-                db.query(summarySQL, {
-                    replacements: {
-                        ...filterBind,
-                    },
-                    type: db.QueryTypes.SELECT,
-                }),
-            ]);
+            db.query(countSQL, {
+                replacements,
+                type: db.QueryTypes.SELECT,
+            }),
+
+            db.query(summarySQL, {
+                replacements,
+                type: db.QueryTypes.SELECT,
+            }),
+        ]);
 
         // =========================================
         // RESULT
@@ -9639,6 +10292,7 @@ exports.getDataReportSales = async (params) => {
                 ),
             },
         };
+
     } catch (error) {
         console.error(
             "ERROR SERVICE GET DATA REPORT SALES:",
@@ -9766,8 +10420,12 @@ const normalizeFilterValues = (value) => {
         });
 };
 
-exports.getDataKonfirmasiPiutang = async (params) => {
+
+exports.getDataKonfirmasiPiutang = async (params = {}) => {
     try {
+        // =========================================
+        // PARAMETER
+        // =========================================
         const page = Math.max(
             1,
             Number(params?.page) || 1
@@ -9780,38 +10438,38 @@ exports.getDataKonfirmasiPiutang = async (params) => {
 
         const offset = (page - 1) * limit;
 
-        // =====================================================
-        // FILTER DASAR
-        // =====================================================
         const keyword = String(
-            params?.keyword ?? ''
+            params?.keyword ?? ""
         ).trim();
 
-        const status = String(
-            params?.status ?? 'ALL'
-        ).trim();
+        const normalizedStatus = String(
+            params?.status ?? "ALL"
+        )
+            .trim()
+            .toUpperCase()
+            .replace(/\s+/g, "_");
 
         const startDate = String(
-            params?.start_date ?? ''
+            params?.start_date ?? ""
         ).trim();
 
         const endDate = String(
-            params?.end_date ?? ''
+            params?.end_date ?? ""
         ).trim();
 
-        // =====================================================
+        // =========================================
         // BIND
-        // =====================================================
+        // =========================================
         const bind = {
             limit,
             offset,
         };
 
-        let condition = '';
+        let condition = "";
 
-        // =====================================================
+        // =========================================
         // FILTER KEYWORD
-        // =====================================================
+        // =========================================
         if (keyword) {
             condition += `
                 AND (
@@ -9853,22 +10511,24 @@ exports.getDataKonfirmasiPiutang = async (params) => {
                         SELECT 1
                         FROM public.m_customer mc_keyword
                         WHERE mc_keyword.kode_customer = p.customer
-                          AND mc_keyword.name ILIKE :keyword
+                            AND mc_keyword.name ILIKE :keyword
                     )
 
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_referensi mr_keyword
                         WHERE mr_keyword.kd_ref = p.cabang
-                          AND mr_keyword.jns_ref = 'cabang_id'
-                          AND mr_keyword.ur_ref ILIKE :keyword
+                            AND mr_keyword.jns_ref = 'cabang_id'
+                            AND mr_keyword.ur_ref ILIKE :keyword
                     )
 
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_penjualan dd
+                        INNER JOIN public.m_principle mp_keyword
+                            ON mp_keyword.principle = dd.principle
+                        WHERE dd.billing_no = p.no_billing
+                            AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -9876,129 +10536,125 @@ exports.getDataKonfirmasiPiutang = async (params) => {
             bind.keyword = `%${keyword}%`;
         }
 
-        // Filter status konfirmasi piutang
-        const normalizedStatus = String(status ?? '')
-            .trim()
-            .toUpperCase()
-            .replace(/\s+/g, '_');
-
-        if (normalizedStatus && normalizedStatus !== 'ALL') {
+        // =========================================
+        // FILTER STATUS
+        // =========================================
+        if (normalizedStatus && normalizedStatus !== "ALL") {
             switch (normalizedStatus) {
-                case 'BELUM_DIKIRIM':
-                    // Belum pernah dikirim untuk konfirmasi
+                case "BELUM_DIKIRIM":
                     condition += `
-                AND kp.k_piutang_id IS NULL
-            `;
+                        AND kp.k_piutang_id IS NULL
+                    `;
                     break;
 
-                case 'MENUNGGU_KONFIRMASI':
-                case 'MK':
-                    // Sudah dikirim, tetapi belum ada keputusan final
+                case "MENUNGGU_KONFIRMASI":
+                case "MK":
                     condition += `
-                AND kp.k_piutang_id IS NOT NULL
-                AND (
-                    ds.kd_status IS NULL
-                    OR UPPER(ds.kd_status::TEXT) NOT IN ('S', 'T', 'O')
-                )
-            `;
+                        AND kp.k_piutang_id IS NOT NULL
+                        AND (
+                            ds.kd_status IS NULL
+                            OR UPPER(ds.kd_status::TEXT)
+                                NOT IN ('S', 'T', 'O')
+                        )
+                    `;
                     break;
 
-                case 'DISETUJUI_CUSTOMER':
-                case 'STJ':
-                case 'S':
-                    // Disetujui customer
+                case "DISETUJUI_CUSTOMER":
+                case "STJ":
+                case "S":
                     condition += `
-                AND UPPER(ds.kd_status::TEXT) = 'S'
-            `;
+                        AND UPPER(ds.kd_status::TEXT) = 'S'
+                    `;
                     break;
 
-                case 'DITOLAK_CUSTOMER':
-                case 'TLK':
-                case 'T':
-                    // Ditolak customer
+                case "DITOLAK_CUSTOMER":
+                case "TLK":
+                case "T":
                     condition += `
-                AND UPPER(ds.kd_status::TEXT) = 'T'
-            `;
+                        AND UPPER(ds.kd_status::TEXT) = 'T'
+                    `;
                     break;
 
-                case 'DISETUJUI_OTOMATIS':
-                case 'OTO':
-                case 'O':
-                    // Disetujui otomatis
+                case "DISETUJUI_OTOMATIS":
+                case "OTO":
+                case "O":
                     condition += `
-                AND UPPER(ds.kd_status::TEXT) = 'O'
-            `;
+                        AND UPPER(ds.kd_status::TEXT) = 'O'
+                    `;
                     break;
 
                 default:
                     throw new Error(
-                        `Filter status konfirmasi tidak dikenal: ${status}`
+                        `Filter status konfirmasi tidak dikenal: ${normalizedStatus}`
                     );
             }
         }
 
-        // =====================================================
-        // FILTER TANGGAL MULAI
-        // =====================================================
+        // =========================================
+        // FILTER TANGGAL AWAL
+        // =========================================
         if (startDate) {
             condition += `
-                AND kp.tgl_kirim_konfirmasi
-                    >= CAST(:start_date AS DATE)
+                AND kp.tgl_kirim_konfirmasi >= CAST(:start_date AS DATE)
             `;
 
             bind.start_date = startDate;
         }
 
-        // =====================================================
+        // =========================================
         // FILTER TANGGAL AKHIR
-        // Inklusif sampai seluruh waktu pada tanggal akhir
-        // =====================================================
+        // =========================================
         if (endDate) {
             condition += `
-                AND kp.tgl_kirim_konfirmasi
-                    < (
-                        CAST(:end_date AS DATE)
-                        + INTERVAL '1 day'
-                    )
+                AND kp.tgl_kirim_konfirmasi < (
+                    CAST(:end_date AS DATE) + INTERVAL '1 day'
+                )
             `;
 
             bind.end_date = endDate;
         }
 
-        // =====================================================
-        // 1. QUERY LIST DATA
-        // =====================================================
-        const LIST_QUERY =
-            query.getDataKonfirmasiPiutang.replace(
-                /:condition/g,
-                condition
-            );
-
-        const listData = await db.query(
-            LIST_QUERY,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT,
-            }
+        // =========================================
+        // BUILD QUERY
+        // =========================================
+        const listQuery = query.getDataKonfirmasiPiutang.replace(
+            /:condition/g,
+            condition
         );
 
-        // =====================================================
-        // 2. QUERY COUNT DATA
-        // =====================================================
-        const COUNT_QUERY =
-            query.countDataKonfirmasiPiutang.replace(
-                /:condition/g,
-                condition
-            );
-
-        const countData = await db.query(
-            COUNT_QUERY,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT,
-            }
+        const countQuery = query.countDataKonfirmasiPiutang.replace(
+            /:condition/g,
+            condition
         );
 
+        const summaryQuery = query.summaryDataKonfirmasiPiutang.replace(
+            /:condition/g,
+            condition
+        );
+
+        // =========================================
+        // EXECUTE LIST, COUNT, SUMMARY
+        // =========================================
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(listQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+            }),
+
+            db.query(countQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+            }),
+
+            db.query(summaryQuery, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT,
+            }),
+        ]);
+
+        // =========================================
+        // COUNT
+        // =========================================
         const totalData = Number(
             countData?.[0]?.total || 0
         );
@@ -10007,35 +10663,33 @@ exports.getDataKonfirmasiPiutang = async (params) => {
             totalData / limit
         );
 
-        // =====================================================
-        // 3. QUERY SUMMARY
-        // =====================================================
-        const SUMMARY_QUERY =
-            query.summaryDataKonfirmasiPiutang.replace(
-                /:condition/g,
-                condition
-            );
-
-        const summaryResult = await db.query(
-            SUMMARY_QUERY,
-            {
-                replacements: bind,
-                type: db.QueryTypes.SELECT,
-            }
-        );
+        // =========================================
+        // SUMMARY
+        // =========================================
+        const summaryData = summaryResult?.[0] || {};
 
         const summary = {
-            total: 0,
-            menunggu: 0,
-            disetujui: 0,
-            ditolak: 0,
-            otomatis: 0,
-            ...(summaryResult?.[0] || {}),
+            total: Number(summaryData.total || 0),
+            belum_dikirim: Number(
+                summaryData.belum_dikirim || 0
+            ),
+            menunggu: Number(
+                summaryData.menunggu || 0
+            ),
+            disetujui: Number(
+                summaryData.disetujui || 0
+            ),
+            ditolak: Number(
+                summaryData.ditolak || 0
+            ),
+            otomatis: Number(
+                summaryData.otomatis || 0
+            ),
         };
 
-        // =====================================================
+        // =========================================
         // RETURN
-        // =====================================================
+        // =========================================
         return {
             total_data: totalData,
             total_halaman: totalHalaman,
@@ -10044,9 +10698,10 @@ exports.getDataKonfirmasiPiutang = async (params) => {
             list_data: listData,
             summary,
         };
+
     } catch (error) {
         console.error(
-            'ERROR SERVICE GET DATA KONFIRMASI PIUTANG:',
+            "ERROR SERVICE GET DATA KONFIRMASI PIUTANG:",
             error
         );
 
@@ -10253,6 +10908,9 @@ exports.getDataPenerimaanLain = async (params) => {
 
 exports.getDataLaporan = async (params) => {
     try {
+        // =============================================
+        // HELPER NORMALISASI FILTER
+        // =============================================
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value) ? value : [value];
 
@@ -10267,17 +10925,20 @@ exports.getDataLaporan = async (params) => {
                 .filter(Boolean);
         };
 
-        const page = Math.max(1, Number(params?.page) || 1);
-        const limit = Math.max(1, Number(params?.limit) || 10);
+        const page = Math.max(1, parseInt(params?.page, 10) || 1);
+        const limit = Math.max(1, parseInt(params?.limit, 10) || 10);
         const offset = (page - 1) * limit;
+
         const keyword = String(params?.keyword || '').trim();
 
         const salesOffices = normalizeFilterValues(
             params?.sales_office ?? params?.['sales_office[]']
         );
+
         const customers = normalizeFilterValues(
             params?.customer ?? params?.['customer[]']
         );
+
         const principles = normalizeFilterValues(
             params?.principle ?? params?.['principle[]']
         );
@@ -10286,14 +10947,23 @@ exports.getDataLaporan = async (params) => {
         const startDate = String(params?.start_date || '').trim();
         const endDate = String(params?.end_date || '').trim();
 
+        // =============================================
+        // FILTER DINAMIS
+        // =============================================
         let condition = '';
         const filterBind = {};
 
-        if (['02', '03'].includes(params?.dataUser?.role_id)) {
-            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}' `;
+        // FILTER ROLE CABANG
+        const roleId = String(params?.dataUser?.role_id || '');
+
+        if (['02', '03'].includes(roleId)) {
+            condition += ` AND p.cabang = :role_cabang `;
+            filterBind.role_cabang = params?.dataUser?.cabang_id;
         }
 
+        // =============================================
         // FILTER KEYWORD
+        // =============================================
         if (keyword) {
             condition += `
                 AND (
@@ -10305,14 +10975,14 @@ exports.getDataLaporan = async (params) => {
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
                     OR p.principle ILIKE :keyword
-                    OR p.posting_date::text ILIKE :keyword
-                    OR p.jatuh_tempo::text ILIKE :keyword
-                    OR p.dpp::text ILIKE :keyword
-                    OR p.ppn::text ILIKE :keyword
-                    OR p.pph::text ILIKE :keyword
-                    OR p.total_dibayar_hitung::text ILIKE :keyword
-                    OR p.saldo_piutang_hitung::text ILIKE :keyword
-                    OR p.aging::text ILIKE :keyword
+                    OR p.posting_date::TEXT ILIKE :keyword
+                    OR p.jatuh_tempo::TEXT ILIKE :keyword
+                    OR p.dpp::TEXT ILIKE :keyword
+                    OR p.ppn::TEXT ILIKE :keyword
+                    OR p.pph::TEXT ILIKE :keyword
+                    OR p.total_dibayar_hitung::TEXT ILIKE :keyword
+                    OR p.saldo_piutang_hitung::TEXT ILIKE :keyword
+                    OR p.aging::TEXT ILIKE :keyword
 
                     OR EXISTS (
                         SELECT 1
@@ -10320,6 +10990,7 @@ exports.getDataLaporan = async (params) => {
                         WHERE mc_keyword.kode_customer = p.customer
                             AND mc_keyword.name ILIKE :keyword
                     )
+
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_referensi mr_keyword
@@ -10327,6 +10998,7 @@ exports.getDataLaporan = async (params) => {
                             AND mr_keyword.jns_ref = 'cabang_id'
                             AND mr_keyword.ur_ref ILIKE :keyword
                     )
+
                     OR EXISTS (
                         SELECT 1
                         FROM public.m_principle mp_keyword
@@ -10335,72 +11007,123 @@ exports.getDataLaporan = async (params) => {
                     )
                 )
             `;
+
             filterBind.keyword = `%${keyword}%`;
         }
 
-        // FILTER CABANG / SALES OFFICE
-        if (salesOffices.length > 0 && !salesOffices.some((item) => item.toUpperCase() === 'ALL')) {
+        // =============================================
+        // FILTER SALES OFFICE / CABANG
+        // =============================================
+        if (
+            salesOffices.length > 0 &&
+            !salesOffices.some((item) => item.toUpperCase() === 'ALL')
+        ) {
             condition += ` AND p.cabang IN (:sales_offices) `;
             filterBind.sales_offices = salesOffices;
         }
 
+        // =============================================
         // FILTER CUSTOMER
-        if (customers.length > 0 && !customers.some((item) => item.toUpperCase() === 'ALL')) {
+        // =============================================
+        if (
+            customers.length > 0 &&
+            !customers.some((item) => item.toUpperCase() === 'ALL')
+        ) {
             condition += ` AND p.customer IN (:customers) `;
             filterBind.customers = customers;
         }
 
+        // =============================================
         // FILTER STATUS PIUTANG
+        // =============================================
         if (status && status.toUpperCase() !== 'ALL') {
             condition += `
                 AND UPPER(COALESCE(p.status_piutang, '')) = UPPER(:status)
             `;
+
             filterBind.status = status;
         }
 
+        // =============================================
         // FILTER PRINCIPLE
-        if (principles.length > 0 && !principles.some((item) => item.toUpperCase() === 'ALL')) {
+        // =============================================
+        if (
+            principles.length > 0 &&
+            !principles.some((item) => item.toUpperCase() === 'ALL')
+        ) {
             condition += ` AND p.principle IN (:principles) `;
             filterBind.principles = principles;
         }
 
+        // =============================================
         // FILTER TANGGAL MULAI
+        // =============================================
         if (startDate) {
-            condition += ` AND p.posting_date >= CAST(:start_date AS DATE) `;
+            condition += `
+                AND p.posting_date >= CAST(:start_date AS DATE)
+            `;
+
             filterBind.start_date = startDate;
         }
 
-        // FILTER TANGGAL SELESAI (inklusif untuk satu hari penuh)
+        // =============================================
+        // FILTER TANGGAL SELESAI
+        // =============================================
         if (endDate) {
             condition += `
                 AND p.posting_date < CAST(:end_date AS DATE) + INTERVAL '1 day'
             `;
+
             filterBind.end_date = endDate;
         }
 
-        // GET LIST DATA
-        const listQuery = query.getDataLaporan.replace(/:condition/g, condition);
-        const listData = await db.query(listQuery, {
-            replacements: { ...filterBind, limit, offset },
-            type: db.QueryTypes.SELECT
-        });
+        // =============================================
+        // SIAPKAN QUERY
+        // =============================================
+        const replacements = { ...filterBind };
 
-        // GET TOTAL DATA
-        const countQuery = query.countDataLaporan.replace(/:condition/g, condition);
-        const countData = await db.query(countQuery, {
-            replacements: filterBind,
-            type: db.QueryTypes.SELECT
-        });
+        const listQuery = query.getDataLaporan
+            .replace(/:condition/g, condition);
+
+        const countQuery = query.countDataLaporan
+            .replace(/:condition/g, condition);
+
+        const summaryQuery = query.summaryDataLaporan
+            .replace(/:condition/g, condition);
+
+        // =============================================
+        // EKSEKUSI PARALEL
+        // =============================================
+        const [listData, countData, summaryResult] = await Promise.all([
+            db.query(listQuery, {
+                replacements: {
+                    ...replacements,
+                    limit,
+                    offset
+                },
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(countQuery, {
+                replacements,
+                type: db.QueryTypes.SELECT
+            }),
+
+            db.query(summaryQuery, {
+                replacements,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
+
+        // =============================================
+        // TOTAL DATA
+        // =============================================
         const totalData = Number(countData?.[0]?.total || 0);
         const totalHalaman = Math.ceil(totalData / limit);
 
-        // GET SUMMARY
-        const summaryQuery = query.summaryDataLaporan.replace(/:condition/g, condition);
-        const summaryResult = await db.query(summaryQuery, {
-            replacements: filterBind,
-            type: db.QueryTypes.SELECT
-        });
-
+        // =============================================
+        // SUMMARY
+        // =============================================
         const summary = summaryResult?.[0] || {
             total_piutang: 0,
             sudah_dibayar: 0,
@@ -10423,6 +11146,7 @@ exports.getDataLaporan = async (params) => {
             list_data: listData,
             summary
         };
+
     } catch (error) {
         console.error('ERROR SERVICE GET DATA LAPORAN:', error);
         throw error;
@@ -13128,6 +13852,9 @@ exports.getAgingPiutangDashboard = async (params) => {
 
 exports.getDataDoar = async (params) => {
     try {
+        // =====================================================
+        // NORMALIZE FILTER
+        // =====================================================
         const normalizeFilterValues = (value) => {
             const values = Array.isArray(value) ? value : [value];
 
@@ -13137,164 +13864,273 @@ exports.getDataDoar = async (params) => {
                 .filter(Boolean);
         };
 
-        const page = Number(params?.page) || 1;
-        const limit = Number(params?.limit) || 10;
+        const isAllSelected = (values) => {
+            return values.some(
+                (item) => item.toUpperCase() === 'ALL'
+            );
+        };
+
+        // =====================================================
+        // PAGINATION
+        // =====================================================
+        const page = Math.max(
+            1,
+            Math.trunc(Number(params?.page) || 1)
+        );
+
+        const limit = Math.min(
+            1000,
+            Math.max(1, Math.trunc(Number(params?.limit) || 10))
+        );
+
         const offset = (page - 1) * limit;
 
-        const keyword = String(params?.keyword || '').trim();
+        const keyword = String(
+            params?.keyword || ''
+        ).trim();
 
-        // SALES OFFICE / CABANG
+        // =====================================================
+        // FILTER SALES OFFICE
+        // =====================================================
         const salesOffices = normalizeFilterValues(
             params?.sales_office ?? params?.['sales_office[]']
         );
 
-        // CUSTOMER
+        // =====================================================
+        // FILTER CUSTOMER
+        // =====================================================
         const customers = normalizeFilterValues(
             params?.customer ?? params?.['customer[]']
         );
 
-        // CUSTOMER GROUP / CHANNEL
+        // =====================================================
+        // FILTER CUSTOMER GROUP
+        // =====================================================
         const customerGroups = normalizeFilterValues(
             params?.customer_group ?? params?.['customer_group[]']
         );
 
-        // PRINCIPLE
+        // =====================================================
+        // FILTER PRINCIPLE
+        // =====================================================
         const principles = normalizeFilterValues(
             params?.principle ?? params?.['principle[]']
         );
 
-        // DATE
-        const startDate = String(params?.start_date || '').trim();
-        const endDate = String(params?.end_date || '').trim();
+        // =====================================================
+        // FILTER DATE
+        // =====================================================
+        const startDate = String(
+            params?.start_date || ''
+        ).trim();
 
+        const endDate = String(
+            params?.end_date || ''
+        ).trim();
+
+        // =====================================================
+        // CONDITION LIST DAN COUNT
+        // =====================================================
         let condition = '';
+        let countCondition = '';
 
         const bind = {
+            page,
             limit,
             offset
         };
 
+        const countBind = {};
+
+        // =====================================================
         // KEYWORD
+        // =====================================================
         if (keyword) {
-            condition += `
+            const keywordCondition = `
                 AND (
                     p.customer ILIKE :keyword
                     OR p.cabang ILIKE :keyword
                     OR mc.name ILIKE :keyword
                     OR mr_cabang.ur_ref ILIKE :keyword
                     OR mt.lini ILIKE :keyword
+
                     OR EXISTS (
                         SELECT 1
-                        FROM public.m_principle mp_keyword left join d_penjualan dd on dd.principle = mp_keyword.principle join d_piutang dpp on dpp.no_billing = dd.billing_no 
-                        WHERE dpp.piutang_id = p.piutang_id
-                        AND mp_keyword.nama_principle ILIKE :keyword
+                        FROM public.d_piutang dpp
+
+                        INNER JOIN public.d_penjualan dd
+                            ON dd.billing_no = dpp.no_billing
+
+                        INNER JOIN public.m_principle mp_keyword
+                            ON mp_keyword.principle = dd.principle
+
+                        WHERE dpp.customer = p.customer
+                          AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
 
+            condition += keywordCondition;
+            countCondition += keywordCondition;
+
             bind.keyword = `%${keyword}%`;
+            countBind.keyword = `%${keyword}%`;
         }
 
-        // FILTER SALES OFFICE / CABANG
+        // =====================================================
+        // SALES OFFICE
+        // =====================================================
         if (
             salesOffices.length &&
-            !salesOffices.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(salesOffices)
         ) {
             condition += `
                 AND p.cabang IN (:sales_offices)
             `;
 
+            countCondition += `
+                AND p.cabang IN (:sales_offices)
+            `;
+
             bind.sales_offices = salesOffices;
+            countBind.sales_offices = salesOffices;
         }
 
-        // FILTER CUSTOMER
+        // =====================================================
+        // CUSTOMER
+        // =====================================================
         if (
             customers.length &&
-            !customers.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(customers)
         ) {
             condition += `
                 AND p.customer IN (:customers)
             `;
 
+            countCondition += `
+                AND p.customer IN (:customers)
+            `;
+
             bind.customers = customers;
+            countBind.customers = customers;
         }
 
-        // FILTER CUSTOMER GROUP / CHANNEL
+        // =====================================================
+        // CUSTOMER GROUP
+        // =====================================================
         if (
             customerGroups.length &&
-            !customerGroups.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(customerGroups)
         ) {
             condition += `
                 AND p.channel_id IN (:customer_groups)
             `;
 
+            countCondition += `
+                AND p.channel_id IN (:customer_groups)
+            `;
+
             bind.customer_groups = customerGroups;
+            countBind.customer_groups = customerGroups;
         }
 
-        // FILTER PRINCIPLE
+        // =====================================================
+        // PRINCIPLE
+        // =====================================================
         if (
             principles.length &&
-            !principles.some(
-                (item) => item.toUpperCase() === 'ALL'
-            )
+            !isAllSelected(principles)
         ) {
             condition += `
                 AND p.principle IN (:principles)
             `;
 
+            countCondition += `
+                AND p.principle IN (:principles)
+            `;
+
             bind.principles = principles;
+            countBind.principles = principles;
         }
 
-        // FILTER START DATE
+        // =====================================================
+        // START DATE
+        // =====================================================
         if (startDate) {
             condition += `
                 AND p.posting_date >= :start_date
             `;
 
-            bind.start_date = startDate;
-        }
-
-        // FILTER END DATE
-        if (endDate) {
-            condition += `
-                AND p.posting_date <= :end_date
+            countCondition += `
+                AND p.posting_date >= :start_date
             `;
 
-            bind.end_date = endDate;
+            bind.start_date = startDate;
+            countBind.start_date = startDate;
         }
 
-        // 1. GET LIST DATA
+        // =====================================================
+        // END DATE
+        // =====================================================
+        if (endDate) {
+            const endDateCondition = `
+                AND p.posting_date < (
+                    CAST(:end_date AS date) + INTERVAL '1 day'
+                )
+            `;
+
+            condition += endDateCondition;
+            countCondition += endDateCondition;
+
+            bind.end_date = endDate;
+            countBind.end_date = endDate;
+        }
+
+        // =====================================================
+        // QUERY LIST
+        // =====================================================
         const LIST_QUERY = query.getDataDoar.replace(
             /:condition/g,
             condition
         );
 
-        const listData = await db.query(LIST_QUERY, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        });
-
-        // 2. GET TOTAL CUSTOMER
+        // =====================================================
+        // QUERY COUNT
+        // =====================================================
         const COUNT_QUERY = query.countDataDoar.replace(
             /:condition/g,
-            condition
+            countCondition
         );
 
-        const countData = await db.query(COUNT_QUERY, {
-            replacements: bind,
-            type: db.QueryTypes.SELECT
-        });
+        // =====================================================
+        // EKSEKUSI QUERY
+        // =====================================================
+        const [listData, countData] = await Promise.all([
+            db.query(LIST_QUERY, {
+                replacements: bind,
+                type: db.QueryTypes.SELECT
+            }),
 
-        const totalData = Number(countData?.[0]?.total || 0);
-        const totalHalaman = Math.ceil(totalData / limit);
+            db.query(COUNT_QUERY, {
+                replacements: countBind,
+                type: db.QueryTypes.SELECT
+            })
+        ]);
 
-        // RETURN
+        // =====================================================
+        // TOTAL DATA
+        // =====================================================
+        const totalData = Number(
+            countData?.[0]?.total || 0
+        );
+
+        const totalHalaman = Math.ceil(
+            totalData / limit
+        );
+
+        // =====================================================
+        // RESPONSE
+        // =====================================================
         return {
             total_data: totalData,
             total_halaman: totalHalaman,
@@ -13304,7 +14140,11 @@ exports.getDataDoar = async (params) => {
         };
 
     } catch (error) {
-        console.error('ERROR SERVICE GET DATA DOAR:', error);
+        console.error(
+            'ERROR SERVICE GET DATA DOAR:',
+            error
+        );
+
         throw error;
     }
 };
