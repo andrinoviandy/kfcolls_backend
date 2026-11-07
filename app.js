@@ -132,7 +132,7 @@ app.use((err, req, res, next) => {
 });
 
 // Cron job untuk pengiriman email
-cron.schedule('55 21 * * *', async () => {
+cron.schedule('0 4 * * *', async () => {
   try {
     const result = await getDataSales();
   } catch (error) {
