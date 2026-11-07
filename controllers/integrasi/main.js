@@ -17,8 +17,8 @@ exports.getDataSales = async () => {
             entitas: 'dwh',
             modul: 'get_sales',
             method: 'post',
-            posting_date: '2026-10-29'
-            // posting_date: moment().subtract(1, 'days').format('YYYY-MM-DD')
+            // posting_date: '2026-10-29'
+            posting_date: moment().subtract(1, 'days').format('YYYY-MM-DD')
         }
 
         const config = await serviceIntegrasi.checkConfig(payload)
