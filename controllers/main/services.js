@@ -5956,8 +5956,10 @@ exports.insertBayarFaktur = async (
                     totalBayar =
                         saldoPiutang;
 
+                    // nominalBayar =
+                    //     saldoPiutang;
                     nominalBayar =
-                        saldoPiutang;
+                        item?.nominal_pembayaran || 0;
                 }
 
                 // =================================================
