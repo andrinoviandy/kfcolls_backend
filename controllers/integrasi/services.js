@@ -347,8 +347,8 @@ exports.getDataSales = async (payload) => {
                         status_piutang,
                         created_by,
                         created_at,
-                        desc_cust_grp3
-                        -- channel_id
+                        desc_cust_grp3,
+                        channel_id
                     )
                     SELECT
                         x.billing_no AS no_faktur,
@@ -367,8 +367,8 @@ exports.getDataSales = async (payload) => {
                         x.status_piutang,
                         'SYSTEM' AS created_by,
                         CURRENT_TIMESTAMP AS created_at,
-                        x.desc_cust_grp3 AS desc_cust_grp3
-                        -- x.channel_id
+                        x.desc_cust_grp3 AS desc_cust_grp3,
+                        x.channel_id
 
                     FROM (
                         SELECT
@@ -466,26 +466,26 @@ exports.getDataSales = async (payload) => {
 
                         LEFT JOIN public.m_top mt
                             ON REPLACE(
-                                LOWER(mt.desc_cust_grp3),
+                                LOWER(TRIM(mt.desc_cust_grp3)),
                                 ' ',
                                 ''
                             ) = REPLACE(
-                                LOWER(dp.desc_cust_grp3),
+                                LOWER(TRIM(dp.desc_cust_grp3)),
                                 ' ',
                                 ''
                             )
 
                         LEFT JOIN public.m_referensi m1
                             ON REPLACE(
-                                LOWER(m1.ur_ref),
+                                LOWER(TRIM(m1.ur_ref)),
                                 ' ',
                                 ''
                             ) = REPLACE(
-                                LOWER(mt.lini),
+                                LOWER(TRIM(mt.lini)),
                                 ' ',
                                 ''
                             )
-                            AND m1.jns_ref = 'lini_id'
+                            AND m1.jns_ref = 'channel_id'
 
                         LEFT JOIN (
                             SELECT
