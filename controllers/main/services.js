@@ -5748,14 +5748,14 @@ exports.insertBayarFaktur = async (
 ) => {
     try {
 
-        if (
-            !files ||
-            files.length === 0
-        ) {
-            throw new Error(
-                'File bukti pembayaran wajib diupload'
-            );
-        }
+        // if (
+        //     !files ||
+        //     files.length === 0
+        // ) {
+        //     throw new Error(
+        //         'File bukti pembayaran wajib diupload'
+        //     );
+        // }
 
         const jenisPembayaran =
             String(
@@ -14627,6 +14627,255 @@ exports.getAgingPiutangDashboard = async (params) => {
 //     }
 // };
 
+// exports.getDataDoar = async (params) => {
+//     try {
+//         // =====================================================
+//         // NORMALIZE FILTER
+//         // =====================================================
+//         const normalizeFilterValues = (value) => {
+//             const values = Array.isArray(value) ? value : [value];
+
+//             return values
+//                 .filter(
+//                     (item) =>
+//                         item !== undefined &&
+//                         item !== null &&
+//                         String(item).trim() !== ''
+//                 )
+//                 .map((item) => String(item).trim())
+//                 .filter(Boolean);
+//         };
+
+//         const isAllSelected = (values) =>
+//             values.some((item) => item.toUpperCase() === 'ALL');
+
+//         // =====================================================
+//         // PAGINATION
+//         // =====================================================
+//         const page = Math.max(
+//             1,
+//             Math.trunc(Number(params?.page) || 1)
+//         );
+
+//         const limit = Math.min(
+//             1000,
+//             Math.max(1, Math.trunc(Number(params?.limit) || 10))
+//         );
+
+//         const offset = (page - 1) * limit;
+
+//         const keyword = String(params?.keyword || '').trim();
+
+//         // =====================================================
+//         // FILTER SALES OFFICE
+//         // =====================================================
+//         const salesOffices = normalizeFilterValues(
+//             params?.sales_office ?? params?.['sales_office[]']
+//         );
+
+//         // =====================================================
+//         // FILTER CUSTOMER
+//         // =====================================================
+//         const customers = normalizeFilterValues(
+//             params?.customer ?? params?.['customer[]']
+//         );
+
+//         // =====================================================
+//         // FILTER CUSTOMER GROUP
+//         // =====================================================
+//         const customerGroups = normalizeFilterValues(
+//             params?.customer_group ?? params?.['customer_group[]']
+//         );
+
+//         // =====================================================
+//         // FILTER PRINCIPLE
+//         // =====================================================
+//         const principles = normalizeFilterValues(
+//             params?.principle ?? params?.['principle[]']
+//         );
+
+//         // =====================================================
+//         // FILTER DATE
+//         // =====================================================
+//         const startDate = String(params?.start_date || '').trim();
+//         const endDate = String(params?.end_date || '').trim();
+
+//         // =====================================================
+//         // DYNAMIC CONDITION
+//         // =====================================================
+//         let condition = '';
+
+//         const filterBind = {};
+
+//         // =====================================================
+//         // KEYWORD
+//         // =====================================================
+//         if (keyword) {
+//             condition += `
+//                 AND (
+//                     p.customer ILIKE :keyword
+//                     OR p.cabang ILIKE :keyword
+//                     OR mc.name ILIKE :keyword
+//                     OR mr_cabang.ur_ref ILIKE :keyword
+//                     OR p.lini ILIKE :keyword
+//                     OR EXISTS (
+//                         SELECT 1
+//                         FROM UNNEST(p.nama_principle_search) AS principle_name
+//                         WHERE principle_name ILIKE :keyword
+//                     )
+//                 )
+//             `;
+
+//             filterBind.keyword = `%${keyword}%`;
+//         }
+
+//         // =====================================================
+//         // FILTER SALES OFFICE
+//         // =====================================================
+//         if (
+//             salesOffices.length > 0 &&
+//             !isAllSelected(salesOffices)
+//         ) {
+//             condition += `
+//                 AND p.cabang IN (:sales_offices)
+//             `;
+
+//             filterBind.sales_offices = salesOffices;
+//         }
+
+//         // =====================================================
+//         // FILTER CUSTOMER
+//         // =====================================================
+//         if (
+//             customers.length > 0 &&
+//             !isAllSelected(customers)
+//         ) {
+//             condition += `
+//                 AND p.customer IN (:customers)
+//             `;
+
+//             filterBind.customers = customers;
+//         }
+
+//         // =====================================================
+//         // FILTER CUSTOMER GROUP
+//         // =====================================================
+//         if (
+//             customerGroups.length > 0 &&
+//             !isAllSelected(customerGroups)
+//         ) {
+//             condition += `
+//                 AND p.channel_id IN (:customer_groups)
+//             `;
+
+//             filterBind.customer_groups = customerGroups;
+//         }
+
+//         // =====================================================
+//         // FILTER PRINCIPLE
+//         // =====================================================
+//         if (
+//             principles.length > 0 &&
+//             !isAllSelected(principles)
+//         ) {
+//             condition += `
+//                 AND p.principle IN (:principles)
+//             `;
+
+//             filterBind.principles = principles;
+//         }
+
+//         // =====================================================
+//         // FILTER START DATE
+//         // =====================================================
+//         if (startDate) {
+//             condition += `
+//                 AND p.posting_date >= CAST(:start_date AS DATE)
+//             `;
+
+//             filterBind.start_date = startDate;
+//         }
+
+//         // =====================================================
+//         // FILTER END DATE
+//         // =====================================================
+//         if (endDate) {
+//             condition += `
+//                 AND p.posting_date < (
+//                     CAST(:end_date AS DATE) + INTERVAL '1 day'
+//                 )
+//             `;
+
+//             filterBind.end_date = endDate;
+//         }
+
+//         // =====================================================
+//         // QUERY LIST
+//         // =====================================================
+//         const listQuery = query.getDataDoar.replace(
+//             /:condition/g,
+//             condition
+//         );
+
+//         // =====================================================
+//         // QUERY COUNT
+//         // =====================================================
+//         const countQuery = query.countDataDoar.replace(
+//             /:condition/g,
+//             condition
+//         );
+
+//         // =====================================================
+//         // EXECUTE PARALLEL
+//         // =====================================================
+//         const [listData, countData] = await Promise.all([
+//             db.query(listQuery, {
+//                 replacements: {
+//                     ...filterBind,
+//                     limit,
+//                     offset
+//                 },
+//                 type: db.QueryTypes.SELECT
+//             }),
+//             db.query(countQuery, {
+//                 replacements: filterBind,
+//                 type: db.QueryTypes.SELECT
+//             })
+//         ]);
+
+//         // =====================================================
+//         // TOTAL DATA
+//         // =====================================================
+//         const totalData = Number(
+//             countData?.[0]?.total || 0
+//         );
+
+//         const totalHalaman = Math.ceil(
+//             totalData / limit
+//         );
+
+//         // =====================================================
+//         // RESPONSE
+//         // =====================================================
+//         return {
+//             total_data: totalData,
+//             total_halaman: totalHalaman,
+//             limit,
+//             page,
+//             list_data: listData
+//         };
+
+//     } catch (error) {
+//         console.error(
+//             'ERROR SERVICE GET DATA DOAR:',
+//             error
+//         );
+
+//         throw error;
+//     }
+// };
+
+
 exports.getDataDoar = async (params) => {
     try {
         // =====================================================
@@ -14713,16 +14962,12 @@ exports.getDataDoar = async (params) => {
         if (keyword) {
             condition += `
                 AND (
-                    p.customer ILIKE :keyword
-                    OR p.cabang ILIKE :keyword
+                    cd.customer ILIKE :keyword
+                    OR cd.cabang ILIKE :keyword
                     OR mc.name ILIKE :keyword
-                    OR mr_cabang.ur_ref ILIKE :keyword
-                    OR p.lini ILIKE :keyword
-                    OR EXISTS (
-                        SELECT 1
-                        FROM UNNEST(p.nama_principle_search) AS principle_name
-                        WHERE principle_name ILIKE :keyword
-                    )
+                    OR cabang.ur_ref ILIKE :keyword
+                    OR top_data.lini ILIKE :keyword
+                    OR cd.nama_principle ILIKE :keyword
                 )
             `;
 
@@ -14737,7 +14982,7 @@ exports.getDataDoar = async (params) => {
             !isAllSelected(salesOffices)
         ) {
             condition += `
-                AND p.cabang IN (:sales_offices)
+                AND cd.cabang IN (:sales_offices)
             `;
 
             filterBind.sales_offices = salesOffices;
@@ -14751,7 +14996,7 @@ exports.getDataDoar = async (params) => {
             !isAllSelected(customers)
         ) {
             condition += `
-                AND p.customer IN (:customers)
+                AND cd.customer IN (:customers)
             `;
 
             filterBind.customers = customers;
@@ -14765,7 +15010,7 @@ exports.getDataDoar = async (params) => {
             !isAllSelected(customerGroups)
         ) {
             condition += `
-                AND p.channel_id IN (:customer_groups)
+                AND cd.channel_id IN (:customer_groups)
             `;
 
             filterBind.customer_groups = customerGroups;
@@ -14779,7 +15024,7 @@ exports.getDataDoar = async (params) => {
             !isAllSelected(principles)
         ) {
             condition += `
-                AND p.principle IN (:principles)
+                AND cd.principle IN (:principles)
             `;
 
             filterBind.principles = principles;
@@ -14790,7 +15035,7 @@ exports.getDataDoar = async (params) => {
         // =====================================================
         if (startDate) {
             condition += `
-                AND p.posting_date >= CAST(:start_date AS DATE)
+                AND cd.posting_date >= CAST(:start_date AS DATE)
             `;
 
             filterBind.start_date = startDate;
@@ -14801,7 +15046,7 @@ exports.getDataDoar = async (params) => {
         // =====================================================
         if (endDate) {
             condition += `
-                AND p.posting_date < (
+                AND cd.posting_date < (
                     CAST(:end_date AS DATE) + INTERVAL '1 day'
                 )
             `;
@@ -14832,11 +15077,13 @@ exports.getDataDoar = async (params) => {
             db.query(listQuery, {
                 replacements: {
                     ...filterBind,
+                    tanggal_akhir: endDate || null,
                     limit,
                     offset
                 },
                 type: db.QueryTypes.SELECT
             }),
+
             db.query(countQuery, {
                 replacements: filterBind,
                 type: db.QueryTypes.SELECT
@@ -14847,7 +15094,7 @@ exports.getDataDoar = async (params) => {
         // TOTAL DATA
         // =====================================================
         const totalData = Number(
-            countData?.[0]?.total || 0
+            countData?.[0]?.total_data || 0
         );
 
         const totalHalaman = Math.ceil(
