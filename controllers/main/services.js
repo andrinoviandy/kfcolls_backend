@@ -5901,11 +5901,11 @@ exports.insertBayarFaktur = async (
                     .replace(/\\/g, '/')
                 : '';
 
-        if (!filePath) {
-            throw new Error(
-                'File bukti pembayaran gagal disimpan'
-            );
-        }
+        // if (!filePath) {
+        //     throw new Error(
+        //         'File bukti pembayaran gagal disimpan'
+        //     );
+        // }
 
         const tanggalPembayaran =
             payload?.tanggal_pembayaran
