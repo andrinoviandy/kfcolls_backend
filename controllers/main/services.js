@@ -6000,15 +6000,15 @@ exports.insertBayarFaktur = async (
                 // VALIDASI NOMINAL
                 // =================================================
 
-                if (
-                    jenisPembayaran !==
-                    'MENUNGGU_PEMBAYARAN' &&
-                    nominalBayar <= 0
-                ) {
-                    throw new Error(
-                        `Nominal pembayaran untuk faktur ${item?.no_faktur || '-'} harus lebih dari 0`
-                    );
-                }
+                // if (
+                //     jenisPembayaran !==
+                //     'MENUNGGU_PEMBAYARAN' &&
+                //     nominalBayar <= 0
+                // ) {
+                //     throw new Error(
+                //         `Nominal pembayaran untuk faktur ${item?.no_faktur || '-'} harus lebih dari 0`
+                //     );
+                // }
 
                 // =================================================
                 // VALIDASI SALDO PIUTANG
