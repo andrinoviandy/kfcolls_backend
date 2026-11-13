@@ -5770,23 +5770,23 @@ exports.insertBayarFaktur = async (
             'SPP'
         ];
 
-        if (
-            !allowedJenisPembayaran.includes(
-                jenisPembayaran
-            )
-        ) {
-            throw new Error(
-                'Jenis pembayaran tidak valid'
-            );
-        }
+        // if (
+        //     !allowedJenisPembayaran.includes(
+        //         jenisPembayaran
+        //     )
+        // ) {
+        //     throw new Error(
+        //         'Jenis pembayaran tidak valid'
+        //     );
+        // }
 
-        if (
-            !payload?.metode_pembayaran
-        ) {
-            throw new Error(
-                'Metode pembayaran wajib diisi'
-            );
-        }
+        // if (
+        //     !payload?.metode_pembayaran
+        // ) {
+        //     throw new Error(
+        //         'Metode pembayaran wajib diisi'
+        //     );
+        // }
 
         // =====================================================
         // VALIDASI METODE PEMBAYARAN
