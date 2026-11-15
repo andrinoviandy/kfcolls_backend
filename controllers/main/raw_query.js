@@ -17162,6 +17162,7 @@ SELECT
     a.is_active,
     TO_CHAR(a.assigned_at, 'DD/MM/YYYY HH24:MM:SI') AS assigned_at,
     b.nama,
+    a.kd_status,
     a.alasan_pengembalian as alasan  
 FROM d_faktur_petugas a 
     LEFT JOIN m_user b ON b.nip = a.nip 
@@ -21695,6 +21696,7 @@ query.getDataVerifikasiPembayaran = `
         dp.metode_pembayaran,
 
         CONCAT('${LINK_DOK}', dp.files) AS files,
+        CONCAT('${LINK_DOK}', dp.files_kasir) AS files_kasir,
 
         dp.created_at,
         dp.updated_at,
@@ -23261,67 +23263,84 @@ query.summaryDataKonfirmasiPiutang = `
         :condition
 `;
 
-const laporanBaseCte = `
-    WITH payment_status AS (
-        SELECT
-            dp.no_billing,
 
-            SUM(
-                CASE
-                    WHEN UPPER(COALESCE(ds.kd_status, '')) = 'S'
-                    THEN COALESCE(dp.nominal_bayar, 0)
-                    ELSE 0
-                END
-            ) AS total_dibayar
+
+const laporanBaseCte = `
+    WITH payment_rows AS (
+
+        -- =============================================
+        -- PEMBAYARAN TERVERIFIKASI
+        -- MENGGUNAKAN EXISTS STATUS S
+        -- =============================================
+        SELECT
+            BTRIM(COALESCE(dp.no_billing, '')) AS no_billing,
+            COALESCE(dp.nominal_bayar, 0) AS nominal
 
         FROM public.d_pembayaran dp
 
-        LEFT JOIN LATERAL (
-            SELECT
-                ds1.kd_status
-            FROM public.d_status ds1
-            WHERE ds1.foreign_id = dp.pembayaran_id
-                AND ds1.kegiatan = 'PENAGIHAN'
-            ORDER BY
-                ds1.created_at DESC NULLS LAST,
-                ds1.status_id DESC
-            LIMIT 1
-        ) ds ON TRUE
+        WHERE EXISTS (
+            SELECT 1
 
-        GROUP BY dp.no_billing
-    ),
+            FROM public.d_status ds
 
-    cod_totals AS (
+            WHERE ds.foreign_id = dp.pembayaran_id
+                AND ds.kegiatan = 'PENAGIHAN'
+                AND ds.kd_status = 'S'
+        )
+
+        UNION ALL
+
+        -- =============================================
+        -- PEMBAYARAN COD
+        -- =============================================
         SELECT
-            dc.no_billing,
-            SUM(COALESCE(dc.nominal_billing, 0)) AS total_cod
+            BTRIM(COALESCE(dc.no_billing, '')) AS no_billing,
+            COALESCE(dc.nominal_billing, 0) AS nominal
 
         FROM public.d_cod dc
-
-        GROUP BY dc.no_billing
     ),
 
+    -- =============================================
+    -- TOTAL COLLECTIONS PER BILLING
+    -- =============================================
+    payment_totals AS (
+        SELECT
+            no_billing,
+
+            COALESCE(SUM(nominal), 0) AS total_collections
+
+        FROM payment_rows
+
+        WHERE no_billing <> ''
+
+        GROUP BY no_billing
+    ),
+
+    -- =============================================
+    -- DATA PIUTANG
+    -- =============================================
     piutang_data AS (
         SELECT
             p.*,
 
-            COALESCE(ps.total_dibayar, 0)
-                + COALESCE(ct.total_cod, 0) AS total_dibayar_hitung,
+            -- TOTAL COLLECTIONS
+            COALESCE(
+                pt.total_collections,
+                0
+            ) AS total_dibayar_hitung,
 
+            -- OUTSTANDING
             (
-                COALESCE(p.dpp, 0)
-                + COALESCE(p.ppn, 0)
-                - COALESCE(ps.total_dibayar, 0)
-                - COALESCE(ct.total_cod, 0)
+                COALESCE(p.dpp, 0) +
+                COALESCE(p.ppn, 0) -
+                COALESCE(pt.total_collections, 0)
             ) AS saldo_piutang_hitung
 
         FROM public.d_piutang p
 
-        LEFT JOIN payment_status ps
-            ON ps.no_billing = p.no_billing
-
-        LEFT JOIN cod_totals ct
-            ON ct.no_billing = p.no_billing
+        LEFT JOIN payment_totals pt
+            ON pt.no_billing =
+               BTRIM(COALESCE(p.no_billing, ''))
     )
 `;
 
@@ -23655,13 +23674,15 @@ query.summaryDataLaporan = `
         -- =============================================
         COALESCE(
             SUM(
-                COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)
+                COALESCE(p.dpp, 0) +
+                COALESCE(p.ppn, 0)
             ),
             0
         ) AS total_piutang,
 
         -- =============================================
-        -- SUDAH DIBAYAR
+        -- TOTAL COLLECTIONS
+        -- PEMBAYARAN TERVERIFIKASI + COD
         -- =============================================
         COALESCE(
             SUM(p.total_dibayar_hitung),
@@ -23670,12 +23691,16 @@ query.summaryDataLaporan = `
 
         -- =============================================
         -- OUTSTANDING
+        -- DPP + PPN - COLLECTIONS
         -- =============================================
         COALESCE(
             SUM(p.saldo_piutang_hitung),
             0
         ) AS outstanding,
 
+        -- =============================================
+        -- JUMLAH OUTSTANDING
+        -- =============================================
         COUNT(*) FILTER (
             WHERE p.saldo_piutang_hitung > 0
         ) AS outstanding_count,
@@ -23720,6 +23745,9 @@ query.summaryDataLaporan = `
                 AND p.saldo_piutang_hitung > 0
         ) AS sudah_jatuh_tempo_count,
 
+        -- =============================================
+        -- TOTAL DATA
+        -- =============================================
         COUNT(*) AS total_data
 
     FROM summary_data p
@@ -23727,7 +23755,6 @@ query.summaryDataLaporan = `
     WHERE 1 = 1
         :condition
 `;
-
 
 query.getDataKonfirmasiCustomer = `
     SELECT
@@ -25939,529 +25966,748 @@ query.getAgingPiutangDashboard = `
     ORDER BY urutan
 `;
 
+// const doarBaseCte = `
+//     WITH
+
+//     -- =====================================================
+//     -- 1. ATRIBUT CUSTOMER
+//     -- =====================================================
+//     customer_base AS MATERIALIZED (
+//         SELECT
+//             p.customer,
+//             MAX(p.cabang) AS cabang,
+//             MAX(p.desc_cust_grp3) AS desc_cust_grp3,
+//             MAX(p.channel_id) AS channel_id,
+//             MAX(p.posting_date) AS posting_date
+
+//         FROM public.d_piutang p
+
+//         GROUP BY p.customer
+//     ),
+
+//     -- =====================================================
+//     -- 2. BILLING PER CUSTOMER
+//     -- =====================================================
+//     customer_billing AS (
+//     SELECT DISTINCT
+//         customer,
+//         no_billing
+//     FROM public.d_piutang
+//     WHERE no_billing IS NOT NULL
+// ),
+
+//     -- =====================================================
+//     -- 3. PRINCIPLE PER CUSTOMER
+//     -- =====================================================
+//     customer_principle AS (
+//         SELECT
+//             cb.customer,
+
+//             MAX(mp.kode_principle) AS principle,
+//             MAX(mp.nama_principle) AS nama_principle,
+//             MAX(mp.nama_principle) AS principal
+
+//         FROM customer_billing cb
+
+//         INNER JOIN public.d_penjualan dp
+//             ON dp.billing_no = cb.no_billing
+
+//         LEFT JOIN public.m_produk mp
+//             ON mp.material = dp.material
+
+//         GROUP BY cb.customer
+//     ),
+
+//     -- =====================================================
+//     -- 4. DATA CUSTOMER
+//     -- =====================================================
+//     customer_data AS MATERIALIZED (
+//         SELECT
+//             cb.customer,
+//             cb.cabang,
+//             cb.desc_cust_grp3,
+//             cb.channel_id,
+//             cb.posting_date,
+
+//             cp.principle,
+//             cp.nama_principle,
+//             cp.nama_principle AS principal
+
+//         FROM customer_base cb
+
+//         LEFT JOIN customer_principle cp
+//             ON cp.customer IS NOT DISTINCT FROM cb.customer
+//     )
+// `;
+
+// query.getDataDoar = `
+//     ${doarBaseCte},
+
+//     -- =====================================================
+//     -- 5. FILTER DAN PAGINATION CUSTOMER
+//     -- =====================================================
+//     page_data AS MATERIALIZED (
+//         SELECT
+//             p.cabang AS profit_center,
+//             mr_cabang.ur_ref AS nama_cabang,
+
+//             p.customer AS customer_code,
+//             mc.name AS customer_name,
+
+//             p.principle AS kode_principle,
+//             p.nama_principle,
+//             p.nama_principle AS principal,
+
+//             mt.lini,
+
+//             p.customer
+
+//         FROM customer_data p
+
+//         LEFT JOIN public.m_customer mc
+//             ON mc.kode_customer = p.customer
+
+//         LEFT JOIN public.m_referensi mr_cabang
+//             ON mr_cabang.kd_ref = p.cabang
+//             AND mr_cabang.jns_ref = 'cabang_id'
+
+//         LEFT JOIN LATERAL (
+//             SELECT
+//                 MAX(mt1.lini) AS lini
+
+//             FROM public.m_top mt1
+
+//             WHERE REPLACE(LOWER(mt1.desc_cust_grp3), ' ', '')
+//                 = REPLACE(LOWER(p.desc_cust_grp3), ' ', '')
+//         ) mt ON TRUE
+
+//         WHERE 1 = 1
+//             :condition
+
+//         ORDER BY
+//             mc.name ASC NULLS LAST,
+//             p.customer ASC
+
+//         LIMIT :limit
+//         OFFSET :offset
+//     ),
+
+//     -- =====================================================
+//     -- 6. CUSTOMER YANG MASUK HALAMAN
+//     -- =====================================================
+//     page_customers AS MATERIALIZED (
+//         SELECT DISTINCT
+//             customer
+
+//         FROM page_data
+//     ),
+
+//     -- =====================================================
+//     -- 7. REKAP PIUTANG BULANAN
+//     -- HANYA CUSTOMER HALAMAN AKTIF
+//     -- =====================================================
+//     customer_monthly AS (
+//         SELECT
+//             p.customer,
+
+//             DATE_TRUNC(
+//                 'month',
+//                 p.posting_date
+//             )::date AS periode,
+
+//             SUM(
+//                 COALESCE(p.dpp, 0) +
+//                 COALESCE(p.ppn, 0)
+//             ) AS total_piutang,
+
+//             SUM(
+//                 COALESCE(p.dpp, 0)
+//             ) AS total_dpp
+
+//         FROM page_customers pc
+
+//         INNER JOIN public.d_piutang p
+//             ON p.customer IS NOT DISTINCT FROM pc.customer
+
+//         WHERE p.posting_date >= MAKE_DATE(
+//             EXTRACT(YEAR FROM CURRENT_DATE)::integer - 1,
+//             12,
+//             1
+//         )
+
+//         AND p.posting_date < (
+//             DATE_TRUNC('month', CURRENT_DATE)
+//             + INTERVAL '1 month'
+//         )
+
+//         GROUP BY
+//             p.customer,
+//             DATE_TRUNC('month', p.posting_date)::date
+//     ),
+
+//     -- =====================================================
+//     -- 8. PIUTANG PERTAMA YANG TIDAK NOL
+//     -- =====================================================
+//     first_nonzero_piutang AS (
+//         SELECT DISTINCT ON (customer)
+//             customer,
+//             total_piutang AS piutang_akhir_tahun
+
+//         FROM customer_monthly
+
+//         WHERE total_piutang <> 0
+
+//         ORDER BY
+//             customer,
+//             periode ASC
+//     ),
+
+//     -- =====================================================
+//     -- 9. SUMMARY PIUTANG BULANAN
+//     -- =====================================================
+//     customer_monthly_summary AS (
+//         SELECT
+//             customer,
+
+//             COALESCE(
+//                 SUM(total_piutang) FILTER (
+//                     WHERE periode = DATE_TRUNC(
+//                         'month',
+//                         CURRENT_DATE
+//                     )::date
+//                 ),
+//                 0
+//             ) AS piutang_bulan_ini,
+
+//             COALESCE(
+//                 SUM(total_dpp) FILTER (
+//                     WHERE periode >= MAKE_DATE(
+//                         EXTRACT(YEAR FROM CURRENT_DATE)::integer,
+//                         1,
+//                         1
+//                     )
+
+//                     AND periode <= DATE_TRUNC(
+//                         'month',
+//                         CURRENT_DATE
+//                     )::date
+//                 ),
+//                 0
+//             ) AS penjualan_mtd
+
+//         FROM customer_monthly
+
+//         GROUP BY customer
+//     ),
+
+//     -- =====================================================
+//     -- 10. TANGGAL ACUAN
+//     -- =====================================================
+//     tanggal_acuan AS (
+//         SELECT (
+//             DATE_TRUNC('month', CURRENT_DATE)
+//             + INTERVAL '1 month'
+//             - INTERVAL '1 day'
+//         )::date AS tanggal_akhir_bulan
+//     )
+
+//     -- =====================================================
+//     -- 11. HASIL AKHIR
+//     -- =====================================================
+//     SELECT
+//         p.profit_center,
+//         p.nama_cabang,
+
+//         p.customer_code,
+//         p.customer_name,
+
+//         p.kode_principle,
+//         p.nama_principle,
+//         p.nama_principle AS principal,
+
+//         p.lini,
+
+//         COALESCE(
+//             fn.piutang_akhir_tahun,
+//             0
+//         ) AS piutang_akhir_tahun,
+
+//         COALESCE(
+//             ms.piutang_bulan_ini,
+//             0
+//         ) AS piutang_bulan_ini,
+
+//         COALESCE(
+//             ms.penjualan_mtd,
+//             0
+//         ) AS penjualan_mtd,
+
+//         CASE
+//             WHEN COALESCE(ms.penjualan_mtd, 0) > 0
+
+//             THEN ROUND(
+//                 (
+//                     (
+//                         COALESCE(fn.piutang_akhir_tahun, 0)
+//                         +
+//                         COALESCE(ms.piutang_bulan_ini, 0)
+//                     )
+//                     / 2.0
+//                     *
+//                     EXTRACT(
+//                         DAY FROM ta.tanggal_akhir_bulan
+//                     )
+//                 ) / ms.penjualan_mtd,
+//                 0
+//             )
+
+//             ELSE 0
+//         END AS doar
+
+//     FROM page_data p
+
+//     LEFT JOIN customer_monthly_summary ms
+//         ON ms.customer IS NOT DISTINCT FROM p.customer
+
+//     LEFT JOIN first_nonzero_piutang fn
+//         ON fn.customer IS NOT DISTINCT FROM p.customer
+
+//     CROSS JOIN tanggal_acuan ta
+
+//     ORDER BY
+//         p.customer_name ASC NULLS LAST,
+//         p.customer ASC
+// `;
+
+// query.countDataDoar = `
+//     ${doarBaseCte}
+
+//     SELECT
+//         COUNT(*)::INTEGER AS total
+
+//     FROM customer_data p
+
+//     LEFT JOIN public.m_customer mc
+//         ON mc.kode_customer = p.customer
+
+//     LEFT JOIN public.m_referensi mr_cabang
+//         ON mr_cabang.kd_ref = p.cabang
+//         AND mr_cabang.jns_ref = 'cabang_id'
+
+//     LEFT JOIN LATERAL (
+//         SELECT
+//             MAX(mt1.lini) AS lini
+
+//         FROM public.m_top mt1
+
+//         WHERE REPLACE(LOWER(mt1.desc_cust_grp3), ' ', '')
+//             = REPLACE(LOWER(p.desc_cust_grp3), ' ', '')
+//     ) mt ON TRUE
+
+//     WHERE 1 = 1
+//         :condition
+// `;
+
+// menggunakan material view dan query biasa
 const doarBaseCte = `
-    WITH
-
-    -- =====================================================
-    -- 1. ATRIBUT CUSTOMER
-    -- =====================================================
-    customer_base AS MATERIALIZED (
-        SELECT
-            p.customer,
-            MAX(p.cabang) AS cabang,
-            MAX(p.desc_cust_grp3) AS desc_cust_grp3,
-            MAX(p.channel_id) AS channel_id,
-            MAX(p.posting_date) AS posting_date
-
-        FROM public.d_piutang p
-
-        GROUP BY p.customer
-    ),
-
-    -- =====================================================
-    -- 2. BILLING PER CUSTOMER
-    -- =====================================================
-    customer_billing AS (
+WITH
+customer_base AS MATERIALIZED (
+    SELECT
+        p.customer,
+        MAX(p.cabang) AS cabang,
+        MAX(p.desc_cust_grp3) AS desc_cust_grp3,
+        MAX(p.channel_id) AS channel_id,
+        MAX(p.posting_date) AS posting_date
+    FROM public.d_piutang p
+    GROUP BY p.customer
+),
+customer_billing AS (
     SELECT DISTINCT
         customer,
         no_billing
     FROM public.d_piutang
     WHERE no_billing IS NOT NULL
 ),
-
-    -- =====================================================
-    -- 3. PRINCIPLE PER CUSTOMER
-    -- =====================================================
-    customer_principle AS (
-        SELECT
-            cb.customer,
-
-            MAX(mp.kode_principle) AS principle,
-            MAX(mp.nama_principle) AS nama_principle,
-            MAX(mp.nama_principle) AS principal
-
-        FROM customer_billing cb
-
-        INNER JOIN public.d_penjualan dp
-            ON dp.billing_no = cb.no_billing
-
-        LEFT JOIN public.m_produk mp
-            ON mp.material = dp.material
-
-        GROUP BY cb.customer
-    ),
-
-    -- =====================================================
-    -- 4. DATA CUSTOMER
-    -- =====================================================
-    customer_data AS MATERIALIZED (
-        SELECT
-            cb.customer,
-            cb.cabang,
-            cb.desc_cust_grp3,
-            cb.channel_id,
-            cb.posting_date,
-
-            cp.principle,
-            cp.nama_principle,
-            cp.nama_principle AS principal
-
-        FROM customer_base cb
-
-        LEFT JOIN customer_principle cp
-            ON cp.customer IS NOT DISTINCT FROM cb.customer
-    )
+customer_principle AS (
+    SELECT
+        cb.customer,
+        MAX(mp.kode_principle) AS principle,
+        MAX(mp.nama_principle) AS nama_principle,
+        MAX(mp.nama_principle) AS principal
+    FROM customer_billing cb
+    INNER JOIN public.d_penjualan dp
+        ON dp.billing_no = cb.no_billing
+    LEFT JOIN public.mv_doar_v2_produk mp
+        ON mp.material = dp.material
+    GROUP BY cb.customer
+),
+customer_data AS MATERIALIZED (
+    SELECT
+        cb.customer,
+        cb.cabang,
+        cb.desc_cust_grp3,
+        cb.channel_id,
+        cb.posting_date,
+        cp.principle,
+        cp.nama_principle,
+        cp.nama_principle AS principal
+    FROM customer_base cb
+    LEFT JOIN customer_principle cp
+        ON cp.customer IS NOT DISTINCT FROM cb.customer
+)
 `;
 
 query.getDataDoar = `
-    ${doarBaseCte},
-
-    -- =====================================================
-    -- 5. FILTER DAN PAGINATION CUSTOMER
-    -- =====================================================
-    page_data AS MATERIALIZED (
-        SELECT
-            p.cabang AS profit_center,
-            mr_cabang.ur_ref AS nama_cabang,
-
-            p.customer AS customer_code,
-            mc.name AS customer_name,
-
-            p.principle AS kode_principle,
-            p.nama_principle,
-            p.nama_principle AS principal,
-
-            mt.lini,
-
-            p.customer
-
-        FROM customer_data p
-
-        LEFT JOIN public.m_customer mc
-            ON mc.kode_customer = p.customer
-
-        LEFT JOIN public.m_referensi mr_cabang
-            ON mr_cabang.kd_ref = p.cabang
-            AND mr_cabang.jns_ref = 'cabang_id'
-
-        LEFT JOIN LATERAL (
-            SELECT
-                MAX(mt1.lini) AS lini
-
-            FROM public.m_top mt1
-
-            WHERE REPLACE(LOWER(mt1.desc_cust_grp3), ' ', '')
-                = REPLACE(LOWER(p.desc_cust_grp3), ' ', '')
-        ) mt ON TRUE
-
-        WHERE 1 = 1
-            :condition
-
-        ORDER BY
-            mc.name ASC NULLS LAST,
-            p.customer ASC
-
-        LIMIT :limit
-        OFFSET :offset
-    ),
-
-    -- =====================================================
-    -- 6. CUSTOMER YANG MASUK HALAMAN
-    -- =====================================================
-    page_customers AS MATERIALIZED (
-        SELECT DISTINCT
-            customer
-
-        FROM page_data
-    ),
-
-    -- =====================================================
-    -- 7. REKAP PIUTANG BULANAN
-    -- HANYA CUSTOMER HALAMAN AKTIF
-    -- =====================================================
-    customer_monthly AS (
-        SELECT
-            p.customer,
-
-            DATE_TRUNC(
-                'month',
-                p.posting_date
-            )::date AS periode,
-
-            SUM(
-                COALESCE(p.dpp, 0) +
-                COALESCE(p.ppn, 0)
-            ) AS total_piutang,
-
-            SUM(
-                COALESCE(p.dpp, 0)
-            ) AS total_dpp
-
-        FROM page_customers pc
-
-        INNER JOIN public.d_piutang p
-            ON p.customer IS NOT DISTINCT FROM pc.customer
-
-        WHERE p.posting_date >= MAKE_DATE(
-            EXTRACT(YEAR FROM CURRENT_DATE)::integer - 1,
-            12,
-            1
-        )
-
-        AND p.posting_date < (
-            DATE_TRUNC('month', CURRENT_DATE)
-            + INTERVAL '1 month'
-        )
-
-        GROUP BY
-            p.customer,
-            DATE_TRUNC('month', p.posting_date)::date
-    ),
-
-    -- =====================================================
-    -- 8. PIUTANG PERTAMA YANG TIDAK NOL
-    -- =====================================================
-    first_nonzero_piutang AS (
-        SELECT DISTINCT ON (customer)
-            customer,
-            total_piutang AS piutang_akhir_tahun
-
-        FROM customer_monthly
-
-        WHERE total_piutang <> 0
-
-        ORDER BY
-            customer,
-            periode ASC
-    ),
-
-    -- =====================================================
-    -- 9. SUMMARY PIUTANG BULANAN
-    -- =====================================================
-    customer_monthly_summary AS (
-        SELECT
-            customer,
-
-            COALESCE(
-                SUM(total_piutang) FILTER (
-                    WHERE periode = DATE_TRUNC(
-                        'month',
-                        CURRENT_DATE
-                    )::date
-                ),
-                0
-            ) AS piutang_bulan_ini,
-
-            COALESCE(
-                SUM(total_dpp) FILTER (
-                    WHERE periode >= MAKE_DATE(
-                        EXTRACT(YEAR FROM CURRENT_DATE)::integer,
-                        1,
-                        1
-                    )
-
-                    AND periode <= DATE_TRUNC(
-                        'month',
-                        CURRENT_DATE
-                    )::date
-                ),
-                0
-            ) AS penjualan_mtd
-
-        FROM customer_monthly
-
-        GROUP BY customer
-    ),
-
-    -- =====================================================
-    -- 10. TANGGAL ACUAN
-    -- =====================================================
-    tanggal_acuan AS (
-        SELECT (
-            DATE_TRUNC('month', CURRENT_DATE)
-            + INTERVAL '1 month'
-            - INTERVAL '1 day'
-        )::date AS tanggal_akhir_bulan
-    )
-
-    -- =====================================================
-    -- 11. HASIL AKHIR
-    -- =====================================================
+${doarBaseCte},
+periode AS (
     SELECT
-        p.profit_center,
-        p.nama_cabang,
-
-        p.customer_code,
-        p.customer_name,
-
-        p.kode_principle,
-        p.nama_principle,
-        p.nama_principle AS principal,
-
-        p.lini,
-
-        COALESCE(
-            fn.piutang_akhir_tahun,
-            0
-        ) AS piutang_akhir_tahun,
-
-        COALESCE(
-            ms.piutang_bulan_ini,
-            0
-        ) AS piutang_bulan_ini,
-
-        COALESCE(
-            ms.penjualan_mtd,
-            0
-        ) AS penjualan_mtd,
-
-        CASE
-            WHEN COALESCE(ms.penjualan_mtd, 0) > 0
-
-            THEN ROUND(
-                (
-                    (
-                        COALESCE(fn.piutang_akhir_tahun, 0)
-                        +
-                        COALESCE(ms.piutang_bulan_ini, 0)
-                    )
-                    / 2.0
-                    *
-                    EXTRACT(
-                        DAY FROM ta.tanggal_akhir_bulan
-                    )
-                ) / ms.penjualan_mtd,
-                0
+        DATE_TRUNC(
+            'month',
+            COALESCE(CAST(:tanggal_akhir AS DATE), CURRENT_DATE)
+        )::DATE AS bulan_acuan
+),
+periode_batas AS (
+    SELECT
+        bulan_acuan,
+        (bulan_acuan - INTERVAL '1 year')::DATE AS awal_periode,
+        (bulan_acuan + INTERVAL '1 month')::DATE AS akhir_periode,
+        (bulan_acuan + INTERVAL '1 month - 1 day')::DATE AS tanggal_acuan,
+        EXTRACT(
+            DAY FROM (
+                bulan_acuan + INTERVAL '1 month - 1 day'
             )
-
-            ELSE 0
-        END AS doar
-
-    FROM page_data p
-
-    LEFT JOIN customer_monthly_summary ms
-        ON ms.customer IS NOT DISTINCT FROM p.customer
-
-    LEFT JOIN first_nonzero_piutang fn
-        ON fn.customer IS NOT DISTINCT FROM p.customer
-
-    CROSS JOIN tanggal_acuan ta
-
-    ORDER BY
-        p.customer_name ASC NULLS LAST,
-        p.customer ASC
-`;
-
-query.countDataDoar = `
-    ${doarBaseCte}
-
+        )::INTEGER AS jumlah_hari
+    FROM periode
+),
+page_data AS MATERIALIZED (
     SELECT
-        COUNT(*)::INTEGER AS total
-
-    FROM customer_data p
-
-    LEFT JOIN public.m_customer mc
-        ON mc.kode_customer = p.customer
-
-    LEFT JOIN public.m_referensi mr_cabang
-        ON mr_cabang.kd_ref = p.cabang
-        AND mr_cabang.jns_ref = 'cabang_id'
-
-    LEFT JOIN LATERAL (
-        SELECT
-            MAX(mt1.lini) AS lini
-
-        FROM public.m_top mt1
-
-        WHERE REPLACE(LOWER(mt1.desc_cust_grp3), ' ', '')
-            = REPLACE(LOWER(p.desc_cust_grp3), ' ', '')
-    ) mt ON TRUE
-
+        cd.customer,
+        cd.cabang AS profit_center,
+        mc.name AS customer_name,
+        cd.desc_cust_grp3,
+        cd.channel_id,
+        cd.posting_date,
+        cd.principle AS kode_principle,
+        cd.nama_principle,
+        cabang.ur_ref AS nama_cabang,
+        top_data.lini
+    FROM customer_data cd
+    LEFT JOIN public.mv_doar_v2_customer mc
+        ON mc.kode_customer = cd.customer
+    LEFT JOIN public.mv_doar_v2_cabang cabang
+        ON cabang.kd_ref::TEXT = cd.cabang::TEXT
+    LEFT JOIN public.mv_doar_v2_top top_data
+        ON top_data.desc_cust_grp3_key =
+           REPLACE(LOWER(cd.desc_cust_grp3), ' ', '')
     WHERE 1 = 1
-        :condition
-`;
-
-query.getDataDoar = `
-    WITH
-    -- =====================================================
-    -- 1. FILTER DAN PAGINATION CUSTOMER
-    -- =====================================================
-    page_data AS MATERIALIZED (
-        SELECT
-            p.cabang AS profit_center,
-            mr_cabang.ur_ref AS nama_cabang,
-            p.customer AS customer_code,
-            mc.name AS customer_name,
-            p.principle AS kode_principle,
-            p.nama_principle,
-            p.nama_principle AS principal,
-            p.lini,
-            p.customer
-        FROM public.mv_doar_customer p
-        LEFT JOIN public.m_customer mc
-            ON mc.kode_customer = p.customer
-        LEFT JOIN public.m_referensi mr_cabang
-            ON mr_cabang.kd_ref = p.cabang
-            AND mr_cabang.jns_ref = 'cabang_id'
-        WHERE 1 = 1
-            :condition
-        ORDER BY
-            mc.name ASC NULLS LAST,
-            p.customer ASC
-        LIMIT :limit
-        OFFSET :offset
-    ),
-    -- =====================================================
-    -- 2. CUSTOMER YANG MASUK HALAMAN
-    -- =====================================================
-    page_customers AS MATERIALIZED (
-        SELECT DISTINCT
-            customer
-        FROM page_data
-    ),
-    -- =====================================================
-    -- 3. REKAP PIUTANG BULANAN
-    -- HANYA CUSTOMER DI HALAMAN
-    -- =====================================================
-    customer_monthly AS (
-        SELECT
-            m.customer,
-            m.periode,
-            m.total_piutang,
-            m.total_dpp
-        FROM page_customers pc
-        INNER JOIN public.mv_doar_customer_monthly m
-            ON m.customer IS NOT DISTINCT FROM pc.customer
-        WHERE m.periode >= MAKE_DATE(
-            EXTRACT(YEAR FROM CURRENT_DATE)::integer - 1,
-            12,
-            1
-        )
-        AND m.periode < (
-            DATE_TRUNC('month', CURRENT_DATE)
-            + INTERVAL '1 month'
-        )
-    ),
-    -- =====================================================
-    -- 4. PIUTANG PERTAMA YANG TIDAK NOL
-    -- =====================================================
-    first_nonzero_piutang AS (
-        SELECT DISTINCT ON (customer)
-            customer,
-            total_piutang AS piutang_akhir_tahun
-        FROM customer_monthly
-        WHERE total_piutang <> 0
-        ORDER BY
-            customer,
-            periode ASC
-    ),
-    -- =====================================================
-    -- 5. SUMMARY PIUTANG BULANAN
-    -- =====================================================
-    customer_monthly_summary AS (
-        SELECT
-            customer,
-            COALESCE(
-                SUM(total_piutang) FILTER (
-                    WHERE periode = DATE_TRUNC(
-                        'month',
-                        CURRENT_DATE
-                    )::date
-                ),
-                0
-            ) AS piutang_bulan_ini,
-            COALESCE(
-                SUM(total_dpp) FILTER (
-                    WHERE periode >= MAKE_DATE(
-                        EXTRACT(YEAR FROM CURRENT_DATE)::integer,
-                        1,
-                        1
-                    )
-                    AND periode <= DATE_TRUNC(
-                        'month',
-                        CURRENT_DATE
-                    )::date
-                ),
-                0
-            ) AS penjualan_mtd
-        FROM customer_monthly
-        GROUP BY customer
-    ),
-    -- =====================================================
-    -- 6. TANGGAL ACUAN
-    -- =====================================================
-    tanggal_acuan AS (
-        SELECT (
-            DATE_TRUNC('month', CURRENT_DATE)
-            + INTERVAL '1 month'
-            - INTERVAL '1 day'
-        )::date AS tanggal_akhir_bulan
-    )
-    -- =====================================================
-    -- 7. HASIL AKHIR
-    -- =====================================================
+    :condition
+    ORDER BY
+        mc.name ASC NULLS LAST,
+        cd.customer ASC
+    LIMIT :limit
+    OFFSET :offset
+),
+page_customers AS (
+    SELECT DISTINCT customer
+    FROM page_data
+),
+customer_monthly AS (
     SELECT
-        p.profit_center,
-        p.nama_cabang,
-        p.customer_code,
-        p.customer_name,
-        p.kode_principle,
-        p.nama_principle,
-        p.nama_principle AS principal,
-        p.lini,
-        COALESCE(
-            fn.piutang_akhir_tahun,
-            0
-        ) AS piutang_akhir_tahun,
-        COALESCE(
-            ms.piutang_bulan_ini,
-            0
+        p.customer,
+        DATE_TRUNC('month', p.posting_date)::DATE AS bulan,
+        SUM(
+            COALESCE(p.dpp, 0) + COALESCE(p.ppn, 0)
+        ) AS total_piutang,
+        SUM(COALESCE(p.dpp, 0)) AS total_dpp
+    FROM public.d_piutang p
+    INNER JOIN page_customers pc
+        ON pc.customer IS NOT DISTINCT FROM p.customer
+    CROSS JOIN periode_batas pb
+    WHERE p.posting_date >= pb.awal_periode
+      AND p.posting_date < pb.akhir_periode
+    GROUP BY
+        p.customer,
+        DATE_TRUNC('month', p.posting_date)::DATE
+),
+first_nonzero_piutang AS (
+    SELECT DISTINCT ON (cm.customer)
+        cm.customer,
+        cm.bulan AS bulan_awal,
+        cm.total_piutang AS piutang_awal
+    FROM customer_monthly cm
+    WHERE cm.total_piutang <> 0
+    ORDER BY
+        cm.customer,
+        cm.bulan ASC
+),
+customer_monthly_summary AS (
+    SELECT
+        cm.customer,
+        SUM(
+            CASE
+                WHEN cm.bulan = pb.bulan_acuan
+                THEN cm.total_piutang
+                ELSE 0
+            END
         ) AS piutang_bulan_ini,
-        COALESCE(
-            ms.penjualan_mtd,
-            0
-        ) AS penjualan_mtd,
+        SUM(
+            CASE
+                WHEN cm.bulan <= pb.bulan_acuan
+                THEN cm.total_dpp
+                ELSE 0
+            END
+        ) AS penjualan_mtd
+    FROM customer_monthly cm
+    CROSS JOIN periode_batas pb
+    GROUP BY cm.customer
+),
+customer_doar AS (
+    SELECT
+        pc.customer,
+        COALESCE(fn.piutang_awal, 0) AS piutang_awal,
+        COALESCE(ms.piutang_bulan_ini, 0) AS piutang_bulan_ini,
+        COALESCE(ms.penjualan_mtd, 0) AS penjualan_mtd,
         CASE
-            WHEN COALESCE(ms.penjualan_mtd, 0) > 0
+            WHEN COALESCE(ms.penjualan_mtd, 0) <> 0
             THEN ROUND(
                 (
                     (
-                        COALESCE(fn.piutang_akhir_tahun, 0)
-                        +
-                        COALESCE(ms.piutang_bulan_ini, 0)
+                        COALESCE(fn.piutang_awal, 0)
+                        + COALESCE(ms.piutang_bulan_ini, 0)
                     ) / 2.0
-                    *
-                    EXTRACT(
-                        DAY FROM ta.tanggal_akhir_bulan
-                    )
+                    * pb.jumlah_hari
                 ) / ms.penjualan_mtd,
-                0
+                2
             )
             ELSE 0
         END AS doar
-    FROM page_data p
-    LEFT JOIN customer_monthly_summary ms
-        ON ms.customer IS NOT DISTINCT FROM p.customer
+    FROM page_customers pc
+    CROSS JOIN periode_batas pb
     LEFT JOIN first_nonzero_piutang fn
-        ON fn.customer IS NOT DISTINCT FROM p.customer
-    CROSS JOIN tanggal_acuan ta
-    ORDER BY
-        p.customer_name ASC NULLS LAST,
-        p.customer ASC
+        ON fn.customer IS NOT DISTINCT FROM pc.customer
+    LEFT JOIN customer_monthly_summary ms
+        ON ms.customer IS NOT DISTINCT FROM pc.customer
+)
+SELECT
+    pd.profit_center,
+    pd.nama_cabang,
+    pd.customer AS customer_code,
+    pd.customer_name,
+    pd.kode_principle,
+    pd.nama_principle,
+    pd.lini,
+    pd.desc_cust_grp3,
+    pd.channel_id,
+    COALESCE(cd.piutang_awal, 0) AS piutang_awal,
+    COALESCE(cd.piutang_bulan_ini, 0) AS piutang_bulan_ini,
+    COALESCE(cd.penjualan_mtd, 0) AS penjualan_mtd,
+    COALESCE(cd.doar, 0) AS doar
+FROM page_data pd
+LEFT JOIN customer_doar cd
+    ON cd.customer IS NOT DISTINCT FROM pd.customer
+ORDER BY
+    pd.customer_name ASC NULLS LAST,
+    pd.customer ASC
 `;
 
 query.countDataDoar = `
-    SELECT
-        COUNT(*)::INTEGER AS total
-    FROM public.mv_doar_customer p
-    LEFT JOIN public.m_customer mc
-        ON mc.kode_customer = p.customer
-    LEFT JOIN public.m_referensi mr_cabang
-        ON mr_cabang.kd_ref = p.cabang
-        AND mr_cabang.jns_ref = 'cabang_id'
-    WHERE 1 = 1
-        :condition
+${doarBaseCte}
+SELECT
+    COUNT(*)::INTEGER AS total_data
+FROM customer_data cd
+LEFT JOIN public.mv_doar_v2_customer mc
+    ON mc.kode_customer = cd.customer
+LEFT JOIN public.mv_doar_v2_cabang cabang
+    ON cabang.kd_ref::TEXT = cd.cabang::TEXT
+LEFT JOIN public.mv_doar_v2_top top_data
+    ON top_data.desc_cust_grp3_key =
+       REPLACE(LOWER(cd.desc_cust_grp3), ' ', '')
+WHERE 1 = 1
+    :condition
 `;
+
+// menggunakan material view
+// query.getDataDoar = `
+//     WITH
+//     -- =====================================================
+//     -- 1. FILTER DAN PAGINATION CUSTOMER
+//     -- =====================================================
+//     page_data AS MATERIALIZED (
+//         SELECT
+//             p.cabang AS profit_center,
+//             mr_cabang.ur_ref AS nama_cabang,
+//             p.customer AS customer_code,
+//             mc.name AS customer_name,
+//             p.principle AS kode_principle,
+//             p.nama_principle,
+//             p.nama_principle AS principal,
+//             p.lini,
+//             p.customer
+//         FROM public.mv_doar_customer p
+//         LEFT JOIN public.m_customer mc
+//             ON mc.kode_customer = p.customer
+//         LEFT JOIN public.m_referensi mr_cabang
+//             ON mr_cabang.kd_ref = p.cabang
+//             AND mr_cabang.jns_ref = 'cabang_id'
+//         WHERE 1 = 1
+//             :condition
+//         ORDER BY
+//             mc.name ASC NULLS LAST,
+//             p.customer ASC
+//         LIMIT :limit
+//         OFFSET :offset
+//     ),
+//     -- =====================================================
+//     -- 2. CUSTOMER YANG MASUK HALAMAN
+//     -- =====================================================
+//     page_customers AS MATERIALIZED (
+//         SELECT DISTINCT
+//             customer
+//         FROM page_data
+//     ),
+//     -- =====================================================
+//     -- 3. REKAP PIUTANG BULANAN
+//     -- HANYA CUSTOMER DI HALAMAN
+//     -- =====================================================
+//     customer_monthly AS (
+//         SELECT
+//             m.customer,
+//             m.periode,
+//             m.total_piutang,
+//             m.total_dpp
+//         FROM page_customers pc
+//         INNER JOIN public.mv_doar_customer_monthly m
+//             ON m.customer IS NOT DISTINCT FROM pc.customer
+//         WHERE m.periode >= MAKE_DATE(
+//             EXTRACT(YEAR FROM CURRENT_DATE)::integer - 1,
+//             12,
+//             1
+//         )
+//         AND m.periode < (
+//             DATE_TRUNC('month', CURRENT_DATE)
+//             + INTERVAL '1 month'
+//         )
+//     ),
+//     -- =====================================================
+//     -- 4. PIUTANG PERTAMA YANG TIDAK NOL
+//     -- =====================================================
+//     first_nonzero_piutang AS (
+//         SELECT DISTINCT ON (customer)
+//             customer,
+//             total_piutang AS piutang_akhir_tahun
+//         FROM customer_monthly
+//         WHERE total_piutang <> 0
+//         ORDER BY
+//             customer,
+//             periode ASC
+//     ),
+//     -- =====================================================
+//     -- 5. SUMMARY PIUTANG BULANAN
+//     -- =====================================================
+//     customer_monthly_summary AS (
+//         SELECT
+//             customer,
+//             COALESCE(
+//                 SUM(total_piutang) FILTER (
+//                     WHERE periode = DATE_TRUNC(
+//                         'month',
+//                         CURRENT_DATE
+//                     )::date
+//                 ),
+//                 0
+//             ) AS piutang_bulan_ini,
+//             COALESCE(
+//                 SUM(total_dpp) FILTER (
+//                     WHERE periode >= MAKE_DATE(
+//                         EXTRACT(YEAR FROM CURRENT_DATE)::integer,
+//                         1,
+//                         1
+//                     )
+//                     AND periode <= DATE_TRUNC(
+//                         'month',
+//                         CURRENT_DATE
+//                     )::date
+//                 ),
+//                 0
+//             ) AS penjualan_mtd
+//         FROM customer_monthly
+//         GROUP BY customer
+//     ),
+//     -- =====================================================
+//     -- 6. TANGGAL ACUAN
+//     -- =====================================================
+//     tanggal_acuan AS (
+//         SELECT (
+//             DATE_TRUNC('month', CURRENT_DATE)
+//             + INTERVAL '1 month'
+//             - INTERVAL '1 day'
+//         )::date AS tanggal_akhir_bulan
+//     )
+//     -- =====================================================
+//     -- 7. HASIL AKHIR
+//     -- =====================================================
+//     SELECT
+//         p.profit_center,
+//         p.nama_cabang,
+//         p.customer_code,
+//         p.customer_name,
+//         p.kode_principle,
+//         p.nama_principle,
+//         p.nama_principle AS principal,
+//         p.lini,
+//         COALESCE(
+//             fn.piutang_akhir_tahun,
+//             0
+//         ) AS piutang_akhir_tahun,
+//         COALESCE(
+//             ms.piutang_bulan_ini,
+//             0
+//         ) AS piutang_bulan_ini,
+//         COALESCE(
+//             ms.penjualan_mtd,
+//             0
+//         ) AS penjualan_mtd,
+//         CASE
+//             WHEN COALESCE(ms.penjualan_mtd, 0) > 0
+//             THEN ROUND(
+//                 (
+//                     (
+//                         COALESCE(fn.piutang_akhir_tahun, 0)
+//                         +
+//                         COALESCE(ms.piutang_bulan_ini, 0)
+//                     ) / 2.0
+//                     *
+//                     EXTRACT(
+//                         DAY FROM ta.tanggal_akhir_bulan
+//                     )
+//                 ) / ms.penjualan_mtd,
+//                 0
+//             )
+//             ELSE 0
+//         END AS doar
+//     FROM page_data p
+//     LEFT JOIN customer_monthly_summary ms
+//         ON ms.customer IS NOT DISTINCT FROM p.customer
+//     LEFT JOIN first_nonzero_piutang fn
+//         ON fn.customer IS NOT DISTINCT FROM p.customer
+//     CROSS JOIN tanggal_acuan ta
+//     ORDER BY
+//         p.customer_name ASC NULLS LAST,
+//         p.customer ASC
+// `;
+
+// query.countDataDoar = `
+//     SELECT
+//         COUNT(*)::INTEGER AS total
+//     FROM public.mv_doar_customer p
+//     LEFT JOIN public.m_customer mc
+//         ON mc.kode_customer = p.customer
+//     LEFT JOIN public.m_referensi mr_cabang
+//         ON mr_cabang.kd_ref = p.cabang
+//         AND mr_cabang.jns_ref = 'cabang_id'
+//     WHERE 1 = 1
+//         :condition
+// `;
 
 const DASHBOARD_CONDITION_NO_DATE = `
     AND (

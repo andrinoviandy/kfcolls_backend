@@ -17,8 +17,8 @@ exports.getDataSales = async () => {
             entitas: 'dwh',
             modul: 'get_sales',
             method: 'post',
-            // posting_date: '2026-10-29'
-            posting_date: moment().subtract(1, 'days').format('YYYY-MM-DD')
+            posting_date: '2026-10-01'
+            // posting_date: moment().subtract(1, 'days').format('YYYY-MM-DD')
         }
 
         const config = await serviceIntegrasi.checkConfig(payload)
@@ -34,3 +34,42 @@ exports.getDataSales = async () => {
         // res.status(statusCode.error).json(errorMessage(error))
     }
 }
+
+// exports.getDataSales = async () => {
+//     try {
+//         const startDate = moment('2026-11-01');
+//         const endDate = moment('2026-11-07');
+
+//         for (
+//             let date = startDate.clone();
+//             date.isSameOrBefore(endDate, 'day');
+//             date.add(1, 'day')
+//         ) {
+//             const postingDate = date.format('YYYY-MM-DD');
+
+//             console.log(`Proses get sales tanggal: ${postingDate}`);
+
+//             const payload = {
+//                 entitas: 'dwh',
+//                 modul: 'get_sales',
+//                 method: 'post',
+//                 posting_date: postingDate
+//             };
+
+//             const config = await serviceIntegrasi.checkConfig(payload);
+
+//             if (config > 0) {
+//                 const result = await serviceIntegrasi.getDataSales(payload);
+
+//                 console.log(`Berhasil: ${postingDate}`, result);
+//             } else {
+//                 console.log(`Tidak ada konfigurasi: ${postingDate}`);
+//             }
+//         }
+
+//         console.log('Proses get sales Oktober 2026 selesai');
+
+//     } catch (error) {
+//         console.log(error);
+//     }
+// };

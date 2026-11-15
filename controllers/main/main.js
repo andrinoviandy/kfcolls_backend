@@ -1126,6 +1126,7 @@ exports.insertFakturKembali = async (req, res) => {
 
 };
 
+
 exports.insertBayarFaktur = async (req, res) => {
     let transaction;
 
@@ -1142,11 +1143,21 @@ exports.insertBayarFaktur = async (req, res) => {
             role_user_id
         } = req.user;
 
+        // Bukti pembayaran dari customer
         const files = req?.files?.lampiran
             ? (
                 Array.isArray(req.files.lampiran)
                     ? req.files.lampiran
                     : [req.files.lampiran]
+            )
+            : [];
+
+        // Bukti serah terima dari kasir
+        const filesKasir = req?.files?.files_kasir
+            ? (
+                Array.isArray(req.files.files_kasir)
+                    ? req.files.files_kasir
+                    : [req.files.files_kasir]
             )
             : [];
 
@@ -1163,7 +1174,8 @@ exports.insertBayarFaktur = async (req, res) => {
             await serviceMain.insertBayarFaktur(
                 payload,
                 files,
-                transaction
+                transaction,
+                filesKasir
             );
 
         await transaction.commit();

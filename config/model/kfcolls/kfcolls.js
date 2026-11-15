@@ -5727,6 +5727,10 @@ exports.D_FAKTUR_PETUGAS = db.define('d_faktur_petugas',
         updated_by: {
             type: DataTypes.STRING,
             field: 'updated_by'
+        },
+        alasan_pengembalian: {
+            type: DataTypes.STRING,
+            field: 'alasan_pengembalian'
         }
     }, {
     schema: 'public',
@@ -5915,6 +5919,10 @@ exports.D_PEMBAYARAN = db.define('d_pembayaran',
         files: {
             type: DataTypes.TEXT,
             field: 'files'
+        },
+        files_kasir: {
+            type: DataTypes.TEXT,
+            field: 'files_kasir'
         },
         keterangan: {
             type: DataTypes.STRING,

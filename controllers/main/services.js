@@ -5479,7 +5479,7 @@ exports.insertFakturKembali = async (payload) => {
             await model.d_faktur_petugas.update(
                 {
                     is_active: 'T',
-                    kd_status: 'K',
+                    kd_status: payload?.kd_status,
                     alasan_pengembalian: payload?.alasan,
                     updated_by: payload?.updated_by || 'SYSTEM',
                     updated_at: new Date()
@@ -5744,7 +5744,8 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
 exports.insertBayarFaktur = async (
     payload,
     files,
-    transaction
+    transaction,
+    filesKasir = []
 ) => {
     try {
 
@@ -5900,6 +5901,27 @@ exports.insertBayarFaktur = async (
                 ? uploadDocument[0].path
                     .replace(/\\/g, '/')
                 : '';
+
+        // =====================================================
+        // UPLOAD BUKTI SERAH TERIMA DARI KASIR (CASH)
+        // =====================================================
+
+        let fileKasirPath = null;
+
+        if (metodePembayaran === 'CASH' && filesKasir?.length > 0) {
+            const uploadDocumentKasir =
+                await this.processUploadFile(
+                    payload,
+                    filesKasir,
+                    transaction
+                );
+
+            fileKasirPath =
+                uploadDocumentKasir?.[0]?.path
+                    ? uploadDocumentKasir[0].path
+                        .replace(/\\/g, '/')
+                    : null;
+        }
 
         // if (!filePath) {
         //     throw new Error(
@@ -6076,6 +6098,11 @@ exports.insertBayarFaktur = async (
                             files:
                                 filePath,
 
+                            files_kasir:
+                                metodePembayaran === 'CASH'
+                                    ? fileKasirPath
+                                    : null,
+
                             keterangan:
                                 payload?.keterangan ||
                                 null
@@ -6193,6 +6220,11 @@ exports.insertBayarFaktur = async (
 
                         files:
                             filePath,
+
+                        files_kasir:
+                            metodePembayaran === 'CASH'
+                                ? fileKasirPath
+                                : null,
 
                         keterangan:
                             payload?.keterangan ||
@@ -10976,7 +11008,6 @@ exports.getDataLaporan = async (params) => {
                     OR p.sales ILIKE :keyword
                     OR p.nama_sales ILIKE :keyword
                     OR p.cabang ILIKE :keyword
-                    OR p.principle ILIKE :keyword
                     OR p.posting_date::TEXT ILIKE :keyword
                     OR p.jatuh_tempo::TEXT ILIKE :keyword
                     OR p.dpp::TEXT ILIKE :keyword
@@ -10999,13 +11030,6 @@ exports.getDataLaporan = async (params) => {
                         WHERE mr_keyword.kd_ref = p.cabang
                             AND mr_keyword.jns_ref = 'cabang_id'
                             AND mr_keyword.ur_ref ILIKE :keyword
-                    )
-
-                    OR EXISTS (
-                        SELECT 1
-                        FROM public.m_principle mp_keyword
-                        WHERE mp_keyword.principle = p.principle
-                            AND mp_keyword.nama_principle ILIKE :keyword
                     )
                 )
             `;
@@ -11053,7 +11077,16 @@ exports.getDataLaporan = async (params) => {
             principles.length > 0 &&
             !principles.some((item) => item.toUpperCase() === 'ALL')
         ) {
-            condition += ` AND p.principle IN (:principles) `;
+            condition += ` AND EXISTS (
+                    SELECT 1
+                    FROM public.m_principle mp_keyword
+                    LEFT JOIN public.d_penjualan dd
+                        ON dd.principle = mp_keyword.principle
+                    JOIN public.d_piutang dpp
+                        ON dpp.no_billing = dd.billing_no
+                    WHERE dpp.piutang_id = p.piutang_id
+                      AND mp_keyword.principle IN (:principles)
+                ) `;
             filterBind.principles = principles;
         }
 
@@ -12782,7 +12815,7 @@ exports.alokasiPenerimaanLain = async (payload, transaction) => {
                         null,
 
                     nominal_bayar:
-                        parseFloat(piutang?.dpp) + parseFloat(piutang?.ppn),
+                        parseFloat(payload?.nominal_bayar),
 
                     tanggal_pembayaran:
                         penerimaanLain?.tanggal_pembayaran,
