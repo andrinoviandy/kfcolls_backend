@@ -22,6 +22,11 @@ const cron = require('node-cron');
 const app = express();
 
 const server = createServer(app); // Gunakan HTTP server untuk Socket.IO
+server.requestTimeout = 1200000;  // 20 menit
+server.headersTimeout = 1205000;  // Harus lebih besar dari requestTimeout
+server.timeout = 1200000;         // 20 menit
+server.keepAliveTimeout = 65000;
+
 // const io = new Server(server, {
 //   cors: {
 //     origin: "*", // Izinkan akses dari semua domain (ubah jika perlu)
