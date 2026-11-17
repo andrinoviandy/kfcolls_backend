@@ -18223,7 +18223,7 @@ query.getDataPenjualan = `
         dp.name_principle AS principal,
         dp.desc_cust_grp3,
         dp.salesman,
-        dp.name_salesman,
+        mu.nama AS name_salesman,
         dp.po_number,
         dp.quotation_number,
         dp.created_by,
@@ -18235,6 +18235,9 @@ query.getDataPenjualan = `
         mt.top
 
     FROM public.d_penjualan dp
+
+    LEFT JOIN public.m_user mu 
+        ON mu.kode_sales = dp.salesman 
 
     LEFT JOIN public.m_top mt
         ON REPLACE(
@@ -18732,7 +18735,7 @@ piutang_data AS (
         p.customer,
         p.cabang,
         p.sales,
-        p.nama_sales,
+        mu.nama AS nama_sales,
         p.posting_date,
         p.jatuh_tempo,
         p.dpp,
@@ -18904,6 +18907,9 @@ piutang_data AS (
         mt.top
 
     FROM filtered_piutang p
+
+    LEFT JOIN m_user mu 
+        ON mu.kode_sales = p.sales 
 
     CROSS JOIN tanggal_acuan ta
 
@@ -20238,7 +20244,7 @@ query.getDataKreasiFaktur = `
             p.customer,
             p.cabang,
             p.sales,
-            p.nama_sales,
+            mu.nama AS nama_sales,
             p.posting_date,
             p.jatuh_tempo,
             p.dpp,
@@ -20273,6 +20279,9 @@ query.getDataKreasiFaktur = `
             mt.top
 
         FROM public.d_piutang p
+
+        LEFT JOIN m_user mu 
+            ON mu.kode_sales = p.sales
 
         LEFT JOIN public.m_top mt
           ON REPLACE(LOWER(mt.desc_cust_grp3), ' ', '') =
@@ -22630,11 +22639,13 @@ query.getDataReportSales = `
             p.customer,
             p.cabang,
             p.sales,
-            p.nama_sales,
+            mu.nama AS nama_sales,
             p.channel_id,
             p.posting_date,
             COALESCE(p.dpp, 0) AS dpp
-        FROM public.d_piutang p
+        FROM public.d_piutang p 
+        LEFT JOIN m_user mu 
+        ON mu.kode_sales = p.sales
         WHERE 1 = 1
             :condition
     ),
@@ -23054,9 +23065,14 @@ query.getDataKonfirmasiPiutang = `
             WHEN ds.kd_status = 'T' THEN 'TLK'
             WHEN ds.kd_status = 'MK' THEN 'MK'
             ELSE COALESCE(ds.kd_status::TEXT, '-')
-        END AS kode_singkat_status
+        END AS kode_singkat_status,
+
+        mu.nama AS nama_salesman 
 
     FROM public.d_piutang p
+
+    LEFT JOIN m_user mu 
+        ON mu.kode_sales = p.sales 
 
     -- KONFIRMASI AKTIF TERAKHIR
     LEFT JOIN LATERAL (
@@ -23374,7 +23390,7 @@ query.getDataLaporan = `
         mc.name AS nama_customer,
 
         p.sales,
-        p.nama_sales,
+        mu.nama AS nama_sales,
 
         p.cabang,
         mr.ur_ref AS nama_cabang,
@@ -23494,6 +23510,9 @@ query.getDataLaporan = `
 
     FROM piutang_data p
 
+    LEFT JOIN m_user mu 
+        ON mu.kode_sales = p.sales
+        
     -- =============================================
     -- PENUGASAN TUKAR FAKTUR TERAKHIR
     -- =============================================
