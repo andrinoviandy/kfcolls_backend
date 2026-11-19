@@ -2051,7 +2051,15 @@ const dashboardHandlers = [
     'getAgingPiutangDashboard',
     'getTrendPencairanPiutang',
     'getDashboardCard1',
-    'getDashboardPiutangByCabang'
+    'getDashboardPiutangByCabang',
+
+    // Endpoint Dashboard Baru
+    'getSaldoPiutangByAgingChannelDashboard',
+    'getPerformaPiutangByDimensionDashboard',
+    'getOutstandingByChannelDashboard',
+    'getCollectionByDimensionDashboard',
+    'getTopPiutangByPrincipalDashboard',
+    'getCollectionByMetodePembayaranDashboard'
 ];
 
 dashboardHandlers.forEach((handlerName) => {

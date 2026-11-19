@@ -13588,6 +13588,54 @@ exports.getDashboardPiutangByCabang = async (params = {}) => {
 //     }
 // };
 
+exports.getCollectionByMetodePembayaranDashboard = async (
+    params = {}
+) => {
+    try {
+        const filters = prepareFilters({
+            ...params,
+            tanggal_mulai: params.tanggal_mulai ?? null,
+            tanggal_akhir: params.tanggal_akhir ?? null
+        });
+
+        const listData = await runSelect(
+            query.getCollectionByMetodePembayaranDashboard,
+            filters
+        );
+
+        const data = Array.isArray(listData)
+            ? listData.map((item) => ({
+                metode_pembayaran:
+                    item.metode_pembayaran || 'LAINNYA',
+
+                nominal_collection: Number(
+                    item.nominal_collection || 0
+                )
+            }))
+            : [];
+
+        const totalCollection = data.reduce(
+            (total, item) =>
+                total + item.nominal_collection,
+            0
+        );
+
+        return {
+            list_data: data,
+            total_data: data.length,
+            total_collection: totalCollection
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET COLLECTION BY METODE PEMBAYARAN DASHBOARD:',
+            error
+        );
+
+        throw error;
+    }
+};
+
 // =====================================================
 // 4. SALES OPEN INVOICE
 // =====================================================
@@ -13685,6 +13733,241 @@ exports.getDetailPiutangDashboard = async (params = {}) => {
             'ERROR SERVICE GET DETAIL PIUTANG DASHBOARD:',
             error
         );
+        throw error;
+    }
+};
+
+const DASHBOARD_DIMENSION_CONFIG = {
+    performa: [
+        'produk',
+        'principal',
+        'channel',
+        'customer',
+        'cabang'
+    ],
+
+    collection: [
+        'customer',
+        'principal',
+        'channel'
+    ]
+};
+
+const getDashboardAggregateFilters = (params = {}) => {
+    return prepareFilters({
+        ...params,
+        tanggal_mulai: params.tanggal_mulai ?? null,
+        tanggal_akhir: params.tanggal_akhir ?? null
+    });
+};
+
+const getDashboardGroupBy = (
+    value,
+    allowedValues,
+    defaultValue
+) => {
+    const groupBy = String(
+        value || defaultValue
+    ).trim().toLowerCase();
+
+    if (!allowedValues.includes(groupBy)) {
+        throw new Error(
+            `group_by tidak valid. Pilihan: ${allowedValues.join(', ')}`
+        );
+    }
+
+    return groupBy;
+};
+
+exports.getSaldoPiutangByAgingChannelDashboard = async (
+    params = {}
+) => {
+    try {
+        const filters = getDashboardAggregateFilters(params);
+
+        const listData = await runSelect(
+            query.getSaldoPiutangByAgingChannelDashboard,
+            filters
+        );
+
+        const rows = Array.isArray(listData)
+            ? listData
+            : [];
+
+        const totalOutstanding = rows.reduce(
+            (sum, row) =>
+                sum + Number(
+                    row.total_outstanding ?? row.total ?? 0
+                ),
+            0
+        );
+
+        const result = rows.map((row) => {
+            const total = Number(
+                row.total_outstanding ?? row.total ?? 0
+            );
+
+            const sdhJto2026 = Number(
+                row.sdh_jto_2026 || 0
+            );
+
+            return {
+                ...row,
+
+                total,
+
+                total_outstanding: total,
+
+                percentage: totalOutstanding !== 0
+                    ? (total / totalOutstanding) * 100
+                    : 0,
+
+                percentage_sdh_jto: total !== 0
+                    ? (sdhJto2026 / total) * 100
+                    : 0
+            };
+        });
+
+        return {
+            list_data: result
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET SALDO PIUTANG BY AGING CHANNEL DASHBOARD:',
+            error
+        );
+
+        throw error;
+    }
+};
+
+exports.getPerformaPiutangByDimensionDashboard = async (
+    params = {}
+) => {
+    try {
+        const filters = getDashboardAggregateFilters(params);
+
+        const group_by = getDashboardGroupBy(
+            params.group_by,
+            DASHBOARD_DIMENSION_CONFIG.performa,
+            'produk'
+        );
+
+        const listData = await runSelect(
+            query.getPerformaPiutangByDimensionDashboard,
+            {
+                ...filters,
+                group_by
+            }
+        );
+
+        return {
+            list_data: Array.isArray(listData)
+                ? listData
+                : [],
+
+            group_by
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET PERFORMA PIUTANG BY DIMENSION DASHBOARD:',
+            error
+        );
+
+        throw error;
+    }
+};
+
+exports.getOutstandingByChannelDashboard = async (
+    params = {}
+) => {
+    try {
+        const filters = getDashboardAggregateFilters(params);
+
+        const listData = await runSelect(
+            query.getOutstandingByChannelDashboard,
+            filters
+        );
+
+        return {
+            list_data: Array.isArray(listData)
+                ? listData
+                : []
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET OUTSTANDING BY CHANNEL DASHBOARD:',
+            error
+        );
+
+        throw error;
+    }
+};
+
+exports.getCollectionByDimensionDashboard = async (
+    params = {}
+) => {
+    try {
+        const filters = getDashboardAggregateFilters(params);
+
+        const group_by = getDashboardGroupBy(
+            params.group_by,
+            DASHBOARD_DIMENSION_CONFIG.collection,
+            'customer'
+        );
+
+        const listData = await runSelect(
+            query.getCollectionByDimensionDashboard,
+            {
+                ...filters,
+                group_by
+            }
+        );
+
+        return {
+            list_data: Array.isArray(listData)
+                ? listData
+                : [],
+
+            group_by
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET COLLECTION BY DIMENSION DASHBOARD:',
+            error
+        );
+
+        throw error;
+    }
+};
+
+exports.getTopPiutangByPrincipalDashboard = async (
+    params = {}
+) => {
+    try {
+        const filters = getDashboardAggregateFilters(params);
+
+        const listData = await runSelect(
+            query.getTopPiutangByPrincipalDashboard,
+            filters
+        );
+
+        return {
+            list_data: Array.isArray(listData)
+                ? listData
+                : []
+        };
+
+    } catch (error) {
+        console.error(
+            'ERROR SERVICE GET TOP PIUTANG BY PRINCIPAL DASHBOARD:',
+            error
+        );
+
         throw error;
     }
 };

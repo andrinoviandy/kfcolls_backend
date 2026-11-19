@@ -64,6 +64,42 @@ router.get(
     authorization.doAuth,
     controller.main.getDashboardCard1
 );
+// Dashboard Piutang - Endpoint Baru
+
+router.get(
+    '/getSaldoPiutangByAgingChannelDashboard',
+    authorization.doAuth,
+    controller.main.getSaldoPiutangByAgingChannelDashboard
+);
+
+router.get(
+    '/getPerformaPiutangByDimensionDashboard',
+    authorization.doAuth,
+    controller.main.getPerformaPiutangByDimensionDashboard
+);
+
+router.get(
+    '/getOutstandingByChannelDashboard',
+    authorization.doAuth,
+    controller.main.getOutstandingByChannelDashboard
+);
+
+router.get(
+    '/getCollectionByDimensionDashboard',
+    authorization.doAuth,
+    controller.main.getCollectionByDimensionDashboard
+);
+
+router.get(
+    '/getTopPiutangByPrincipalDashboard',
+    authorization.doAuth,
+    controller.main.getTopPiutangByPrincipalDashboard
+);
+router.get(
+    '/getCollectionByMetodePembayaranDashboard',
+    authorization.doAuth,
+    controller.main.getCollectionByMetodePembayaranDashboard
+);
 router.get(
     '/getDashboardPiutangByCabang',
     authorization.doAuth,
