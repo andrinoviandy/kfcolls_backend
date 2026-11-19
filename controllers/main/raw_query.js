@@ -19280,7 +19280,6 @@ WHERE 1 = 1
     :condition
 `;
 
-
 query.getUploadedDataPiutang = `
     SELECT
         x.billing_no,
@@ -19870,12 +19869,24 @@ query.summaryDataFakturPetugas = `
         ) AS belum_ditugaskan,
 
         COUNT(*) FILTER (
-            WHERE fp.fp_kembali_tukar_id IS NOT NULL
-        ) AS total_faktur_kembali_tukar_faktur,
+            WHERE fp.kembali_tukar_id IS NOT NULL
+              AND fp.kembali_tukar_status = 'A'
+        ) AS faktur_kembali_tukar_faktur_accept,
 
         COUNT(*) FILTER (
-            WHERE fp.fp_kembali_penagihan_id IS NOT NULL
-        ) AS total_faktur_kembali_penagihan
+            WHERE fp.kembali_tukar_id IS NOT NULL
+              AND fp.kembali_tukar_status = 'C'
+        ) AS faktur_kembali_tukar_faktur_reject,
+
+        COUNT(*) FILTER (
+            WHERE fp.kembali_penagihan_id IS NOT NULL
+              AND fp.kembali_penagihan_status = 'A'
+        ) AS faktur_kembali_penagihan_accept,
+
+        COUNT(*) FILTER (
+            WHERE fp.kembali_penagihan_id IS NOT NULL
+              AND fp.kembali_penagihan_status = 'C'
+        ) AS faktur_kembali_penagihan_reject
 
     FROM public.d_piutang p
 
@@ -19883,11 +19894,16 @@ query.summaryDataFakturPetugas = `
         SELECT
             tukar.faktur_petugas_id AS fp_tukar_id,
             penagihan.faktur_petugas_id AS fp_penagihan_id,
-            kembali_tukar.faktur_petugas_id AS fp_kembali_tukar_id,
-            kembali_penagihan.faktur_petugas_id AS fp_kembali_penagihan_id
+
+            kembali_tukar.faktur_petugas_id AS kembali_tukar_id,
+            kembali_tukar.kd_status AS kembali_tukar_status,
+
+            kembali_penagihan.faktur_petugas_id AS kembali_penagihan_id,
+            kembali_penagihan.kd_status AS kembali_penagihan_status
 
         FROM (SELECT 1) AS base
 
+        -- Penugasan Tukar Faktur terbaru yang aktif
         LEFT JOIN LATERAL (
             SELECT fp.faktur_petugas_id
             FROM public.d_faktur_petugas fp
@@ -19901,6 +19917,7 @@ query.summaryDataFakturPetugas = `
             LIMIT 1
         ) tukar ON TRUE
 
+        -- Penugasan Penagihan terbaru yang aktif
         LEFT JOIN LATERAL (
             SELECT fp.faktur_petugas_id
             FROM public.d_faktur_petugas fp
@@ -19914,29 +19931,33 @@ query.summaryDataFakturPetugas = `
             LIMIT 1
         ) penagihan ON TRUE
 
+        -- Status Faktur Kembali Tukar Faktur terbaru
         LEFT JOIN LATERAL (
-            SELECT fp.faktur_petugas_id, fp.kd_status
+            SELECT
+                fp.faktur_petugas_id,
+                fp.kd_status
             FROM public.d_faktur_petugas fp
             WHERE fp.piutang_id = p.piutang_id
               AND fp.kegiatan = 'TUKAR_FAKTUR'
             ORDER BY
-                COALESCE(fp.updated_at, fp.created_at) DESC NULLS LAST,
+                fp.created_at DESC NULLS LAST,
                 fp.faktur_petugas_id DESC
             LIMIT 1
-        ) kembali_tukar
-            ON kembali_tukar.kd_status = 'K'
+        ) kembali_tukar ON TRUE
 
+        -- Status Faktur Kembali Penagihan terbaru
         LEFT JOIN LATERAL (
-            SELECT fp.faktur_petugas_id, fp.kd_status
+            SELECT
+                fp.faktur_petugas_id,
+                fp.kd_status
             FROM public.d_faktur_petugas fp
             WHERE fp.piutang_id = p.piutang_id
               AND fp.kegiatan = 'PENAGIHAN'
             ORDER BY
-                COALESCE(fp.updated_at, fp.created_at) DESC NULLS LAST,
+                fp.created_at DESC NULLS LAST,
                 fp.faktur_petugas_id DESC
             LIMIT 1
-        ) kembali_penagihan
-            ON kembali_penagihan.kd_status = 'K'
+        ) kembali_penagihan ON TRUE
 
     ) fp ON TRUE
 
@@ -20473,7 +20494,6 @@ query.countDataKreasiFaktur = `
         :condition
 `;
 
-
 query.summaryDataKreasiFaktur = `
     WITH payment_rows AS (
         SELECT
@@ -20567,8 +20587,6 @@ query.summaryDataKreasiFaktur = `
     WHERE 1 = 1
         :condition
 `;
-
-
 
 query.getDataVerifikasiTukarFaktur = `
     SELECT
@@ -21219,7 +21237,6 @@ query.countDataBayarFaktur = `
     WHERE 1 = 1
         :condition
 `;
-
 
 query.summaryDataBayarFaktur = `
 WITH filtered_data AS (
@@ -23067,12 +23084,12 @@ query.getDataKonfirmasiPiutang = `
             ELSE COALESCE(ds.kd_status::TEXT, '-')
         END AS kode_singkat_status,
 
-        mu.nama AS nama_salesman 
+        mus.nama AS nama_salesman 
 
     FROM public.d_piutang p
 
-    LEFT JOIN m_user mu 
-        ON mu.kode_sales = p.sales 
+    LEFT JOIN m_user mus 
+        ON mus.kode_sales = p.sales 
 
     -- KONFIRMASI AKTIF TERAKHIR
     LEFT JOIN LATERAL (
@@ -23293,14 +23310,12 @@ query.summaryDataKonfirmasiPiutang = `
         :condition
 `;
 
-
-
 const laporanBaseCte = `
     WITH payment_rows AS (
 
         -- =============================================
         -- PEMBAYARAN TERVERIFIKASI
-        -- MENGGUNAKAN EXISTS STATUS S
+        -- HANYA STATUS TERBARU = S
         -- =============================================
         SELECT
             BTRIM(COALESCE(dp.no_billing, '')) AS no_billing,
@@ -23308,15 +23323,20 @@ const laporanBaseCte = `
 
         FROM public.d_pembayaran dp
 
-        WHERE EXISTS (
-            SELECT 1
-
+        INNER JOIN LATERAL (
+            SELECT
+                ds.kd_status,
+                ds.created_at
             FROM public.d_status ds
-
             WHERE ds.foreign_id = dp.pembayaran_id
-                AND ds.kegiatan = 'PENAGIHAN'
-                AND ds.kd_status = 'S'
-        )
+              AND ds.kegiatan = 'PENAGIHAN'
+            ORDER BY
+                ds.created_at DESC NULLS LAST,
+                ds.status_id DESC
+            LIMIT 1
+        ) ds ON TRUE
+
+        WHERE UPPER(COALESCE(ds.kd_status, '')) = 'S'
 
         UNION ALL
 
@@ -23336,7 +23356,6 @@ const laporanBaseCte = `
     payment_totals AS (
         SELECT
             no_billing,
-
             COALESCE(SUM(nominal), 0) AS total_collections
 
         FROM payment_rows
@@ -23359,7 +23378,7 @@ const laporanBaseCte = `
                 0
             ) AS total_dibayar_hitung,
 
-            -- OUTSTANDING
+            -- OUTSTANDING = DPP + PPN - COLLECTIONS
             (
                 COALESCE(p.dpp, 0) +
                 COALESCE(p.ppn, 0) -

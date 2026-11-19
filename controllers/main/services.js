@@ -1687,7 +1687,7 @@ exports.getDataPenjualan = async (params) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(
                 1,
                 Math.trunc(Number(params?.limit) || 10)
@@ -2022,7 +2022,7 @@ exports.getDataMasterTarget = async (params = {}) => {
 
         const limit = Math.min(
             Math.max(Number(params?.limit) || 10, 1),
-            500
+            100
         );
 
         const offset = (page - 1) * limit;
@@ -2714,7 +2714,7 @@ exports.getDataKreasiFaktur = async (params = {}) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(1, Math.trunc(Number(params.limit) || 10))
         );
 
@@ -3233,7 +3233,7 @@ exports.getDataPelanggan = async (params) => {
         // FILTER CABANG
         // =========================
         console.log(cabangId, 'cabangId');
-        
+
         if (cabangId.length > 0 && cabangId[0] !== 'ALL') {
             condition += `
                 AND mc.plant IN (:cabang_id)
@@ -4192,7 +4192,7 @@ exports.getDataFakturPetugas = async (params = {}) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(1, Math.trunc(Number(params.limit) || 10))
         );
 
@@ -4431,6 +4431,8 @@ exports.getDataFakturPetugas = async (params = {}) => {
         const totalHalaman = Math.ceil(totalData / limit);
 
         // SUMMARY
+
+        // SUMMARY
         const summary = summaryResult?.[0] || {};
 
         return {
@@ -4443,14 +4445,25 @@ exports.getDataFakturPetugas = async (params = {}) => {
                 total_faktur: Number(summary.total_faktur || 0),
                 sudah_ditugaskan: Number(summary.sudah_ditugaskan || 0),
                 belum_ditugaskan: Number(summary.belum_ditugaskan || 0),
-                total_faktur_kembali_tukar_faktur: Number(
-                    summary.total_faktur_kembali_tukar_faktur || 0
+
+                faktur_kembali_tukar_faktur_accept: Number(
+                    summary.faktur_kembali_tukar_faktur_accept || 0
                 ),
-                total_faktur_kembali_penagihan: Number(
-                    summary.total_faktur_kembali_penagihan || 0
+
+                faktur_kembali_tukar_faktur_reject: Number(
+                    summary.faktur_kembali_tukar_faktur_reject || 0
+                ),
+
+                faktur_kembali_penagihan_accept: Number(
+                    summary.faktur_kembali_penagihan_accept || 0
+                ),
+
+                faktur_kembali_penagihan_reject: Number(
+                    summary.faktur_kembali_penagihan_reject || 0
                 )
             }
         };
+
 
     } catch (error) {
         console.error(
@@ -4481,7 +4494,7 @@ exports.getDataTukarFaktur = async (params = {}) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(1, Math.trunc(Number(params.limit) || 10))
         );
 
@@ -4751,7 +4764,7 @@ exports.getDataVerifikasiTukarFaktur = async (params = {}) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(1, Math.trunc(Number(params.limit) || 10))
         );
 
@@ -5000,7 +5013,7 @@ exports.getDataVerifikasiPembayaran = async (params = {}) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(1, Math.trunc(Number(params?.limit) || 10))
         );
 
@@ -5050,6 +5063,17 @@ exports.getDataVerifikasiPembayaran = async (params = {}) => {
             condition += `
                 AND p.cabang = :role_cabang
             `;
+
+            if (['02'].includes(roleId)) {
+                condition += `
+                    AND dp.metode_pembayaran = 'BIAYA_LAIN'
+                `;
+            }
+            if (['03'].includes(roleId)) {
+                condition += `
+                    AND dp.metode_pembayaran != 'BIAYA_LAIN'
+                `;
+            }
 
             bind.role_cabang = params?.dataUser?.cabang_id;
         }
@@ -6001,6 +6025,21 @@ exports.insertBayarFaktur = async (
                         );
                 }
 
+                else if (
+                    jenisPembayaran ===
+                    'BIAYA_LAIN'
+                ) {
+
+                    totalBayar =
+                        saldoPiutang;
+
+                    nominalBayar =
+                        Number(
+                            item?.nominal_pembayaran ||
+                            0
+                        );
+                }
+
                 // =================================================
                 // MENUNGGU PEMBAYARAN
                 // =================================================
@@ -6076,7 +6115,7 @@ exports.insertBayarFaktur = async (
                                 jenisPembayaran,
 
                             metode_pembayaran:
-                                payload?.metode_pembayaran,
+                                jenisPembayaran === 'BIAYA_LAIN' ? jenisPembayaran : payload?.metode_pembayaran,
 
                             // Tambahan nama bank.
                             nama_bank:
@@ -8234,7 +8273,7 @@ exports.getDataBayarFaktur = async (params = {}) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(1, Math.trunc(Number(params?.limit) || 10))
         );
 
@@ -8290,6 +8329,17 @@ exports.getDataBayarFaktur = async (params = {}) => {
             condition += `
                 AND p.cabang = :role_cabang
             `;
+
+            if (['02'].includes(roleId)) {
+                condition += `
+                    AND EXISTS (SELECT 1 FROM d_pembayaran dpp where dpp.no_billing = p.no_billing AND dpp.metode_pembayaran = 'BIAYA_LAIN')
+                `;
+            }
+            if (['03'].includes(roleId)) {
+                condition += `
+                    AND EXISTS (SELECT 1 FROM d_pembayaran dpp where dpp.no_billing = p.no_billing AND dpp.metode_pembayaran != 'BIAYA_LAIN')
+                `;
+            }
 
             bind.role_cabang = params?.dataUser?.cabang_id;
         }
@@ -10038,7 +10088,7 @@ exports.getDataReportSales = async (params = {}) => {
 
         const limit = Math.min(
             Math.max(1, Number(params?.limit) || 10),
-            1000
+            100
         );
 
         const offset = (page - 1) * limit;
@@ -10464,7 +10514,7 @@ exports.getDataKonfirmasiPiutang = async (params = {}) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(1, Number(params?.limit) || 10)
         );
 
@@ -13652,7 +13702,7 @@ exports.getDetailPiutangDashboard = async (params = {}) => {
         );
 
         const limit = Math.min(
-            1000000,
+            100,
             Math.max(
                 1,
                 Number.parseInt(params.limit, 10) || 10
@@ -15221,7 +15271,7 @@ exports.getDataDoar = async (params) => {
         );
 
         const limit = Math.min(
-            1000,
+            100,
             Math.max(1, Math.trunc(Number(params?.limit) || 10))
         );
 

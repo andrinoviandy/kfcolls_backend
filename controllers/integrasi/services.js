@@ -378,7 +378,6 @@ exports.getDataSales = async (payload) => {
                             dp.salesman,
                             dp.name_salesman,
                             dp.sales_office,
-                            dp.principle,
 
                             COALESCE(SUM(dp.total_penjualan), 0) AS dpp,
 
@@ -524,7 +523,6 @@ exports.getDataSales = async (payload) => {
                             dp.salesman,
                             dp.name_salesman,
                             dp.sales_office,
-                            dp.principle,
                             dp.desc_cust_grp3,
                             m1.kd_ref,
                             mt.top,
