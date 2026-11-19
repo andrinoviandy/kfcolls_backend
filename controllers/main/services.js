@@ -2450,8 +2450,6 @@ exports.getDataPiutang = async (params) => {
                     OR p.dpp::text ILIKE :keyword
                     OR p.ppn::text ILIKE :keyword
                     OR p.pph::text ILIKE :keyword
-                    OR p.dibayar::text ILIKE :keyword
-                    OR p.outstanding::text ILIKE :keyword
                     OR p.aging::text ILIKE :keyword
                     OR p.status_piutang ILIKE :keyword
                     OR p.created_by ILIKE :keyword
