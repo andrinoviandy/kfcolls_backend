@@ -27521,7 +27521,209 @@ ORDER BY
 LIMIT 10
 `;
 
+// query.getOutstandingByChannelDashboard = `
+// WITH
+// -- =====================================================
+// -- 1. FILTER SALES
+// -- =====================================================
+// filtered_sales AS (
+//     SELECT
+//         dp.billing_no,
+//         dp.desc_cust_grp3,
+//         COALESCE(dp.total_penjualan, 0)::NUMERIC AS total_penjualan,
+//         COALESCE(dp.tax_amount, 0)::NUMERIC AS tax_amount
+//     FROM public.d_penjualan dp
+//     WHERE
+//         (:cabang_all = TRUE OR dp.sales_office IN (:cabang))
+//         AND (:principal_all = TRUE OR dp.principle IN (:principal))
+//         AND (:channel_all = TRUE OR dp.desc_cust_grp3 IN (:channel))
+//         AND (:customer_all = TRUE OR dp.bill_to_party IN (:customer))
+//         AND (:produk_all = TRUE OR dp.material IN (:produk))
+//         AND (
+//             :tanggal_mulai IS NULL
+//             OR dp.posting_date >= CAST(:tanggal_mulai AS DATE)
+//         )
+//         AND (
+//             :tanggal_akhir IS NULL
+//             OR dp.posting_date < CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+//         )
+// ),
 
+// -- =====================================================
+// -- 2. BILLING YANG TERFILTER
+// -- =====================================================
+// filtered_billing AS (
+//     SELECT DISTINCT billing_no
+//     FROM filtered_sales
+//     WHERE billing_no IS NOT NULL
+// ),
+
+// -- =====================================================
+// -- 3. PENJUALAN TOTAL PER BILLING
+// -- Denominator alokasi seluruh channel
+// -- =====================================================
+// billing_sales AS (
+//     SELECT
+//         dp.billing_no,
+//         SUM(
+//             COALESCE(dp.total_penjualan, 0)::NUMERIC
+//             + COALESCE(dp.tax_amount, 0)::NUMERIC
+//         ) AS total_penjualan_tax
+//     FROM public.d_penjualan dp
+//     INNER JOIN filtered_billing fb
+//         ON fb.billing_no = dp.billing_no
+//     GROUP BY dp.billing_no
+// ),
+
+// -- =====================================================
+// -- 4. PENJUALAN PER BILLING DAN CHANNEL
+// -- =====================================================
+// channel_sales AS (
+//     SELECT
+//         fs.billing_no,
+//         fs.desc_cust_grp3,
+//         SUM(
+//             fs.total_penjualan + fs.tax_amount
+//         )::NUMERIC AS total_penjualan_channel
+//     FROM filtered_sales fs
+//     GROUP BY
+//         fs.billing_no,
+//         fs.desc_cust_grp3
+// ),
+
+// -- =====================================================
+// -- 5. TOTAL PIUTANG PER BILLING
+// -- =====================================================
+// billing_piutang AS (
+//     SELECT
+//         p.no_billing,
+//         SUM(
+//             COALESCE(p.dpp, 0)::NUMERIC
+//             + COALESCE(p.ppn, 0)::NUMERIC
+//         ) AS total_piutang
+//     FROM public.d_piutang p
+//     INNER JOIN filtered_billing fb
+//         ON fb.billing_no = p.no_billing
+//     GROUP BY p.no_billing
+// ),
+
+// -- =====================================================
+// -- 6. PEMBAYARAN TERVERIFIKASI + COD
+// -- Mengambil status terakhir seperti summaryDataPiutang
+// -- =====================================================
+// payment_rows AS (
+//     SELECT
+//         dp.no_billing,
+//         dp.nominal_bayar AS nominal
+//     FROM public.d_pembayaran dp
+//     INNER JOIN filtered_billing fb
+//         ON fb.billing_no = dp.no_billing
+//     INNER JOIN LATERAL (
+//         SELECT ds.kd_status
+//         FROM public.d_status ds
+//         WHERE ds.foreign_id = dp.pembayaran_id
+//           AND ds.kegiatan = 'PENAGIHAN'
+//         ORDER BY
+//             ds.created_at DESC NULLS LAST,
+//             ds.status_id DESC
+//         LIMIT 1
+//     ) status_verifikasi
+//         ON UPPER(COALESCE(status_verifikasi.kd_status, '')) = 'S'
+
+//     UNION ALL
+
+//     SELECT
+//         dc.no_billing,
+//         dc.nominal_billing AS nominal
+//     FROM public.d_cod dc
+//     INNER JOIN filtered_billing fb
+//         ON fb.billing_no = dc.no_billing
+// ),
+
+// billing_collection AS (
+//     SELECT
+//         no_billing,
+//         COALESCE(SUM(nominal), 0)::NUMERIC AS total_collection
+//     FROM payment_rows
+//     GROUP BY no_billing
+// ),
+
+// -- =====================================================
+// -- 7. ALOKASI OUTSTANDING PER CHANNEL
+// -- =====================================================
+// channel_allocation AS (
+//     SELECT
+//         cs.desc_cust_grp3,
+
+//         (
+//             (
+//                 COALESCE(bp.total_piutang, 0)
+//                 - COALESCE(bc.total_collection, 0)
+//             )
+//             *
+//             CASE
+//                 WHEN COALESCE(bs.total_penjualan_tax, 0) <> 0
+//                 THEN
+//                     cs.total_penjualan_channel
+//                     / NULLIF(bs.total_penjualan_tax, 0)
+//                 ELSE 0
+//             END
+//         )::NUMERIC AS outstanding
+
+//     FROM channel_sales cs
+
+//     INNER JOIN billing_sales bs
+//         ON bs.billing_no = cs.billing_no
+
+//     LEFT JOIN billing_piutang bp
+//         ON bp.no_billing = cs.billing_no
+
+//     LEFT JOIN billing_collection bc
+//         ON bc.no_billing = cs.billing_no
+// ),
+
+// -- =====================================================
+// -- 8. SUMMARY PER CHANNEL
+// -- =====================================================
+// channel_summary AS (
+//     SELECT
+//         COALESCE(
+//             NULLIF(TRIM(desc_cust_grp3), ''),
+//             'TIDAK DIKETAHUI'
+//         ) AS name,
+
+//         COALESCE(
+//             NULLIF(TRIM(desc_cust_grp3), ''),
+//             'TIDAK DIKETAHUI'
+//         ) AS channel,
+
+//         SUM(outstanding)::NUMERIC AS total_outstanding
+
+//     FROM channel_allocation
+//     GROUP BY
+//         COALESCE(
+//             NULLIF(TRIM(desc_cust_grp3), ''),
+//             'TIDAK DIKETAHUI'
+//         )
+// )
+
+// -- =====================================================
+// -- 9. HASIL AKHIR
+// -- =====================================================
+// SELECT
+//     cs.name,
+//     cs.channel,
+//     cs.total_outstanding AS value,
+//     cs.total_outstanding AS outstanding,
+//     cs.total_outstanding AS total_outstanding,
+//     cs.total_outstanding AS saldo_piutang
+
+// FROM channel_summary cs
+
+// ORDER BY
+//     value DESC,
+//     name ASC
+// `;
 query.getOutstandingByChannelDashboard = `
 WITH
 -- =====================================================
@@ -27530,7 +27732,6 @@ WITH
 filtered_sales AS (
     SELECT
         dp.billing_no,
-        dp.desc_cust_grp3,
         COALESCE(dp.total_penjualan, 0)::NUMERIC AS total_penjualan,
         COALESCE(dp.tax_amount, 0)::NUMERIC AS tax_amount
     FROM public.d_penjualan dp
@@ -27561,7 +27762,6 @@ filtered_billing AS (
 
 -- =====================================================
 -- 3. PENJUALAN TOTAL PER BILLING
--- Denominator alokasi seluruh channel
 -- =====================================================
 billing_sales AS (
     SELECT
@@ -27577,19 +27777,16 @@ billing_sales AS (
 ),
 
 -- =====================================================
--- 4. PENJUALAN PER BILLING DAN CHANNEL
+-- 4. PENJUALAN PER BILLING
 -- =====================================================
-channel_sales AS (
+billing_sales_filtered AS (
     SELECT
         fs.billing_no,
-        fs.desc_cust_grp3,
         SUM(
             fs.total_penjualan + fs.tax_amount
-        )::NUMERIC AS total_penjualan_channel
+        )::NUMERIC AS total_penjualan_filtered
     FROM filtered_sales fs
-    GROUP BY
-        fs.billing_no,
-        fs.desc_cust_grp3
+    GROUP BY fs.billing_no
 ),
 
 -- =====================================================
@@ -27610,7 +27807,6 @@ billing_piutang AS (
 
 -- =====================================================
 -- 6. PEMBAYARAN TERVERIFIKASI + COD
--- Mengambil status terakhir seperti summaryDataPiutang
 -- =====================================================
 payment_rows AS (
     SELECT
@@ -27650,66 +27846,80 @@ billing_collection AS (
 ),
 
 -- =====================================================
--- 7. ALOKASI OUTSTANDING PER CHANNEL
+-- 7. OUTSTANDING PER BILLING
+-- =====================================================
+billing_outstanding AS (
+    SELECT
+        bp.no_billing,
+
+        (
+            COALESCE(bp.total_piutang, 0)
+            - COALESCE(bc.total_collection, 0)
+        )::NUMERIC AS outstanding
+
+    FROM billing_piutang bp
+
+    LEFT JOIN billing_collection bc
+        ON bc.no_billing = bp.no_billing
+),
+
+-- =====================================================
+-- 8. OUTSTANDING PER HEADER CHANNEL
 -- =====================================================
 channel_allocation AS (
     SELECT
-        cs.desc_cust_grp3,
+        bo.no_billing,
+
+        COALESCE(
+            NULLIF(TRIM(m2.ur_ref), ''),
+            'TIDAK DIKETAHUI'
+        ) AS channel,
 
         (
-            (
-                COALESCE(bp.total_piutang, 0)
-                - COALESCE(bc.total_collection, 0)
-            )
+            bo.outstanding
             *
             CASE
                 WHEN COALESCE(bs.total_penjualan_tax, 0) <> 0
                 THEN
-                    cs.total_penjualan_channel
+                    bsf.total_penjualan_filtered
                     / NULLIF(bs.total_penjualan_tax, 0)
                 ELSE 0
             END
         )::NUMERIC AS outstanding
 
-    FROM channel_sales cs
+    FROM billing_outstanding bo
 
     INNER JOIN billing_sales bs
-        ON bs.billing_no = cs.billing_no
+        ON bs.billing_no = bo.no_billing
 
-    LEFT JOIN billing_piutang bp
-        ON bp.no_billing = cs.billing_no
+    INNER JOIN billing_sales_filtered bsf
+        ON bsf.billing_no = bo.no_billing
 
-    LEFT JOIN billing_collection bc
-        ON bc.no_billing = cs.billing_no
+    INNER JOIN public.d_piutang p
+        ON p.no_billing = bo.no_billing
+
+    LEFT JOIN public.m_referensi m1
+        ON m1.kd_ref = p.channel_id
+       AND m1.jns_ref = 'channel_id'
+
+    LEFT JOIN public.m_referensi m2
+        ON m2.kd_ref = m1.sub_kd_ref
 ),
 
 -- =====================================================
--- 8. SUMMARY PER CHANNEL
+-- 9. SUMMARY PER HEADER CHANNEL
 -- =====================================================
 channel_summary AS (
     SELECT
-        COALESCE(
-            NULLIF(TRIM(desc_cust_grp3), ''),
-            'TIDAK DIKETAHUI'
-        ) AS name,
-
-        COALESCE(
-            NULLIF(TRIM(desc_cust_grp3), ''),
-            'TIDAK DIKETAHUI'
-        ) AS channel,
-
+        channel AS name,
+        channel,
         SUM(outstanding)::NUMERIC AS total_outstanding
-
     FROM channel_allocation
-    GROUP BY
-        COALESCE(
-            NULLIF(TRIM(desc_cust_grp3), ''),
-            'TIDAK DIKETAHUI'
-        )
+    GROUP BY channel
 )
 
 -- =====================================================
--- 9. HASIL AKHIR
+-- 10. HASIL AKHIR
 -- =====================================================
 SELECT
     cs.name,
@@ -27725,7 +27935,6 @@ ORDER BY
     value DESC,
     name ASC
 `;
-
 
 // query.getSaldoAkhirJatuhTempoDashboard = `
 //     WITH filtered_piutang AS (
