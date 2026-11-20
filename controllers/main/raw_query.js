@@ -26107,8 +26107,89 @@ SELECT
 FROM detail_rows
 `;
 
-query.getCollectionByMetodePembayaranDashboard = `
-WITH collection_data AS (
+// query.getCollectionByMetodePembayaranDashboard = `
+// WITH collection_data AS (
+
+//     -- PEMBAYARAN TERVERIFIKASI
+//     SELECT
+//         COALESCE(
+//             NULLIF(TRIM(dp.metode_pembayaran), ''),
+//             'LAINNYA'
+//         ) AS metode_pembayaran,
+
+//         COALESCE(dp.nominal_bayar, 0) AS nominal_collection
+
+//     FROM public.d_pembayaran dp
+
+//     WHERE EXISTS (
+//         SELECT 1
+//         FROM public.d_status ds
+//         WHERE ds.foreign_id = dp.pembayaran_id
+//           AND ds.kegiatan = 'PENAGIHAN'
+//           AND UPPER(COALESCE(ds.kd_status, '')) = 'S'
+//     )
+
+//     AND (
+//         :tanggal_mulai IS NULL
+//         OR dp.tanggal_pembayaran >=
+//             CAST(:tanggal_mulai AS DATE)
+//     )
+
+//     AND (
+//         :tanggal_akhir IS NULL
+//         OR dp.tanggal_pembayaran <
+//             CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+//     )
+
+//     UNION ALL
+
+//     -- PEMBAYARAN COD
+//     SELECT
+//         'COD' AS metode_pembayaran,
+
+//         COALESCE(dc.nominal_billing, 0) AS nominal_collection
+
+//     FROM public.d_cod dc
+
+//     WHERE (
+//         :tanggal_mulai IS NULL
+//         OR dc.tanggal_pelunasan >=
+//             CAST(:tanggal_mulai AS DATE)
+//     )
+
+//     AND (
+//         :tanggal_akhir IS NULL
+//         OR dc.tanggal_pelunasan <
+//             CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+//     )
+// )
+
+// SELECT
+//     metode_pembayaran,
+//     SUM(nominal_collection) AS nominal_collection
+
+// FROM collection_data
+
+// GROUP BY metode_pembayaran
+
+// ORDER BY
+//     nominal_collection DESC,
+//     metode_pembayaran ASC
+// `;
+query.getCollectionByMetodePembayaranDashboard = `WITH filtered_billing AS (
+    SELECT DISTINCT
+        dp.billing_no
+    FROM public.d_penjualan dp
+    WHERE
+        dp.billing_no IS NOT NULL
+        AND (:cabang_all = TRUE OR dp.sales_office IN (:cabang))
+        AND (:principal_all = TRUE OR dp.principle IN (:principal))
+        AND (:channel_all = TRUE OR dp.desc_cust_grp3 IN (:channel))
+        AND (:customer_all = TRUE OR dp.bill_to_party IN (:customer))
+        AND (:produk_all = TRUE OR dp.material IN (:produk))
+),
+
+collection_data AS (
 
     -- PEMBAYARAN TERVERIFIKASI
     SELECT
@@ -26117,9 +26198,12 @@ WITH collection_data AS (
             'LAINNYA'
         ) AS metode_pembayaran,
 
-        COALESCE(dp.nominal_bayar, 0) AS nominal_collection
+        COALESCE(dp.nominal_bayar, 0)::NUMERIC AS nominal_collection
 
     FROM public.d_pembayaran dp
+
+    INNER JOIN filtered_billing fb
+        ON fb.billing_no = dp.no_billing
 
     WHERE EXISTS (
         SELECT 1
@@ -26147,9 +26231,12 @@ WITH collection_data AS (
     SELECT
         'COD' AS metode_pembayaran,
 
-        COALESCE(dc.nominal_billing, 0) AS nominal_collection
+        COALESCE(dc.nominal_billing, 0)::NUMERIC AS nominal_collection
 
     FROM public.d_cod dc
+
+    INNER JOIN filtered_billing fb
+        ON fb.billing_no = dc.no_billing
 
     WHERE (
         :tanggal_mulai IS NULL
@@ -26908,16 +26995,200 @@ ORDER BY piutang DESC, name ASC
 // GROUP BY name
 // ORDER BY collection DESC, name ASC
 // `;
-query.getCollectionByDimensionDashboard = `
-WITH filtered_sales AS (
-    SELECT
+// query.getCollectionByDimensionDashboard = `
+// WITH filtered_sales AS (
+//     SELECT
+//         dp.billing_no,
+//         dp.principle,
+//         dp.desc_cust_grp3,
+//         dp.bill_to_party,
+//         dp.name_bill_to,
+//         COALESCE(dp.total_penjualan, 0)::NUMERIC AS total_penjualan,
+//         COALESCE(dp.tax_amount, 0)::NUMERIC AS tax_amount
+//     FROM public.d_penjualan dp
+//     WHERE
+//         dp.billing_no IS NOT NULL
+//         AND (:cabang_all = TRUE OR dp.sales_office IN (:cabang))
+//         AND (:principal_all = TRUE OR dp.principle IN (:principal))
+//         AND (:channel_all = TRUE OR dp.desc_cust_grp3 IN (:channel))
+//         AND (:customer_all = TRUE OR dp.bill_to_party IN (:customer))
+//         AND (:produk_all = TRUE OR dp.material IN (:produk))
+// ),
+
+// filtered_billing AS (
+//     SELECT DISTINCT billing_no
+//     FROM filtered_sales
+// ),
+
+// -- Total DPP + Tax seluruh produk dalam billing.
+// -- Tidak menggunakan filter produk agar denominator tetap utuh.
+// billing_sales AS (
+//     SELECT
+//         dp.billing_no,
+//         SUM(
+//             COALESCE(dp.total_penjualan, 0)::NUMERIC
+//             + COALESCE(dp.tax_amount, 0)::NUMERIC
+//         ) AS total_penjualan_tax
+//     FROM public.d_penjualan dp
+//     INNER JOIN filtered_billing fb
+//         ON fb.billing_no = dp.billing_no
+//     GROUP BY dp.billing_no
+// ),
+
+// -- Total collection per billing berdasarkan tanggal pembayaran.
+// billing_collection AS (
+//     SELECT
+//         x.no_billing,
+//         SUM(x.nominal_collection)::NUMERIC AS total_collection
+//     FROM (
+//         -- Pembayaran terverifikasi
+//         SELECT
+//             dp.no_billing,
+//             SUM(COALESCE(dp.nominal_bayar, 0)) AS nominal_collection
+//         FROM public.d_pembayaran dp
+//         INNER JOIN filtered_billing fb
+//             ON fb.billing_no = dp.no_billing
+//         WHERE EXISTS (
+//             SELECT 1
+//             FROM public.d_status ds
+//             WHERE ds.foreign_id = dp.pembayaran_id
+//               AND ds.kegiatan = 'PENAGIHAN'
+//               AND UPPER(COALESCE(ds.kd_status, '')) = 'S'
+//         )
+//         AND (
+//             :tanggal_mulai IS NULL
+//             OR dp.tanggal_pembayaran >= CAST(:tanggal_mulai AS DATE)
+//         )
+//         AND (
+//             :tanggal_akhir IS NULL
+//             OR dp.tanggal_pembayaran < CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+//         )
+//         GROUP BY dp.no_billing
+
+//         UNION ALL
+
+//         -- COD
+//         SELECT
+//             dc.no_billing,
+//             SUM(COALESCE(dc.nominal_billing, 0)) AS nominal_collection
+//         FROM public.d_cod dc
+//         INNER JOIN filtered_billing fb
+//             ON fb.billing_no = dc.no_billing
+//         WHERE (
+//             :tanggal_mulai IS NULL
+//             OR dc.tanggal_pelunasan >= CAST(:tanggal_mulai AS DATE)
+//         )
+//         AND (
+//             :tanggal_akhir IS NULL
+//             OR dc.tanggal_pelunasan < CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+//         )
+//         GROUP BY dc.no_billing
+//     ) x
+//     GROUP BY x.no_billing
+// ),
+
+// -- Jumlahkan nilai DPP + Tax per billing dan dimensi.
+// billing_dimension_sales AS (
+//     SELECT
+//         fs.billing_no,
+
+//         CASE
+//             WHEN :group_by = 'customer'
+//                 THEN COALESCE(
+//                     NULLIF(TRIM(fs.name_bill_to), ''),
+//                     'TIDAK DIKETAHUI'
+//                 )
+
+//             WHEN :group_by = 'principal'
+//                 THEN COALESCE(
+//                     NULLIF(TRIM(mp.nama_principle), ''),
+//                     'TIDAK DIKETAHUI'
+//                 )
+
+//             WHEN :group_by = 'channel'
+//                 THEN COALESCE(
+//                     NULLIF(TRIM(fs.desc_cust_grp3), ''),
+//                     'TIDAK DIKETAHUI'
+//                 )
+
+//             ELSE 'TIDAK DIKETAHUI'
+//         END AS name,
+
+//         SUM(
+//             fs.total_penjualan + fs.tax_amount
+//         ) AS total_produk
+
+//     FROM filtered_sales fs
+
+//     LEFT JOIN public.m_principle mp
+//         ON mp.principle = fs.principle
+
+//     GROUP BY
+//         fs.billing_no,
+//         CASE
+//             WHEN :group_by = 'customer'
+//                 THEN COALESCE(
+//                     NULLIF(TRIM(fs.name_bill_to), ''),
+//                     'TIDAK DIKETAHUI'
+//                 )
+
+//             WHEN :group_by = 'principal'
+//                 THEN COALESCE(
+//                     NULLIF(TRIM(mp.nama_principle), ''),
+//                     'TIDAK DIKETAHUI'
+//                 )
+
+//             WHEN :group_by = 'channel'
+//                 THEN COALESCE(
+//                     NULLIF(TRIM(fs.desc_cust_grp3), ''),
+//                     'TIDAK DIKETAHUI'
+//                 )
+
+//             ELSE 'TIDAK DIKETAHUI'
+//         END
+// ),
+
+// -- Alokasi collection berdasarkan proporsi DPP + Tax.
+// allocated AS (
+//     SELECT
+//         bds.name,
+
+//         COALESCE(bc.total_collection, 0)
+//         *
+//         (
+//             bds.total_produk
+//             / NULLIF(bs.total_penjualan_tax, 0)
+//         ) AS collection_produk
+
+//     FROM billing_dimension_sales bds
+
+//     INNER JOIN billing_sales bs
+//         ON bs.billing_no = bds.billing_no
+
+//     LEFT JOIN billing_collection bc
+//         ON bc.no_billing = bds.billing_no
+
+//     WHERE bs.total_penjualan_tax <> 0
+// )
+
+// SELECT
+//     name,
+//     SUM(collection_produk) AS collection,
+//     SUM(collection_produk) AS total_collection,
+//     SUM(collection_produk) AS total_collections,
+//     SUM(collection_produk) AS nominal_collection
+
+// FROM allocated
+// GROUP BY name
+// ORDER BY collection DESC, name ASC
+// `;
+query.getCollectionByDimensionDashboard = `WITH filtered_sales AS (
+    SELECT DISTINCT
         dp.billing_no,
         dp.principle,
         dp.desc_cust_grp3,
         dp.bill_to_party,
-        dp.name_bill_to,
-        COALESCE(dp.total_penjualan, 0)::NUMERIC AS total_penjualan,
-        COALESCE(dp.tax_amount, 0)::NUMERIC AS tax_amount
+        dp.name_bill_to
     FROM public.d_penjualan dp
     WHERE
         dp.billing_no IS NOT NULL
@@ -26933,103 +27204,31 @@ filtered_billing AS (
     FROM filtered_sales
 ),
 
--- Total DPP + Tax seluruh produk dalam billing.
--- Tidak menggunakan filter produk agar denominator tetap utuh.
-billing_sales AS (
-    SELECT
-        dp.billing_no,
-        SUM(
-            COALESCE(dp.total_penjualan, 0)::NUMERIC
-            + COALESCE(dp.tax_amount, 0)::NUMERIC
-        ) AS total_penjualan_tax
-    FROM public.d_penjualan dp
-    INNER JOIN filtered_billing fb
-        ON fb.billing_no = dp.billing_no
-    GROUP BY dp.billing_no
-),
-
--- Total collection per billing berdasarkan tanggal pembayaran.
-billing_collection AS (
-    SELECT
-        x.no_billing,
-        SUM(x.nominal_collection)::NUMERIC AS total_collection
-    FROM (
-        -- Pembayaran terverifikasi
-        SELECT
-            dp.no_billing,
-            SUM(COALESCE(dp.nominal_bayar, 0)) AS nominal_collection
-        FROM public.d_pembayaran dp
-        INNER JOIN filtered_billing fb
-            ON fb.billing_no = dp.no_billing
-        WHERE EXISTS (
-            SELECT 1
-            FROM public.d_status ds
-            WHERE ds.foreign_id = dp.pembayaran_id
-              AND ds.kegiatan = 'PENAGIHAN'
-              AND UPPER(COALESCE(ds.kd_status, '')) = 'S'
-        )
-        AND (
-            :tanggal_mulai IS NULL
-            OR dp.tanggal_pembayaran >= CAST(:tanggal_mulai AS DATE)
-        )
-        AND (
-            :tanggal_akhir IS NULL
-            OR dp.tanggal_pembayaran < CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
-        )
-        GROUP BY dp.no_billing
-
-        UNION ALL
-
-        -- COD
-        SELECT
-            dc.no_billing,
-            SUM(COALESCE(dc.nominal_billing, 0)) AS nominal_collection
-        FROM public.d_cod dc
-        INNER JOIN filtered_billing fb
-            ON fb.billing_no = dc.no_billing
-        WHERE (
-            :tanggal_mulai IS NULL
-            OR dc.tanggal_pelunasan >= CAST(:tanggal_mulai AS DATE)
-        )
-        AND (
-            :tanggal_akhir IS NULL
-            OR dc.tanggal_pelunasan < CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
-        )
-        GROUP BY dc.no_billing
-    ) x
-    GROUP BY x.no_billing
-),
-
--- Jumlahkan nilai DPP + Tax per billing dan dimensi.
-billing_dimension_sales AS (
+billing_dimension AS (
     SELECT
         fs.billing_no,
 
         CASE
-            WHEN :group_by = 'customer'
-                THEN COALESCE(
+            WHEN :group_by = 'customer' THEN
+                COALESCE(
                     NULLIF(TRIM(fs.name_bill_to), ''),
                     'TIDAK DIKETAHUI'
                 )
 
-            WHEN :group_by = 'principal'
-                THEN COALESCE(
+            WHEN :group_by = 'principal' THEN
+                COALESCE(
                     NULLIF(TRIM(mp.nama_principle), ''),
                     'TIDAK DIKETAHUI'
                 )
 
-            WHEN :group_by = 'channel'
-                THEN COALESCE(
+            WHEN :group_by = 'channel' THEN
+                COALESCE(
                     NULLIF(TRIM(fs.desc_cust_grp3), ''),
                     'TIDAK DIKETAHUI'
                 )
 
             ELSE 'TIDAK DIKETAHUI'
-        END AS name,
-
-        SUM(
-            fs.total_penjualan + fs.tax_amount
-        ) AS total_produk
+        END AS name
 
     FROM filtered_sales fs
 
@@ -27039,20 +27238,20 @@ billing_dimension_sales AS (
     GROUP BY
         fs.billing_no,
         CASE
-            WHEN :group_by = 'customer'
-                THEN COALESCE(
+            WHEN :group_by = 'customer' THEN
+                COALESCE(
                     NULLIF(TRIM(fs.name_bill_to), ''),
                     'TIDAK DIKETAHUI'
                 )
 
-            WHEN :group_by = 'principal'
-                THEN COALESCE(
+            WHEN :group_by = 'principal' THEN
+                COALESCE(
                     NULLIF(TRIM(mp.nama_principle), ''),
                     'TIDAK DIKETAHUI'
                 )
 
-            WHEN :group_by = 'channel'
-                THEN COALESCE(
+            WHEN :group_by = 'channel' THEN
+                COALESCE(
                     NULLIF(TRIM(fs.desc_cust_grp3), ''),
                     'TIDAK DIKETAHUI'
                 )
@@ -27061,39 +27260,81 @@ billing_dimension_sales AS (
         END
 ),
 
--- Alokasi collection berdasarkan proporsi DPP + Tax.
-allocated AS (
+collection_data AS (
+
+    -- PEMBAYARAN TERVERIFIKASI
     SELECT
-        bds.name,
+        dp.no_billing,
+        COALESCE(dp.nominal_bayar, 0)::NUMERIC AS nominal_collection
 
-        COALESCE(bc.total_collection, 0)
-        *
-        (
-            bds.total_produk
-            / NULLIF(bs.total_penjualan_tax, 0)
-        ) AS collection_produk
+    FROM public.d_pembayaran dp
 
-    FROM billing_dimension_sales bds
+    INNER JOIN filtered_billing fb
+        ON fb.billing_no = dp.no_billing
 
-    INNER JOIN billing_sales bs
-        ON bs.billing_no = bds.billing_no
+    WHERE EXISTS (
+        SELECT 1
+        FROM public.d_status ds
+        WHERE ds.foreign_id = dp.pembayaran_id
+          AND ds.kegiatan = 'PENAGIHAN'
+          AND UPPER(COALESCE(ds.kd_status, '')) = 'S'
+    )
 
-    LEFT JOIN billing_collection bc
-        ON bc.no_billing = bds.billing_no
+    AND (
+        :tanggal_mulai IS NULL
+        OR dp.tanggal_pembayaran >=
+            CAST(:tanggal_mulai AS DATE)
+    )
 
-    WHERE bs.total_penjualan_tax <> 0
+    AND (
+        :tanggal_akhir IS NULL
+        OR dp.tanggal_pembayaran <
+            CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+    )
+
+    UNION ALL
+
+    -- PEMBAYARAN COD
+    SELECT
+        dc.no_billing,
+        COALESCE(dc.nominal_billing, 0)::NUMERIC AS nominal_collection
+
+    FROM public.d_cod dc
+
+    INNER JOIN filtered_billing fb
+        ON fb.billing_no = dc.no_billing
+
+    WHERE (
+        :tanggal_mulai IS NULL
+        OR dc.tanggal_pelunasan >=
+            CAST(:tanggal_mulai AS DATE)
+    )
+
+    AND (
+        :tanggal_akhir IS NULL
+        OR dc.tanggal_pelunasan <
+            CAST(:tanggal_akhir AS DATE) + INTERVAL '1 day'
+    )
 )
 
 SELECT
-    name,
-    SUM(collection_produk) AS collection,
-    SUM(collection_produk) AS total_collection,
-    SUM(collection_produk) AS total_collections,
-    SUM(collection_produk) AS nominal_collection
+    bd.name,
 
-FROM allocated
-GROUP BY name
-ORDER BY collection DESC, name ASC
+    SUM(cd.nominal_collection) AS collection,
+    SUM(cd.nominal_collection) AS total_collection,
+    SUM(cd.nominal_collection) AS total_collections,
+    SUM(cd.nominal_collection) AS nominal_collection
+
+FROM collection_data cd
+
+INNER JOIN billing_dimension bd
+    ON bd.billing_no = cd.no_billing
+
+GROUP BY bd.name
+
+ORDER BY
+    collection DESC,
+    bd.name ASC
 `;
 
 query.getTopPiutangByPrincipalDashboard = `

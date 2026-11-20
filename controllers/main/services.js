@@ -13669,15 +13669,59 @@ exports.getDashboardPiutangByCabang = async (params = {}) => {
 //     }
 // };
 
+// exports.getCollectionByMetodePembayaranDashboard = async (
+//     params = {}
+// ) => {
+//     try {
+//         const filters = prepareFilters({
+//             ...params,
+//             tanggal_mulai: params.tanggal_mulai ?? null,
+//             tanggal_akhir: params.tanggal_akhir ?? null
+//         });
+
+//         const listData = await runSelect(
+//             query.getCollectionByMetodePembayaranDashboard,
+//             filters
+//         );
+
+//         const data = Array.isArray(listData)
+//             ? listData.map((item) => ({
+//                 metode_pembayaran:
+//                     item.metode_pembayaran || 'LAINNYA',
+
+//                 nominal_collection: Number(
+//                     item.nominal_collection || 0
+//                 )
+//             }))
+//             : [];
+
+//         const totalCollection = data.reduce(
+//             (total, item) =>
+//                 total + item.nominal_collection,
+//             0
+//         );
+
+//         return {
+//             list_data: data,
+//             total_data: data.length,
+//             total_collection: totalCollection
+//         };
+
+//     } catch (error) {
+//         console.error(
+//             'ERROR SERVICE GET COLLECTION BY METODE PEMBAYARAN DASHBOARD:',
+//             error
+//         );
+
+//         throw error;
+//     }
+// };
+
 exports.getCollectionByMetodePembayaranDashboard = async (
     params = {}
 ) => {
     try {
-        const filters = prepareFilters({
-            ...params,
-            tanggal_mulai: params.tanggal_mulai ?? null,
-            tanggal_akhir: params.tanggal_akhir ?? null
-        });
+        const filters = getDashboardAggregateFilters(params);
 
         const listData = await runSelect(
             query.getCollectionByMetodePembayaranDashboard,
@@ -13716,7 +13760,6 @@ exports.getCollectionByMetodePembayaranDashboard = async (
         throw error;
     }
 };
-
 // =====================================================
 // 4. SALES OPEN INVOICE
 // =====================================================
@@ -13988,6 +14031,44 @@ exports.getOutstandingByChannelDashboard = async (
     }
 };
 
+// exports.getCollectionByDimensionDashboard = async (
+//     params = {}
+// ) => {
+//     try {
+//         const filters = getDashboardAggregateFilters(params);
+
+//         const group_by = getDashboardGroupBy(
+//             params.group_by,
+//             DASHBOARD_DIMENSION_CONFIG.collection,
+//             'customer'
+//         );
+
+//         const listData = await runSelect(
+//             query.getCollectionByDimensionDashboard,
+//             {
+//                 ...filters,
+//                 group_by
+//             }
+//         );
+
+//         return {
+//             list_data: Array.isArray(listData)
+//                 ? listData
+//                 : [],
+
+//             group_by
+//         };
+
+//     } catch (error) {
+//         console.error(
+//             'ERROR SERVICE GET COLLECTION BY DIMENSION DASHBOARD:',
+//             error
+//         );
+
+//         throw error;
+//     }
+// };
+
 exports.getCollectionByDimensionDashboard = async (
     params = {}
 ) => {
@@ -14008,11 +14089,25 @@ exports.getCollectionByDimensionDashboard = async (
             }
         );
 
-        return {
-            list_data: Array.isArray(listData)
-                ? listData
-                : [],
+        const data = Array.isArray(listData)
+            ? listData.map((item) => ({
+                name: item.name || 'TIDAK DIKETAHUI',
+                collection: Number(item.collection || 0),
+                total_collection: Number(item.total_collection || 0),
+                total_collections: Number(item.total_collections || 0),
+                nominal_collection: Number(item.nominal_collection || 0)
+            }))
+            : [];
 
+        const totalCollection = data.reduce(
+            (total, item) => total + item.collection,
+            0
+        );
+
+        return {
+            list_data: data,
+            total_data: data.length,
+            total_collection: totalCollection,
             group_by
         };
 
