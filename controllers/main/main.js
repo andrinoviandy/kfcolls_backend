@@ -15,9 +15,9 @@ const fs = require('fs');
 exports.getReferensiByJenis = async (req, res) => {
     try {
         const { jns_ref, keyword, cabang_id } = req.query
-        const { role_id } = req.user
+        const dataUser = req.user
 
-        const result = await serviceMain.getReferensiByJenis(jns_ref, keyword, cabang_id, role_id)
+        const result = await serviceMain.getReferensiByJenis(jns_ref, keyword, cabang_id, dataUser)
 
         res.status(statusCode.success).json(successMessage(result))
     } catch (error) {
@@ -1240,7 +1240,8 @@ exports.insertPenerimaanLain = async (req, res) => {
             {
                 created_by: `${nip} - ${nama}`,
                 role_pembuat_id: role_user_id,
-                dataUser: req.user
+                dataUser: req.user,
+                cabang_id: req.user.cabang_id
             }
         );
 
@@ -1912,7 +1913,8 @@ exports.getDataPenerimaanLain = async (req, res) => {
     try {
 
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         };
 
         console.log(

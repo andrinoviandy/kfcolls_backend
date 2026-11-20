@@ -5970,6 +5970,10 @@ exports.D_PENERIMAAN_LAIN = db.define('d_penerimaan_lain',
             type: DataTypes.STRING,
             field: 'document_number'
         },
+        cabang_id: {
+            type: DataTypes.STRING,
+            field: 'cabang_id'
+        },
         created_by: {
             type: DataTypes.STRING,
             field: 'created_by'

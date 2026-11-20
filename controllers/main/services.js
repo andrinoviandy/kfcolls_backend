@@ -136,7 +136,7 @@ exports.insertNotifikasiPush = async (payload, transaction) => {
     }
 }
 
-exports.getReferensiByJenis = async (jns_ref, keyword) => {
+exports.getReferensiByJenis = async (jns_ref, keyword, cabang_id, dataUser) => {
     let condition = ``;
     // if (jns_ref === 'jenis_biaya_id' || jns_ref === 'jabatan_id') {
     //     if (cabang_id === '2000') {
@@ -149,6 +149,15 @@ exports.getReferensiByJenis = async (jns_ref, keyword) => {
     //         }
     //     }
     // }
+    if (
+        ['02', '03', '04'].includes(
+            String(dataUser?.role_id || '')
+        )
+    ) {
+        condition += `
+                AND a.kd_ref = '${dataUser?.cabang_id}'
+            `;
+    }
     const QUERY = query.getReferensiByJenis
         .replace(/:condition/g, condition)
 
@@ -6389,6 +6398,8 @@ exports.insertPenerimaanLain = async (
 
                         metode_pembayaran:
                             payload?.metode_pembayaran,
+                        cabang_id:
+                            payload?.cabang_id,
 
                         created_by:
                             payload?.created_by ||
@@ -10936,16 +10947,37 @@ exports.getDataPenerimaanLain = async (params) => {
         const offset = (page - 1) * limit;
 
         // =====================================================
+        // FILTER ROLE CABANG
+        // =====================================================
+        let condition = '';
+        const bind = {
+            keyword: `%${keyword}%`,
+            limit,
+            offset,
+        };
+
+        if (
+            ['03'].includes(
+                String(params?.dataUser?.role_id || '')
+            )
+        ) {
+            condition += `
+                AND p.cabang = :role_cabang
+            `;
+
+            bind.role_cabang = params.dataUser.cabang_id;
+        }
+
+        // =====================================================
         // GET DATA PENERIMAAN LAIN
         // =====================================================
         const listData = await db.query(
-            query.getDataPenerimaanLain,
+            query.getDataPenerimaanLain.replace(
+                '{{condition}}',
+                condition
+            ),
             {
-                replacements: {
-                    keyword: `%${keyword}%`,
-                    limit,
-                    offset,
-                },
+                replacements: bind,
                 type: db.QueryTypes.SELECT,
             }
         );
@@ -12883,7 +12915,8 @@ exports.alokasiPenerimaanLain = async (payload, transaction) => {
 
                     keterangan:
                         penerimaanLain?.document_number ||
-                        null
+                        null,
+                    penerimaan_lain_id: pembayaranId
                 },
                 {
                     transaction,

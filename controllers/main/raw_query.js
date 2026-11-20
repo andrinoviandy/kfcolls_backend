@@ -21641,26 +21641,10 @@ SELECT
         ),
         0
     ) AS total_saldo_piutang,
-
-    /*
-     * 7. TOTAL PENERIMAAN LAIN
-     */
     COALESCE(
         (
-            SELECT
-                SUM(
-                    COALESCE(dp_lain.sisa_penerimaan, 0)
-                )
-
+            SELECT SUM(COALESCE(dp_lain.sisa_penerimaan, 0))
             FROM public.d_penerimaan_lain dp_lain
-
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM public.d_pembayaran dpe
-
-                WHERE dpe.penerimaan_lain_id =
-                      dp_lain.penerimaan_lain_id
-            )
         ),
         0
     ) AS total_penerimaan_lain
@@ -23899,16 +23883,18 @@ query.getDataPenerimaanLain = `
         dp.document_number,
         dp.sisa_penerimaan,
         CONCAT('${LINK_DOK}', dp.files) AS files,
-        COUNT(*) OVER() AS total_data
+        COUNT(*) OVER() AS total_data,
+        m1.ur_ref AS cabang 
     FROM public.d_penerimaan_lain dp
-    WHERE dp.document_number is not null 
-    AND  
-      (
-          :keyword = ''
-          OR COALESCE(dp.document_number, '') ILIKE :keyword
-          OR COALESCE(dp.keterangan, '') ILIKE :keyword
-          OR COALESCE(dp.metode_pembayaran, '') ILIKE :keyword
-      )
+    LEFT JOIN m_referensi m1 ON m1.kd_ref = dp.cabang_id AND m1.jns_ref = 'cabang_id'
+    WHERE dp.document_number IS NOT NULL
+    AND (
+        :keyword = ''
+        OR COALESCE(dp.document_number, '') ILIKE :keyword
+        OR COALESCE(dp.keterangan, '') ILIKE :keyword
+        OR COALESCE(dp.metode_pembayaran, '') ILIKE :keyword
+    )
+    {{condition}}
     ORDER BY
         dp.sisa_penerimaan DESC,
         dp.tanggal_pembayaran DESC,
