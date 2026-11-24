@@ -37,5 +37,6 @@ model.k_piutang = n2n.K_PIUTANG
 model.k_konfirmasi = n2n.K_KONFIRMASI
 model.m_target = n2n.M_TARGET
 model.d_dwh = n2n.D_DWH
+model.m_customer = n2n.M_CUSTOMER
 
 module.exports = model

@@ -3581,6 +3581,301 @@ exports.deleteUser = async (userId, transaction) => {
     };
 };
 
+// =====================================================
+// INSERT PELANGGAN
+// =====================================================
+
+exports.insertPelanggan = async (payload, transaction) => {
+
+    // ================================================
+    // VALIDASI
+    // ================================================
+
+    if (!String(payload?.name || "").trim()) {
+        throw new Error("Nama pelanggan wajib diisi.");
+    }
+
+    if (!String(payload?.plant || "").trim()) {
+        throw new Error("Cabang wajib diisi.");
+    }
+
+    if (!String(payload?.street || "").trim()) {
+        throw new Error("Alamat wajib diisi.");
+    }
+
+
+    // ================================================
+    // NORMALISASI STATUS
+    // ================================================
+
+    const flagAktif = String(
+        payload?.flag_aktif || "Y"
+    ).toUpperCase();
+
+    if (!["Y", "T"].includes(flagAktif)) {
+        throw new Error("Status pelanggan tidak valid.");
+    }
+
+
+    // ================================================
+    // INSERT DATA PELANGGAN
+    // ================================================
+
+    const pelanggan = await model.m_customer.create({
+
+        kode_customer:
+            payload?.kode_customer || null,
+
+        name:
+            String(payload?.name).trim(),
+
+        plant:
+            payload?.plant || null,
+
+
+        // CUSTOMER GROUPS 1
+        customer_groups_1:
+            payload?.customer_groups_1 || null,
+
+        customer_groups_1_description:
+            payload?.customer_groups_1_description || null,
+
+
+        // CUSTOMER GROUPS 2
+        customer_groups_2:
+            payload?.customer_groups_2 || null,
+
+        customer_groups_2_description:
+            payload?.customer_groups_2_description || null,
+
+
+        // CUSTOMER GROUPS 3 (CHANNEL)
+        customer_groups_3:
+            payload?.customer_groups_3 || null,
+
+        customer_groups_3_description:
+            payload?.customer_groups_3_description || null,
+
+
+        // CUSTOMER GROUPS 4
+        customer_groups_4:
+            payload?.customer_groups_4 || null,
+
+        customer_groups_4_description:
+            payload?.customer_groups_4_description || null,
+
+
+        // ALAMAT
+        street:
+            payload?.street || null,
+
+        city:
+            payload?.city || null,
+
+        postal_code:
+            payload?.postal_code || null,
+
+
+        // INFORMASI PAJAK
+        tax_number:
+            payload?.tax_number || null,
+
+        nik_npwp_16:
+            payload?.nik_npwp_16 || null,
+
+
+        // KONTAK
+        telephone:
+            payload?.telephone || null,
+
+        mobile_phone:
+            payload?.mobile_phone || null,
+
+        email:
+            payload?.email || null,
+
+
+        // STATUS
+        flag_aktif: flagAktif,
+
+        created_at: new Date(),
+
+    }, {
+        transaction,
+        returning: true
+    });
+
+
+    return {
+        customer_id: pelanggan.customer_id,
+        kode_customer: pelanggan.kode_customer,
+        name: pelanggan.name,
+        plant: pelanggan.plant,
+        flag_aktif: pelanggan.flag_aktif,
+        message: "Pelanggan berhasil ditambahkan."
+    };
+
+};
+
+
+// =====================================================
+// EDIT PELANGGAN
+// =====================================================
+
+exports.editPelanggan = async (payload, transaction) => {
+
+    const customerId = payload?.customer_id;
+
+    if (!customerId) {
+        throw new Error("customer_id wajib diisi.");
+    }
+
+
+    // ================================================
+    // VALIDASI
+    // ================================================
+
+    if (!String(payload?.name || "").trim()) {
+        throw new Error("Nama pelanggan wajib diisi.");
+    }
+
+    if (!String(payload?.plant || "").trim()) {
+        throw new Error("Cabang wajib diisi.");
+    }
+
+    if (!String(payload?.street || "").trim()) {
+        throw new Error("Alamat wajib diisi.");
+    }
+
+
+    // ================================================
+    // CEK DATA PELANGGAN
+    // ================================================
+
+    const pelanggan = await model.m_customer.findOne({
+        where: {
+            customer_id: customerId
+        },
+        transaction
+    });
+
+    if (!pelanggan) {
+        throw new Error("Data pelanggan tidak ditemukan.");
+    }
+
+
+    // ================================================
+    // NORMALISASI STATUS
+    // ================================================
+
+    const flagAktif = String(
+        payload?.flag_aktif || "Y"
+    ).toUpperCase();
+
+    if (!["Y", "T"].includes(flagAktif)) {
+        throw new Error("Status pelanggan tidak valid.");
+    }
+
+
+    // ================================================
+    // UPDATE DATA PELANGGAN
+    // ================================================
+
+    await pelanggan.update({
+
+        kode_customer:
+            payload?.kode_customer || null,
+
+        name:
+            String(payload?.name).trim(),
+
+        plant:
+            payload?.plant || null,
+
+
+        // CUSTOMER GROUPS 1
+        customer_groups_1:
+            payload?.customer_groups_1 || null,
+
+        customer_groups_1_description:
+            payload?.customer_groups_1_description || null,
+
+
+        // CUSTOMER GROUPS 2
+        customer_groups_2:
+            payload?.customer_groups_2 || null,
+
+        customer_groups_2_description:
+            payload?.customer_groups_2_description || null,
+
+
+        // CUSTOMER GROUPS 3 (CHANNEL)
+        customer_groups_3:
+            payload?.customer_groups_3 || null,
+
+        customer_groups_3_description:
+            payload?.customer_groups_3_description || null,
+
+
+        // CUSTOMER GROUPS 4
+        customer_groups_4:
+            payload?.customer_groups_4 || null,
+
+        customer_groups_4_description:
+            payload?.customer_groups_4_description || null,
+
+
+        // ALAMAT
+        street:
+            payload?.street || null,
+
+        city:
+            payload?.city || null,
+
+        postal_code:
+            payload?.postal_code || null,
+
+
+        // INFORMASI PAJAK
+        tax_number:
+            payload?.tax_number || null,
+
+        nik_npwp_16:
+            payload?.nik_npwp_16 || null,
+
+
+        // KONTAK
+        telephone:
+            payload?.telephone || null,
+
+        mobile_phone:
+            payload?.mobile_phone || null,
+
+        email:
+            payload?.email || null,
+
+
+        // STATUS
+        flag_aktif: flagAktif,
+
+        updated_at: new Date(),
+
+    }, {
+        transaction
+    });
+
+
+    return {
+        customer_id: pelanggan.customer_id,
+        kode_customer: payload?.kode_customer,
+        name: payload?.name,
+        plant: payload?.plant,
+        flag_aktif: flagAktif,
+        message: "Data pelanggan berhasil diperbarui."
+    };
+
+};
+
 exports.getListUserManagement = async ({
     keyword = null,
     page = 1,

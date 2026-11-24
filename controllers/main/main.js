@@ -657,6 +657,67 @@ exports.deleteUser = async (req, res) => {
     }
 };
 
+exports.insertPelanggan = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const result = await serviceMain.insertPelanggan(
+            req.body,
+            transaction
+        );
+
+        await transaction.commit();
+
+        res.status(statusCode.success).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+        if (transaction && !transaction.finished) {
+            await transaction.rollback();
+        }
+
+        console.log(error, "ERROR INSERT PELANGGAN <<<<<<<<<");
+
+        res.status(statusCode.bad).json(
+            errorMessage(error.message)
+        );
+    }
+};
+
+
+exports.editPelanggan = async (req, res) => {
+    let transaction;
+
+    try {
+        transaction = await db.transaction();
+
+        const result = await serviceMain.editPelanggan(
+            req.body,
+            transaction
+        );
+
+        await transaction.commit();
+
+        res.status(statusCode.success).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+        if (transaction && !transaction.finished) {
+            await transaction.rollback();
+        }
+
+        console.log(error, "ERROR EDIT PELANGGAN <<<<<<<<<");
+
+        res.status(statusCode.bad).json(
+            errorMessage(error.message)
+        );
+    }
+};
+
 exports.getListUserManagement = async (req, res) => {
     try {
         const params = req?.query;

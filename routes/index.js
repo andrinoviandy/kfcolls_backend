@@ -186,6 +186,7 @@ router.post('/uploadPenjualanExcel', authorization.doAuth, controller.main.uploa
 router.post('/uploadMasterTarget', authorization.doAuth, controller.main.uploadMasterTarget)
 router.post('/insertDataCod', authorization.doAuth, controller.main.insertDataCod)
 router.post('/insertUser', authorization.doAuth, controller.main.insertUser)
+router.post('/insertPelanggan', authorization.doAuth, controller.main.insertPelanggan)
 router.post('/insertFakturPetugas', authorization.doAuth, controller.main.insertFakturPetugas)
 router.post('/insertTukarFaktur', authorization.doAuth, controller.main.insertTukarFaktur)
 router.post('/insertBayarFaktur', authorization.doAuth, controller.main.insertBayarFaktur)
@@ -199,6 +200,7 @@ router.post('/terimaFaktur', authorization.doAuth, controller.main.terimaFaktur)
 router.post('/insertFakturKembali', authorization.doAuth, controller.main.insertFakturKembali)
 
 // UPDATE DATA
+router.put('/editPelanggan', authorization.doAuth, controller.main.editPelanggan)
 router.put('/updateUser', authorization.doAuth, controller.main.updateUser)
 router.put('/editDataCod', authorization.doAuth, controller.main.editDataCod)
 router.post("/gantipassword-user", authorization.doAuth, controller.main.changePassword)

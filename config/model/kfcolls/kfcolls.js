@@ -1170,133 +1170,6 @@ exports.H_LOG = db.define('H_LOG',
 }
 )
 
-exports.M_CUSTOMER = db.define('M_CUSTOMER',
-    {
-        customer_id: {
-            type: DataTypes.STRING,
-            primaryKey: true,
-            autoIncrement: true,
-            field: "CUSTOMER_ID"
-        },
-        kode_akun: {
-            type: DataTypes.STRING,
-            field: 'KODE_AKUN'
-        },
-        customer_name: {
-            type: DataTypes.STRING,
-            field: 'CUSTOMER_NAME'
-        },
-        npwp: {
-            type: DataTypes.STRING,
-            field: 'NPWP'
-        },
-        address: {
-            type: DataTypes.STRING,
-            field: 'ADDRESS'
-        },
-        email: {
-            type: DataTypes.STRING,
-            field: 'EMAIL'
-        },
-        fax: {
-            type: DataTypes.STRING,
-            field: 'FAX'
-        },
-        telp: {
-            type: DataTypes.STRING,
-            field: 'TELP'
-        },
-        description: {
-            type: DataTypes.STRING,
-            field: 'DESCRIPTION'
-        },
-        flag_aktif: {
-            type: DataTypes.STRING,
-            field: 'FLAG_AKTIF'
-        },
-        customer_mdm: {
-            type: DataTypes.STRING,
-            field: 'CUSTOMER_MDM'
-        },
-        customer_sap_ar: {
-            type: DataTypes.STRING,
-            field: 'CUSTOMER_SAP_AR'
-        },
-        comp_code: {
-            type: DataTypes.STRING,
-            field: 'COMP_CODE'
-        },
-        kota: {
-            type: DataTypes.STRING,
-            field: 'KOTA'
-        },
-        wapu: {
-            type: DataTypes.STRING,
-            field: 'WAPU'
-        },
-        kd_jabatan: {
-            type: DataTypes.STRING,
-            field: 'KD_JABATAN'
-        },
-        ur_kd_jabatan: {
-            type: DataTypes.STRING,
-            field: 'UR_KD_JABATAN'
-        },
-        kd_jabatan2: {
-            type: DataTypes.STRING,
-            field: 'KD_JABATAN2'
-        },
-        ur_kd_jabatan2: {
-            type: DataTypes.STRING,
-            field: 'UR_KD_JABATAN2'
-        },
-        nilai_tagihan: {
-            type: DataTypes.NUMBER,
-            field: 'NILAI_TAGIHAN'
-        },
-        created_at: {
-            type: DataTypes.DATE,
-            field: 'CREATED_AT'
-        },
-        updated_at: {
-            type: DataTypes.DATE,
-            field: 'UPDATED_AT'
-        },
-        created_by: {
-            type: DataTypes.STRING,
-            field: 'CREATED_BY'
-        },
-        updated_by: {
-            type: DataTypes.STRING,
-            field: 'UPDATED_BY'
-        },
-        profit_center: {
-            type: DataTypes.STRING,
-            field: 'PROFIT_CENTER'
-        },
-        nitku: {
-            type: DataTypes.STRING,
-            field: 'NITKU'
-        },
-        tin: {
-            type: DataTypes.STRING,
-            field: 'TIN'
-        },
-        pelindo_group: {
-            type: DataTypes.STRING,
-            field: 'PELINDO_GROUP'
-        },
-        trading_partner: {
-            type: DataTypes.STRING,
-            field: 'TRADING_PARTNER'
-        },
-    }, {
-    schema: 'N2N',
-    freezeTableName: true,
-    timestamps: false
-}
-);
-
 exports.M_CUSTOMER_CONTACT = db.define('M_CUSTOMER_CONTACT',
     {
         customer_contact_id: {
@@ -6378,6 +6251,113 @@ exports.D_DWH = db.define(
             type: DataTypes.STRING(1),
             field: "is_get",
             defaultValue: 'Y',
+        },
+    },
+    {
+        schema: "public",
+        freezeTableName: true,
+        timestamps: false,
+    }
+);
+
+exports.M_CUSTOMER = db.define(
+    "m_customer",
+    {
+        customer_id: {
+            type: DataTypes.BIGINT,
+            field: "customer_id",
+            primaryKey: true,
+            autoIncrement: true,
+        },
+        kode_customer: {
+            type: DataTypes.STRING(50),
+            field: "kode_customer",
+        },
+        name: {
+            type: DataTypes.STRING(255),
+            field: "name",
+        },
+        plant: {
+            type: DataTypes.STRING(20),
+            field: "plant",
+        },
+        customer_groups_1: {
+            type: DataTypes.STRING(50),
+            field: "customer_groups_1",
+        },
+        customer_groups_1_description: {
+            type: DataTypes.STRING(255),
+            field: "customer_groups_1_description",
+        },
+        customer_groups_2: {
+            type: DataTypes.STRING(50),
+            field: "customer_groups_2",
+        },
+        customer_groups_2_description: {
+            type: DataTypes.STRING(255),
+            field: "customer_groups_2_description",
+        },
+        customer_groups_3: {
+            type: DataTypes.STRING(50),
+            field: "customer_groups_3",
+        },
+        customer_groups_3_description: {
+            type: DataTypes.STRING(255),
+            field: "customer_groups_3_description",
+        },
+        customer_groups_4: {
+            type: DataTypes.STRING(50),
+            field: "customer_groups_4",
+        },
+        customer_groups_4_description: {
+            type: DataTypes.STRING(255),
+            field: "customer_groups_4_description",
+        },
+        street: {
+            type: DataTypes.TEXT,
+            field: "street",
+        },
+        city: {
+            type: DataTypes.STRING(100),
+            field: "city",
+        },
+        postal_code: {
+            type: DataTypes.STRING(20),
+            field: "postal_code",
+        },
+        tax_number: {
+            type: DataTypes.STRING(50),
+            field: "tax_number",
+        },
+        telephone: {
+            type: DataTypes.STRING(50),
+            field: "telephone",
+        },
+        mobile_phone: {
+            type: DataTypes.STRING(50),
+            field: "mobile_phone",
+        },
+        email: {
+            type: DataTypes.STRING(255),
+            field: "email",
+        },
+        nik_npwp_16: {
+            type: DataTypes.STRING(60),
+            field: "nik_npwp_16",
+        },
+        created_at: {
+            type: DataTypes.DATE,
+            field: "created_at",
+            defaultValue: DataTypes.NOW,
+        },
+        updated_at: {
+            type: DataTypes.DATE,
+            field: "updated_at",
+        },
+        flag_aktif: {
+            type: DataTypes.STRING,
+            field: "flag_aktif",
+            defaultValue: "Y",
         },
     },
     {
