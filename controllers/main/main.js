@@ -1092,6 +1092,45 @@ exports.getDataBayarFaktur = async (req, res) => {
     }
 };
 
+exports.getHistoryPembayaran = async (req, res) => {
+    try {
+
+        const params = {
+            ...req.query,
+            dataUser: req.user
+        };
+
+        console.log(
+            params,
+            'params getHistoryPembayaran'
+        );
+
+        const result =
+            await serviceMain.getHistoryPembayaran(
+                params
+            );
+
+        res.status(
+            statusCode.success
+        ).json(
+            successMessage(result)
+        );
+
+    } catch (error) {
+
+        console.log(
+            error,
+            'ERROR GET HISTORY PEMBAYARAN <<<<<<<<<'
+        );
+
+        res.status(
+            statusCode.error
+        ).json(
+            errorMessage(error)
+        );
+    }
+};
+
 exports.insertTukarFaktur = async (req, res) => {
     let transaction;
 

@@ -31,6 +31,7 @@ router.get('/getDataTukarFaktur', authorization.doAuth, controller.main.getDataT
 router.get('/getDataVerifikasiTukarFaktur', authorization.doAuth, controller.main.getDataVerifikasiTukarFaktur)
 router.get('/getDataVerifikasiPembayaran', authorization.doAuth, controller.main.getDataVerifikasiPembayaran)
 router.get('/getDataBayarFaktur', authorization.doAuth, controller.main.getDataBayarFaktur)
+router.get('/getHistoryPembayaran', authorization.doAuth, controller.main.getHistoryPembayaran)
 router.get('/getMonitoringPenugasan', authorization.doAuth, controller.main.getMonitoringPenugasan)
 router.get('/getDetailPenjualan', authorization.doAuth, controller.main.getDetailPenjualan)
 router.get('/getDetailPencairan', authorization.doAuth, controller.main.getDetailPencairan)

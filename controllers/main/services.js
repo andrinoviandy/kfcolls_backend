@@ -5348,6 +5348,10 @@ exports.getDataVerifikasiPembayaran = async (params = {}) => {
             params?.end_date || ''
         ).trim();
 
+        const periode = String(
+            params?.periode || ''
+        ).trim();
+
         // =====================================================
         // CONDITION & BIND
         // =====================================================
@@ -5481,11 +5485,12 @@ exports.getDataVerifikasiPembayaran = async (params = {}) => {
         }
 
         // =====================================================
-        // FILTER TANGGAL PEMBAYARAN
+        // FILTER DOCUMENT DATE
+        // Menggunakan tanggal dokumen/faktur dari d_piutang.
         // =====================================================
         if (startDate) {
             condition += `
-                AND dp.tanggal_pembayaran >= CAST(:start_date AS DATE)
+                AND p.posting_date >= CAST(:start_date AS DATE)
             `;
 
             bind.start_date = startDate;
@@ -5493,12 +5498,35 @@ exports.getDataVerifikasiPembayaran = async (params = {}) => {
 
         if (endDate) {
             condition += `
-                AND dp.tanggal_pembayaran < (
+                AND p.posting_date < (
                     CAST(:end_date AS DATE) + INTERVAL '1 day'
                 )
             `;
 
             bind.end_date = endDate;
+        }
+
+        // =====================================================
+        // FILTER PERIODE PEMBAYARAN
+        // Format frontend: YYYY-MM (contoh: 2026-11).
+        // Filter berdasarkan dp.tanggal_pembayaran.
+        // =====================================================
+        if (periode && periode.toUpperCase() !== 'ALL') {
+            if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periode)) {
+                throw new Error(
+                    'Format periode pembayaran tidak valid. Gunakan format YYYY-MM.'
+                );
+            }
+
+            condition += `
+                AND dp.tanggal_pembayaran >= TO_DATE(:periode || '-01', 'YYYY-MM-DD')
+                AND dp.tanggal_pembayaran < (
+                    TO_DATE(:periode || '-01', 'YYYY-MM-DD')
+                    + INTERVAL '1 month'
+                )
+            `;
+
+            bind.periode = periode;
         }
 
         // =====================================================
@@ -8551,6 +8579,523 @@ exports.verifikasiTukarFaktur = async (
 //     }
 // };
 
+// exports.getDataBayarFaktur = async (params = {}) => {
+//     try {
+//         const penerimaanLainId = params?.penerimaan_lain_id || null;
+
+//         const normalizeFilterValues = (value) => {
+//             const values = Array.isArray(value) ? value : [value];
+
+//             return values
+//                 .filter((item) => item !== undefined && item !== null)
+//                 .flatMap((item) => {
+//                     if (typeof item === 'string' && item.includes(',')) {
+//                         return item.split(',').map((value) => String(value).trim());
+//                     }
+
+//                     return [String(item).trim()];
+//                 })
+//                 .filter(Boolean);
+//         };
+
+//         // =====================================================
+//         // PAGINATION
+//         // =====================================================
+//         const page = Math.max(
+//             1,
+//             Math.trunc(Number(params?.page) || 1)
+//         );
+
+//         const limit = Math.min(
+//             100,
+//             Math.max(1, Math.trunc(Number(params?.limit) || 10))
+//         );
+
+//         const offset = (page - 1) * limit;
+
+//         // =====================================================
+//         // FILTER
+//         // =====================================================
+//         const keyword = String(params?.keyword || '').trim();
+
+//         const salesOffices = normalizeFilterValues(
+//             params?.sales_office ?? params?.['sales_office[]']
+//         );
+
+//         const customers = normalizeFilterValues(
+//             params?.customer ?? params?.['customer[]']
+//         );
+
+//         const statusValues = normalizeFilterValues(
+//             params?.status ?? params?.['status[]']
+//         ).map((item) => item.toUpperCase());
+
+//         const statusVerifikasiValues = normalizeFilterValues(
+//             params?.status_verifikasi ?? params?.['status_verifikasi[]']
+//         ).map((item) => item.toUpperCase());
+
+//         const startDate = String(params?.start_date || '').trim();
+//         const endDate = String(params?.end_date || '').trim();
+//         const periode = String(params?.periode || '').trim();
+
+//         // Periode menggunakan format YYYY-MM.
+//         if (periode && !/^\d{4}-(0[1-9]|1[0-2])$/.test(periode)) {
+//             throw new Error('Format periode harus YYYY-MM');
+//         }
+
+//         // =====================================================
+//         // CONDITION & BIND
+//         // =====================================================
+//         let condition = '';
+
+//         const bind = {
+//             limit,
+//             offset,
+//             start_date: startDate || null,
+//             end_date: endDate || null,
+//             periode: periode || null
+//         };
+
+//         const roleId = String(params?.dataUser?.role_id || '');
+
+//         if (['05', '04'].includes(roleId)) {
+//             condition += `
+//                 AND p.cabang = :role_cabang
+//                 AND mu.nip = :role_nip
+//             `;
+
+//             bind.role_cabang = params?.dataUser?.cabang_id;
+//             bind.role_nip = params?.dataUser?.nip;
+//         } else if (['02', '03'].includes(roleId)) {
+//             condition += `
+//                 AND p.cabang = :role_cabang
+//             `;
+
+//             if (['02'].includes(roleId)) {
+//                 condition += `
+//                     AND EXISTS (SELECT 1 FROM d_pembayaran dpp where dpp.no_billing = p.no_billing AND dpp.metode_pembayaran = 'BIAYA_LAIN')
+//                 `;
+//             }
+//             if (['03'].includes(roleId)) {
+//                 condition += `
+//                     AND EXISTS (SELECT 1 FROM d_pembayaran dpp where dpp.no_billing = p.no_billing AND dpp.metode_pembayaran != 'BIAYA_LAIN')
+//                 `;
+//             }
+
+//             bind.role_cabang = params?.dataUser?.cabang_id;
+//         }
+
+//         // =====================================================
+//         // FILTER PENERIMAAN LAIN
+//         // =====================================================
+//         if (
+//             penerimaanLainId !== undefined &&
+//             penerimaanLainId !== null &&
+//             String(penerimaanLainId).trim() !== ''
+//         ) {
+//             condition += `
+//                 AND EXISTS (
+//                     SELECT 1
+//                     FROM public.d_pembayaran dp_penerimaan_lain
+//                     WHERE dp_penerimaan_lain.penerimaan_lain_id =
+//                           :penerimaan_lain_id
+//                       AND BTRIM(COALESCE(dp_penerimaan_lain.no_billing, '')) =
+//                           BTRIM(COALESCE(p.no_billing, ''))
+//                 )
+//             `;
+
+//             bind.penerimaan_lain_id = penerimaanLainId;
+//         }
+
+//         // =====================================================
+//         // FILTER KEYWORD
+//         // =====================================================
+//         if (keyword) {
+//             condition += `
+//                 AND (
+//                     p.no_faktur ILIKE :keyword
+//                     OR p.no_billing ILIKE :keyword
+//                     OR p.customer ILIKE :keyword
+//                     OR p.sales ILIKE :keyword
+//                     OR p.nama_sales ILIKE :keyword
+//                     OR p.cabang ILIKE :keyword
+//                     OR p.document_type ILIKE :keyword
+//                     OR p.posting_date::text ILIKE :keyword
+//                     OR p.jatuh_tempo::text ILIKE :keyword
+//                     OR mc.name ILIKE :keyword
+//                     OR mr.ur_ref ILIKE :keyword
+//                     OR fp.nip ILIKE :keyword
+//                     OR mu.nama ILIKE :keyword
+//                     OR fp.kd_status ILIKE :keyword
+//                     OR cod.total_nominal_billing::text ILIKE :keyword
+//                     OR pay.total_nominal_bayar::text ILIKE :keyword
+//                     OR verifikasi.kd_status_verifikasi ILIKE :keyword
+//                     OR EXISTS (
+//                         SELECT 1
+//                         FROM public.d_penjualan dd
+//                         INNER JOIN public.m_principle mp
+//                             ON mp.principle = dd.principle
+//                         WHERE dd.billing_no = p.no_billing
+//                           AND mp.nama_principle ILIKE :keyword
+//                     )
+//                 )
+//             `;
+
+//             bind.keyword = `%${keyword}%`;
+//         }
+
+//         // =====================================================
+//         // FILTER SALES OFFICE / CABANG
+//         // =====================================================
+//         if (
+//             salesOffices.length &&
+//             !salesOffices.some((item) => item.toUpperCase() === 'ALL')
+//         ) {
+//             condition += `
+//                 AND p.cabang IN (:sales_offices)
+//             `;
+
+//             bind.sales_offices = salesOffices;
+//         }
+
+//         // =====================================================
+//         // FILTER CUSTOMER
+//         // =====================================================
+//         if (
+//             customers.length &&
+//             !customers.some((item) => item.toUpperCase() === 'ALL')
+//         ) {
+//             condition += `
+//                 AND p.customer IN (:customers)
+//             `;
+
+//             bind.customers = customers;
+//         }
+
+//         // =====================================================
+//         // FILTER STATUS PEMBAYARAN
+//         // Dasar tagihan: DPP + PPN
+//         // =====================================================
+//         const allowedStatus = [
+//             'BELUM_DIBAYAR',
+//             'PARTIAL',
+//             'MENUNGGU_PEMBAYARAN',
+//             'SUDAH_DIBAYAR'
+//         ];
+
+//         const filteredStatusValues = statusValues.filter(
+//             (item) => item !== 'ALL'
+//         );
+
+//         if (filteredStatusValues.length) {
+//             const invalidStatus = filteredStatusValues.find(
+//                 (item) => !allowedStatus.includes(item)
+//             );
+
+//             if (invalidStatus) {
+//                 throw new Error(
+//                     'Status hanya boleh BELUM_DIBAYAR, PARTIAL, MENUNGGU_PEMBAYARAN atau SUDAH_DIBAYAR'
+//                 );
+//             }
+
+//             const statusConditions = [];
+
+//             const nominalTagihan = `
+//                 (
+//                     COALESCE(p.dpp, 0) +
+//                     COALESCE(p.ppn, 0)
+//                 )
+//             `;
+
+//             const nominalPembayaran = `
+//                 COALESCE(pay.total_nominal_bayar_verified, 0)
+//             `;
+
+//             if (filteredStatusValues.includes('BELUM_DIBAYAR')) {
+//                 statusConditions.push(`
+//                     (
+//                         ${nominalPembayaran} <= 0
+//                         AND ${nominalTagihan} > 0
+//                     )
+//                 `);
+//             }
+
+//             if (filteredStatusValues.includes('PARTIAL')) {
+//                 statusConditions.push(`
+//                     (
+//                         ${nominalPembayaran} > 0
+//                         AND ${nominalPembayaran} < ${nominalTagihan}
+//                     )
+//                 `);
+//             }
+
+//             if (filteredStatusValues.includes('SUDAH_DIBAYAR')) {
+//                 statusConditions.push(`
+//                     (
+//                         ${nominalPembayaran} >= ${nominalTagihan}
+//                         AND ${nominalTagihan} > 0
+//                     )
+//                 `);
+//             }
+
+//             if (filteredStatusValues.includes('MENUNGGU_PEMBAYARAN')) {
+//                 // Mengikuti perilaku service sebelumnya.
+//                 statusConditions.push('(1 = 0)');
+//             }
+
+//             if (statusConditions.length) {
+//                 condition += `
+//                     AND (
+//                         ${statusConditions.join(' OR ')}
+//                     )
+//                 `;
+//             }
+//         }
+
+//         // =====================================================
+//         // FILTER STATUS VERIFIKASI
+//         // =====================================================
+//         const allowedVerificationStatus = [
+//             'VERIFIED',
+//             'BELUM_DIVERIFIKASI'
+//         ];
+
+//         const filteredVerificationValues = statusVerifikasiValues.filter(
+//             (item) => item !== 'ALL'
+//         );
+
+//         if (filteredVerificationValues.length) {
+//             const invalidStatus = filteredVerificationValues.find(
+//                 (item) => !allowedVerificationStatus.includes(item)
+//             );
+
+//             if (invalidStatus) {
+//                 throw new Error(
+//                     'Status verifikasi hanya boleh VERIFIED atau BELUM_DIVERIFIKASI'
+//                 );
+//             }
+
+//             const verificationConditions = [];
+
+//             if (filteredVerificationValues.includes('VERIFIED')) {
+//                 verificationConditions.push(`
+//                     verifikasi.kd_status_verifikasi = 'S'
+//                 `);
+//             }
+
+//             if (
+//                 filteredVerificationValues.includes(
+//                     'BELUM_DIVERIFIKASI'
+//                 )
+//             ) {
+//                 verificationConditions.push(`
+//                     verifikasi.kd_status_verifikasi IS NULL
+//                 `);
+//             }
+
+//             condition += `
+//                 AND (
+//                     ${verificationConditions.join(' OR ')}
+//                 )
+//             `;
+//         }
+
+//         // =====================================================
+//         // FILTER PERIODE (BULAN)
+//         // Filter berdasarkan tanggal_pembayaran, format YYYY-MM.
+//         // Faktur ditampilkan jika memiliki pembayaran pada periode tersebut.
+//         // =====================================================
+//         if (periode) {
+//             condition += `
+//                 AND EXISTS (
+//                     SELECT 1
+//                     FROM public.d_pembayaran dp_periode
+//                     WHERE BTRIM(COALESCE(dp_periode.no_billing, '')) =
+//                           BTRIM(COALESCE(p.no_billing, ''))
+//                       AND dp_periode.tanggal_pembayaran >= TO_DATE(:periode || '-01', 'YYYY-MM-DD')
+//                       AND dp_periode.tanggal_pembayaran < (
+//                           TO_DATE(:periode || '-01', 'YYYY-MM-DD')
+//                           + INTERVAL '1 month'
+//                       )
+//                 )
+//             `;
+//         }
+
+//         // =====================================================
+//         // FILTER TANGGAL
+//         // =====================================================
+//         if (startDate) {
+//             condition += `
+//                 AND p.posting_date >= CAST(:start_date AS DATE)
+//             `;
+//         }
+
+//         if (endDate) {
+//             condition += `
+//                 AND p.posting_date < (
+//                     CAST(:end_date AS DATE) + INTERVAL '1 day'
+//                 )
+//             `;
+//         }
+
+//         // =====================================================
+//         // BUILD QUERY
+//         // =====================================================
+//         const listQuery = query.getDataBayarFaktur.replace(
+//             /:condition/g,
+//             condition
+//         );
+
+//         const countQuery = query.countDataBayarFaktur.replace(
+//             /:condition/g,
+//             condition
+//         );
+
+//         const summaryQuery = query.summaryDataBayarFaktur.replace(
+//             /:condition/g,
+//             condition
+//         );
+
+//         // =====================================================
+//         // EXECUTE LIST, COUNT, SUMMARY
+//         // =====================================================
+//         const [listData, countData, summaryResult] = await Promise.all([
+//             db.query(listQuery, {
+//                 replacements: bind,
+//                 type: db.QueryTypes.SELECT
+//             }),
+
+//             db.query(countQuery, {
+//                 replacements: bind,
+//                 type: db.QueryTypes.SELECT
+//             }),
+
+//             db.query(summaryQuery, {
+//                 replacements: bind,
+//                 type: db.QueryTypes.SELECT
+//             })
+//         ]);
+
+//         // =====================================================
+//         // HISTORY PEMBAYARAN
+//         // Catatan: query history tetap memakai query existing.
+//         // =====================================================
+//         const getHistoryPembayaran = async (noBilling) => {
+//             try {
+//                 if (!noBilling) return [];
+
+//                 const result = await db.query(
+//                     query.getHistoryPembayaranBayarFaktur,
+//                     {
+//                         replacements: {
+//                             no_billing: noBilling
+//                         },
+//                         type: db.QueryTypes.SELECT
+//                     }
+//                 );
+
+//                 const history = result?.[0]?.h_pembayaran;
+
+//                 if (Array.isArray(history)) {
+//                     return history;
+//                 }
+
+//                 if (typeof history === 'string') {
+//                     try {
+//                         const parsed = JSON.parse(history);
+//                         return Array.isArray(parsed) ? parsed : [];
+//                     } catch {
+//                         return [];
+//                     }
+//                 }
+
+//                 return Array.isArray(result) ? result : [];
+//             } catch (error) {
+//                 console.error(
+//                     'ERROR GET HISTORY PEMBAYARAN:',
+//                     {
+//                         no_billing: noBilling,
+//                         error: error?.message || error
+//                     }
+//                 );
+
+//                 return [];
+//             }
+//         };
+
+//         const listDataWithHistory = await Promise.all(
+//             (listData || []).map(async (item) => ({
+//                 ...item,
+//                 h_pembayaran: await getHistoryPembayaran(item?.no_billing)
+//             }))
+//         );
+
+//         // =====================================================
+//         // RESPONSE
+//         // =====================================================
+//         const totalData = Number(countData?.[0]?.total || 0);
+//         const totalHalaman = Math.ceil(totalData / limit);
+//         const summary = summaryResult?.[0] || {};
+
+//         return {
+//             total_data: totalData,
+//             total_halaman: totalHalaman,
+//             limit,
+//             page,
+
+//             list_data: listDataWithHistory,
+
+//             summary: {
+//                 total_faktur: Number(summary?.total_faktur || 0),
+//                 total_nominal_faktur: Number(
+//                     summary?.total_nominal_faktur || 0
+//                 ),
+
+//                 belum_dibayar: Number(summary?.belum_dibayar || 0),
+//                 nominal_belum_dibayar: Number(
+//                     summary?.nominal_belum_dibayar || 0
+//                 ),
+
+//                 total_data_menunggu_verifikasi: Number(
+//                     summary?.total_data_menunggu_verifikasi || 0
+//                 ),
+//                 total_collections_menunggu_verifikasi: Number(
+//                     summary?.total_collections_menunggu_verifikasi || 0
+//                 ),
+
+//                 total_data_tidak_terverifikasi: Number(
+//                     summary?.total_data_tidak_terverifikasi || 0
+//                 ),
+//                 total_collections_tidak_terverifikasi: Number(
+//                     summary?.total_collections_tidak_terverifikasi || 0
+//                 ),
+
+//                 total_data_terverifikasi: Number(
+//                     summary?.total_data_terverifikasi || 0
+//                 ),
+//                 total_collections_terverifikasi: Number(
+//                     summary?.total_collections_terverifikasi || 0
+//                 ),
+
+//                 total_saldo_piutang: Number(
+//                     summary?.total_saldo_piutang || 0
+//                 ),
+
+//                 total_penerimaan_lain: Number(
+//                     summary?.total_penerimaan_lain || 0
+//                 )
+//             }
+//         };
+//     } catch (error) {
+//         console.error(
+//             'ERROR SERVICE GET DATA BAYAR FAKTUR:',
+//             error
+//         );
+
+//         throw error;
+//     }
+// };
+
 exports.getDataBayarFaktur = async (params = {}) => {
     try {
         const penerimaanLainId = params?.penerimaan_lain_id || null;
@@ -8608,6 +9153,12 @@ exports.getDataBayarFaktur = async (params = {}) => {
 
         const startDate = String(params?.start_date || '').trim();
         const endDate = String(params?.end_date || '').trim();
+        const periode = String(params?.periode || '').trim();
+
+        // Periode menggunakan format YYYY-MM.
+        if (periode && !/^\d{4}-(0[1-9]|1[0-2])$/.test(periode)) {
+            throw new Error('Format periode harus YYYY-MM');
+        }
 
         // =====================================================
         // CONDITION & BIND
@@ -8618,7 +9169,8 @@ exports.getDataBayarFaktur = async (params = {}) => {
             limit,
             offset,
             start_date: startDate || null,
-            end_date: endDate || null
+            end_date: endDate || null,
+            periode: periode || null
         };
 
         const roleId = String(params?.dataUser?.role_id || '');
@@ -8866,6 +9418,27 @@ exports.getDataBayarFaktur = async (params = {}) => {
         }
 
         // =====================================================
+        // FILTER PERIODE (BULAN)
+        // Filter berdasarkan tanggal_pembayaran, format YYYY-MM.
+        // Faktur ditampilkan jika memiliki pembayaran pada periode tersebut.
+        // =====================================================
+        if (periode) {
+            condition += `
+                AND EXISTS (
+                    SELECT 1
+                    FROM public.d_pembayaran dp_periode
+                    WHERE BTRIM(COALESCE(dp_periode.no_billing, '')) =
+                          BTRIM(COALESCE(p.no_billing, ''))
+                      AND dp_periode.tanggal_pembayaran >= TO_DATE(:periode || '-01', 'YYYY-MM-DD')
+                      AND dp_periode.tanggal_pembayaran < (
+                          TO_DATE(:periode || '-01', 'YYYY-MM-DD')
+                          + INTERVAL '1 month'
+                      )
+                )
+            `;
+        }
+
+        // =====================================================
         // FILTER TANGGAL
         // =====================================================
         if (startDate) {
@@ -8921,60 +9494,6 @@ exports.getDataBayarFaktur = async (params = {}) => {
         ]);
 
         // =====================================================
-        // HISTORY PEMBAYARAN
-        // Catatan: query history tetap memakai query existing.
-        // =====================================================
-        const getHistoryPembayaran = async (noBilling) => {
-            try {
-                if (!noBilling) return [];
-
-                const result = await db.query(
-                    query.getHistoryPembayaranBayarFaktur,
-                    {
-                        replacements: {
-                            no_billing: noBilling
-                        },
-                        type: db.QueryTypes.SELECT
-                    }
-                );
-
-                const history = result?.[0]?.h_pembayaran;
-
-                if (Array.isArray(history)) {
-                    return history;
-                }
-
-                if (typeof history === 'string') {
-                    try {
-                        const parsed = JSON.parse(history);
-                        return Array.isArray(parsed) ? parsed : [];
-                    } catch {
-                        return [];
-                    }
-                }
-
-                return Array.isArray(result) ? result : [];
-            } catch (error) {
-                console.error(
-                    'ERROR GET HISTORY PEMBAYARAN:',
-                    {
-                        no_billing: noBilling,
-                        error: error?.message || error
-                    }
-                );
-
-                return [];
-            }
-        };
-
-        const listDataWithHistory = await Promise.all(
-            (listData || []).map(async (item) => ({
-                ...item,
-                h_pembayaran: await getHistoryPembayaran(item?.no_billing)
-            }))
-        );
-
-        // =====================================================
         // RESPONSE
         // =====================================================
         const totalData = Number(countData?.[0]?.total || 0);
@@ -8987,7 +9506,7 @@ exports.getDataBayarFaktur = async (params = {}) => {
             limit,
             page,
 
-            list_data: listDataWithHistory,
+            list_data: listData,
 
             summary: {
                 total_faktur: Number(summary?.total_faktur || 0),
@@ -9038,6 +9557,34 @@ exports.getDataBayarFaktur = async (params = {}) => {
 
         throw error;
     }
+};
+
+exports.getHistoryPembayaran = async (params = {}) => {
+  try {
+    const noBilling = String(params?.no_billing || "").trim();
+
+    if (!noBilling) {
+      throw new Error("No Billing wajib diisi");
+    }
+
+    const result = await db.query(
+      query.getHistoryPembayaranBayarFaktur,
+      {
+        replacements: {
+          no_billing: noBilling,
+        },
+        type: db.QueryTypes.SELECT,
+      }
+    );
+
+    return {
+      no_billing: noBilling,
+      h_pembayaran: result || [],
+    };
+  } catch (error) {
+    console.error("ERROR SERVICE GET HISTORY PEMBAYARAN:", error);
+    throw error;
+  }
 };
 
 exports.verifikasiBayarFaktur = async (
@@ -15663,6 +16210,7 @@ exports.getAgingPiutangDashboard = async (params) => {
 // };
 
 
+
 exports.getDataDoar = async (params) => {
     try {
         // =====================================================
@@ -15749,12 +16297,22 @@ exports.getDataDoar = async (params) => {
         if (keyword) {
             condition += `
                 AND (
-                    cd.customer ILIKE :keyword
-                    OR cd.cabang ILIKE :keyword
+                    p.customer ILIKE :keyword
+                    OR p.cabang ILIKE :keyword
                     OR mc.name ILIKE :keyword
-                    OR cabang.ur_ref ILIKE :keyword
-                    OR top_data.lini ILIKE :keyword
-                    OR cd.nama_principle ILIKE :keyword
+                    OR mr_cabang.ur_ref ILIKE :keyword
+                    OR mt.lini ILIKE :keyword
+
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.d_piutang dpi
+                        INNER JOIN public.d_penjualan dp
+                            ON dp.billing_no = dpi.no_billing
+                        INNER JOIN public.m_produk mp
+                            ON mp.material = dp.material
+                        WHERE dpi.customer IS NOT DISTINCT FROM p.customer
+                            AND mp.nama_principle ILIKE :keyword
+                    )
                 )
             `;
 
@@ -15769,7 +16327,7 @@ exports.getDataDoar = async (params) => {
             !isAllSelected(salesOffices)
         ) {
             condition += `
-                AND cd.cabang IN (:sales_offices)
+                AND p.cabang IN (:sales_offices)
             `;
 
             filterBind.sales_offices = salesOffices;
@@ -15783,7 +16341,7 @@ exports.getDataDoar = async (params) => {
             !isAllSelected(customers)
         ) {
             condition += `
-                AND cd.customer IN (:customers)
+                AND p.customer IN (:customers)
             `;
 
             filterBind.customers = customers;
@@ -15797,7 +16355,7 @@ exports.getDataDoar = async (params) => {
             !isAllSelected(customerGroups)
         ) {
             condition += `
-                AND cd.channel_id IN (:customer_groups)
+                AND p.channel_id IN (:customer_groups)
             `;
 
             filterBind.customer_groups = customerGroups;
@@ -15811,7 +16369,16 @@ exports.getDataDoar = async (params) => {
             !isAllSelected(principles)
         ) {
             condition += `
-                AND cd.principle IN (:principles)
+                AND EXISTS (
+                    SELECT 1
+                    FROM public.d_piutang dpi
+                    INNER JOIN public.d_penjualan dp
+                        ON dp.billing_no = dpi.no_billing
+                    INNER JOIN public.m_produk mp
+                        ON mp.material = dp.material
+                    WHERE dpi.customer IS NOT DISTINCT FROM p.customer
+                        AND mp.kode_principle IN (:principles)
+                )
             `;
 
             filterBind.principles = principles;
@@ -15822,7 +16389,7 @@ exports.getDataDoar = async (params) => {
         // =====================================================
         if (startDate) {
             condition += `
-                AND cd.posting_date >= CAST(:start_date AS DATE)
+                AND p.posting_date >= CAST(:start_date AS DATE)
             `;
 
             filterBind.start_date = startDate;
@@ -15833,7 +16400,7 @@ exports.getDataDoar = async (params) => {
         // =====================================================
         if (endDate) {
             condition += `
-                AND cd.posting_date < (
+                AND p.posting_date < (
                     CAST(:end_date AS DATE) + INTERVAL '1 day'
                 )
             `;
@@ -15864,7 +16431,6 @@ exports.getDataDoar = async (params) => {
             db.query(listQuery, {
                 replacements: {
                     ...filterBind,
-                    tanggal_akhir: endDate || null,
                     limit,
                     offset
                 },
@@ -15881,7 +16447,7 @@ exports.getDataDoar = async (params) => {
         // TOTAL DATA
         // =====================================================
         const totalData = Number(
-            countData?.[0]?.total_data || 0
+            countData?.[0]?.total ?? 0
         );
 
         const totalHalaman = Math.ceil(
@@ -15908,3 +16474,4 @@ exports.getDataDoar = async (params) => {
         throw error;
     }
 };
+
