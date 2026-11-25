@@ -14037,144 +14037,144 @@ exports.getTrendPencairanPiutang = async (params) => {
     );
 };
 
-exports.getDashboardCard1 = async (params = {}) => {
-    try {
-        // =====================================================
-        // NORMALIZE FILTER
-        // =====================================================
-        const normalizeValues = (...values) => {
-            const raw = values.find(
-                value =>
-                    value !== undefined &&
-                    value !== null &&
-                    value !== ''
-            );
+// exports.getDashboardCard1 = async (params = {}) => {
+//     try {
+//         // =====================================================
+//         // NORMALIZE FILTER
+//         // =====================================================
+//         const normalizeValues = (...values) => {
+//             const raw = values.find(
+//                 value =>
+//                     value !== undefined &&
+//                     value !== null &&
+//                     value !== ''
+//             );
 
-            if (raw === undefined) return [];
+//             if (raw === undefined) return [];
 
-            const items = Array.isArray(raw)
-                ? raw
-                : String(raw).split(',');
+//             const items = Array.isArray(raw)
+//                 ? raw
+//                 : String(raw).split(',');
 
-            return items
-                .flatMap(item =>
-                    String(item).split(',')
-                )
-                .map(item => item.trim())
-                .filter(Boolean);
-        };
+//             return items
+//                 .flatMap(item =>
+//                     String(item).split(',')
+//                 )
+//                 .map(item => item.trim())
+//                 .filter(Boolean);
+//         };
 
-        const isAllSelected = values =>
-            values.length === 0 ||
-            values.some(
-                value => value.toUpperCase() === 'ALL'
-            );
+//         const isAllSelected = values =>
+//             values.length === 0 ||
+//             values.some(
+//                 value => value.toUpperCase() === 'ALL'
+//             );
 
-        // =====================================================
-        // FILTER CABANG
-        // =====================================================
-        const cabang = normalizeValues(
-            params.cabang,
-            params['cabang[]'],
-            params.sales_office,
-            params['sales_office[]']
-        );
+//         // =====================================================
+//         // FILTER CABANG
+//         // =====================================================
+//         const cabang = normalizeValues(
+//             params.cabang,
+//             params['cabang[]'],
+//             params.sales_office,
+//             params['sales_office[]']
+//         );
 
-        // =====================================================
-        // FILTER PRINCIPAL
-        // =====================================================
-        const principal = normalizeValues(
-            params.principal,
-            params['principal[]'],
-            params.principal_id,
-            params['principal_id[]']
-        );
+//         // =====================================================
+//         // FILTER PRINCIPAL
+//         // =====================================================
+//         const principal = normalizeValues(
+//             params.principal,
+//             params['principal[]'],
+//             params.principal_id,
+//             params['principal_id[]']
+//         );
 
-        // =====================================================
-        // FILTER CHANNEL
-        // =====================================================
-        const channel = normalizeValues(
-            params.channel,
-            params['channel[]'],
-            params.channel_id,
-            params['channel_id[]']
-        );
+//         // =====================================================
+//         // FILTER CHANNEL
+//         // =====================================================
+//         const channel = normalizeValues(
+//             params.channel,
+//             params['channel[]'],
+//             params.channel_id,
+//             params['channel_id[]']
+//         );
 
-        // =====================================================
-        // FILTER CUSTOMER
-        // =====================================================
-        const customer = normalizeValues(
-            params.customer,
-            params['customer[]']
-        );
+//         // =====================================================
+//         // FILTER CUSTOMER
+//         // =====================================================
+//         const customer = normalizeValues(
+//             params.customer,
+//             params['customer[]']
+//         );
 
-        // =====================================================
-        // STATUS FILTER
-        // =====================================================
-        const cabangAll = isAllSelected(cabang);
-        const principalAll = isAllSelected(principal);
-        const channelAll = isAllSelected(channel);
-        const customerAll = isAllSelected(customer);
+//         // =====================================================
+//         // STATUS FILTER
+//         // =====================================================
+//         const cabangAll = isAllSelected(cabang);
+//         const principalAll = isAllSelected(principal);
+//         const channelAll = isAllSelected(channel);
+//         const customerAll = isAllSelected(customer);
 
-        // =====================================================
-        // FILTER TANGGAL
-        // =====================================================
-        const tanggalAkhir = String(
-            params.tanggal_akhir ||
-            params.end_date ||
-            params.endDate ||
-            params.tanggal ||
-            ''
-        ).trim() || null;
+//         // =====================================================
+//         // FILTER TANGGAL
+//         // =====================================================
+//         const tanggalAkhir = String(
+//             params.tanggal_akhir ||
+//             params.end_date ||
+//             params.endDate ||
+//             params.tanggal ||
+//             ''
+//         ).trim() || null;
 
-        // =====================================================
-        // QUERY REPLACEMENTS
-        // =====================================================
-        const filters = {
-            cabang: cabangAll
-                ? ['__NO_FILTER_MATCH__']
-                : cabang,
+//         // =====================================================
+//         // QUERY REPLACEMENTS
+//         // =====================================================
+//         const filters = {
+//             cabang: cabangAll
+//                 ? ['__NO_FILTER_MATCH__']
+//                 : cabang,
 
-            principal: principalAll
-                ? ['__NO_FILTER_MATCH__']
-                : principal,
+//             principal: principalAll
+//                 ? ['__NO_FILTER_MATCH__']
+//                 : principal,
 
-            channel: channelAll
-                ? ['__NO_FILTER_MATCH__']
-                : channel,
+//             channel: channelAll
+//                 ? ['__NO_FILTER_MATCH__']
+//                 : channel,
 
-            customer: customerAll
-                ? ['__NO_FILTER_MATCH__']
-                : customer,
+//             customer: customerAll
+//                 ? ['__NO_FILTER_MATCH__']
+//                 : customer,
 
-            cabang_all: cabangAll,
-            principal_all: principalAll,
-            channel_all: channelAll,
-            customer_all: customerAll,
+//             cabang_all: cabangAll,
+//             principal_all: principalAll,
+//             channel_all: channelAll,
+//             customer_all: customerAll,
 
-            tanggal_akhir: tanggalAkhir
-        };
+//             tanggal_akhir: tanggalAkhir
+//         };
 
-        // =====================================================
-        // EXECUTE QUERY
-        // =====================================================
-        return await db.query(
-            query.getDashboardCard1,
-            {
-                replacements: filters,
-                type: db.QueryTypes.SELECT
-            }
-        );
+//         // =====================================================
+//         // EXECUTE QUERY
+//         // =====================================================
+//         return await db.query(
+//             query.getDashboardCard1,
+//             {
+//                 replacements: filters,
+//                 type: db.QueryTypes.SELECT
+//             }
+//         );
 
-    } catch (error) {
-        console.error(
-            'ERROR SERVICE GET DASHBOARD CARD 1:',
-            error
-        );
+//     } catch (error) {
+//         console.error(
+//             'ERROR SERVICE GET DASHBOARD CARD 1:',
+//             error
+//         );
 
-        throw error;
-    }
-};
+//         throw error;
+//     }
+// };
 
 // exports.getDashboardPiutangByCabang = async (params = {}) => {
 
@@ -14290,6 +14290,131 @@ exports.getDashboardCard1 = async (params = {}) => {
 // =====================================================
 // 3. DETAIL PIUTANG
 // =====================================================
+
+exports.getDashboardCard1 = async (params = {}) => {
+    try {
+        // =====================================================
+        // NORMALIZE FILTER
+        // =====================================================
+        const normalizeValues = (...values) => {
+            const raw = values.find(value => {
+                if (value === undefined || value === null || value === '') {
+                    return false;
+                }
+
+                if (Array.isArray(value) && value.length === 0) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            if (raw === undefined) return [];
+
+            const items = Array.isArray(raw)
+                ? raw
+                : String(raw).split(',');
+
+            return items
+                .flatMap(item => String(item).split(','))
+                .map(item => item.trim())
+                .filter(Boolean);
+        };
+
+        const isAllSelected = values =>
+            values.length === 0 ||
+            values.some(value => value.toUpperCase() === 'ALL');
+
+        // =====================================================
+        // FILTER CABANG
+        // =====================================================
+        const cabang = normalizeValues(
+            params.cabang,
+            params['cabang[]'],
+            params.sales_office,
+            params['sales_office[]']
+        );
+
+        // =====================================================
+        // FILTER PRINCIPAL
+        // =====================================================
+        const principal = normalizeValues(
+            params.principal,
+            params['principal[]'],
+            params.principal_id,
+            params['principal_id[]']
+        );
+
+        // =====================================================
+        // FILTER CHANNEL
+        // =====================================================
+        const channel = normalizeValues(
+            params.channel,
+            params['channel[]'],
+            params.channel_id,
+            params['channel_id[]']
+        );
+
+        // =====================================================
+        // FILTER CUSTOMER
+        // =====================================================
+        const customer = normalizeValues(
+            params.customer,
+            params['customer[]']
+        );
+
+        // =====================================================
+        // STATUS FILTER
+        // =====================================================
+        const cabangAll = isAllSelected(cabang);
+        const principalAll = isAllSelected(principal);
+        const channelAll = isAllSelected(channel);
+        const customerAll = isAllSelected(customer);
+
+        // =====================================================
+        // FILTER TANGGAL
+        // =====================================================
+        const tanggalAkhir = String(
+            params.tanggal_akhir ||
+            params.end_date ||
+            params.endDate ||
+            params.tanggal ||
+            ''
+        ).trim() || null;
+
+        // =====================================================
+        // QUERY REPLACEMENTS
+        // =====================================================
+        const filters = {
+            cabang: cabangAll ? ['__NO_FILTER_MATCH__'] : cabang,
+            principal: principalAll ? ['__NO_FILTER_MATCH__'] : principal,
+            channel: channelAll ? ['__NO_FILTER_MATCH__'] : channel,
+            customer: customerAll ? ['__NO_FILTER_MATCH__'] : customer,
+
+            cabang_all: cabangAll,
+            principal_all: principalAll,
+            channel_all: channelAll,
+            customer_all: customerAll,
+
+            tanggal_akhir: tanggalAkhir
+        };
+
+        // =====================================================
+        // EXECUTE QUERY
+        // Data dasar dibaca dari Materialized View.
+        // Filter tetap dinamis sesuai request frontend.
+        // =====================================================
+        return await db.query(query.getDashboardCard1, {
+            replacements: filters,
+            type: db.QueryTypes.SELECT,
+            logging: console.log
+        });
+
+    } catch (error) {
+        console.error('ERROR SERVICE GET DASHBOARD CARD 1:', error);
+        throw error;
+    }
+};
 
 exports.getDashboardPiutangByCabang = async (params = {}) => {
     try {
