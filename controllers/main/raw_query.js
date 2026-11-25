@@ -32343,7 +32343,7 @@ query.getDashboardCard1 = `
 WITH
 
 -- =====================================================
--- 1. PERIODE BULAN BERDASARKAN TANGGAL AKHIR
+-- 1. PERIODE BULAN INI DAN BULAN LALU
 -- =====================================================
 periode AS (
     SELECT
@@ -32351,23 +32351,16 @@ periode AS (
             DATE_TRUNC(
                 'month',
                 COALESCE(
-                    TO_DATE(NULLIF(:tanggal_akhir, ''), 'YYYY-MM-DD'),
+                    TO_DATE(
+                        NULLIF(:tanggal_akhir, ''),
+                        'YYYY-MM-DD'
+                    ),
                     CURRENT_DATE
                 )
             ) AS DATE
-        ) AS bulan_ini,
-
-        COALESCE(
-            TO_DATE(NULLIF(:tanggal_akhir, ''), 'YYYY-MM-DD'),
-            CURRENT_DATE
-        )::DATE AS tanggal_acuan
+        ) AS bulan_ini
 ),
 
--- =====================================================
--- 2. PERIODE BULAN INI DAN BULAN LALU
--- Untuk snapshot piutang dan DOAR tetap menggunakan
--- akhir bulan kalender seperti query sebelumnya.
--- =====================================================
 periode_bulan AS (
     SELECT
         'bulan_ini' AS jenis,
@@ -32388,43 +32381,7 @@ periode_bulan AS (
 ),
 
 -- =====================================================
--- 3. PERIODE PEMBAYARAN MTD
--- Bulan ini: tanggal 1 sampai tanggal_akhir.
--- Bulan lalu: tanggal 1 sampai tanggal yang sama.
--- =====================================================
-periode_pembayaran AS (
-    SELECT
-        'bulan_ini' AS jenis,
-        bulan_ini AS tanggal_mulai,
-        tanggal_acuan AS tanggal_akhir
-    FROM periode
-
-    UNION ALL
-
-    SELECT
-        'bulan_lalu' AS jenis,
-
-        (bulan_ini - INTERVAL '1 month')::DATE
-            AS tanggal_mulai,
-
-        (
-            (bulan_ini - INTERVAL '1 month')
-            +
-            (
-                LEAST(
-                    EXTRACT(DAY FROM tanggal_acuan)::INTEGER,
-                    EXTRACT(
-                        DAY FROM (bulan_ini - INTERVAL '1 day')
-                    )::INTEGER
-                ) - 1
-            ) * INTERVAL '1 day'
-        )::DATE AS tanggal_akhir
-
-    FROM periode
-),
-
--- =====================================================
--- 4. DATA PIUTANG
+-- 2. DATA PIUTANG
 -- =====================================================
 filtered_piutang AS (
     SELECT
@@ -32461,7 +32418,7 @@ filtered_piutang AS (
 ),
 
 -- =====================================================
--- 5. BILLING YANG LOLOS FILTER
+-- 3. BILLING YANG LOLOS FILTER
 -- =====================================================
 filtered_billing AS (
     SELECT DISTINCT
@@ -32473,7 +32430,7 @@ filtered_billing AS (
 ),
 
 -- =====================================================
--- 6. PEMBAYARAN TERVERIFIKASI
+-- 4. PEMBAYARAN TERVERIFIKASI
 -- =====================================================
 payment_verified AS (
     SELECT
@@ -32494,7 +32451,7 @@ payment_verified AS (
 ),
 
 -- =====================================================
--- 7. PEMBAYARAN COD
+-- 5. PEMBAYARAN COD
 -- =====================================================
 payment_cod AS (
     SELECT
@@ -32507,7 +32464,8 @@ payment_cod AS (
 ),
 
 -- =====================================================
--- 8. GABUNGAN PEMBAYARAN
+-- 6. GABUNGAN PEMBAYARAN
+-- Pembayaran terverifikasi + COD.
 -- =====================================================
 payment_source AS (
     SELECT
@@ -32528,9 +32486,8 @@ payment_source AS (
 ),
 
 -- =====================================================
--- 9. TRANSAKSI PEMBAYARAN
+-- 7. TRANSAKSI PEMBAYARAN
 -- Hanya billing yang lolos filter piutang.
--- Tetap mengambil pembayaran historis untuk snapshot.
 -- =====================================================
 payment_rows AS (
     SELECT
@@ -32551,39 +32508,46 @@ payment_rows AS (
 ),
 
 -- =====================================================
--- 10. COLLECTION PER BILLING DAN PERIODE MTD
--- Mengikuti tanggal_akhir dari parameter.
+-- 8. COLLECTION PER BILLING DAN BULAN
+-- Mengambil seluruh transaksi pada bulan terkait.
 -- =====================================================
-collection_per_billing_period AS (
+collection_per_billing_monthly AS (
     SELECT
-        pb.jenis,
         pr.billing_key,
+
+        DATE_TRUNC(
+            'month',
+            pr.tanggal_bayar
+        ) AS periode,
+
         SUM(pr.nominal) AS total_collection
 
-    FROM periode_pembayaran pb
+    FROM payment_rows pr
 
-    INNER JOIN payment_rows pr
-        ON pr.tanggal_bayar >= pb.tanggal_mulai
-        AND pr.tanggal_bayar < (
-            pb.tanggal_akhir + INTERVAL '1 day'
-        )
+    CROSS JOIN periode p
+
+    WHERE pr.tanggal_bayar >= (
+        p.bulan_ini - INTERVAL '1 month'
+    )
+
+    AND pr.tanggal_bayar < (
+        p.bulan_ini + INTERVAL '1 month'
+    )
 
     GROUP BY
-        pb.jenis,
-        pr.billing_key
+        pr.billing_key,
+        DATE_TRUNC('month', pr.tanggal_bayar)
 ),
 
 -- =====================================================
--- 11. TOTAL PEMBAYARAN KUMULATIF PER BILLING
--- Untuk snapshot piutang tetap menggunakan akhir bulan.
+-- 9. TOTAL PEMBAYARAN KUMULATIF PER BILLING
 -- =====================================================
 payment_snapshot AS (
     SELECT
         pr.billing_key,
 
         SUM(pr.nominal) FILTER (
-            WHERE pr.tanggal_bayar <
-                p.bulan_ini
+            WHERE pr.tanggal_bayar < p.bulan_ini
         ) AS total_dibayar_bulan_lalu,
 
         SUM(pr.nominal) FILTER (
@@ -32600,16 +32564,18 @@ payment_snapshot AS (
 ),
 
 -- =====================================================
--- 12. COLLECTION PER PIUTANG DAN PERIODE MTD
+-- 10. COLLECTION PER PIUTANG DAN PERIODE
+-- Mencocokkan bulan pembayaran dengan bulan snapshot.
 -- =====================================================
 collection_per_piutang_monthly AS (
     SELECT
         pb.jenis,
         p.piutang_id,
         p.no_billing,
+        c.periode,
         c.total_collection
 
-    FROM periode_pembayaran pb
+    FROM periode_bulan pb
 
     INNER JOIN filtered_piutang p
         ON p.posting_date >= pb.tanggal_mulai
@@ -32618,16 +32584,21 @@ collection_per_piutang_monthly AS (
             pb.tanggal_akhir + INTERVAL '1 day'
         )
 
-    INNER JOIN collection_per_billing_period c
+    INNER JOIN collection_per_billing_monthly c
         ON c.billing_key = BTRIM(
             COALESCE(p.no_billing, '')
         )
 
-        AND c.jenis = pb.jenis
+        AND c.periode = DATE_TRUNC(
+            'month',
+            pb.tanggal_akhir
+        )
 ),
 
 -- =====================================================
--- 13. DATA BULANAN UNTUK PERHITUNGAN DOAR
+-- 11. DATA BULANAN UNTUK PERHITUNGAN DOAR
+-- Menggunakan tabel d_piutang langsung.
+-- Tetap menghitung YTD.
 -- =====================================================
 doar_monthly AS (
     SELECT
@@ -32670,7 +32641,7 @@ doar_monthly AS (
 ),
 
 -- =====================================================
--- 14. AGREGASI DOAR PER CABANG DAN PERIODE
+-- 12. AGREGASI DOAR PER CABANG DAN PERIODE
 -- =====================================================
 doar_branch_aggregate AS (
     SELECT
@@ -32748,7 +32719,7 @@ doar_branch_aggregate AS (
 ),
 
 -- =====================================================
--- 15. HITUNG DOAR PER CABANG
+-- 13. HITUNG DOAR PER CABANG
 -- =====================================================
 doar_branch_periode AS (
     SELECT
@@ -32784,7 +32755,7 @@ doar_branch_periode AS (
 ),
 
 -- =====================================================
--- 16. REKAP DOAR SELURUH CABANG
+-- 14. REKAP DOAR SELURUH CABANG
 -- =====================================================
 rekap_doar AS (
     SELECT
@@ -32810,7 +32781,7 @@ rekap_doar AS (
 ),
 
 -- =====================================================
--- 17. SNAPSHOT PIUTANG PER AKHIR BULAN
+-- 15. SNAPSHOT PIUTANG PER AKHIR BULAN
 -- =====================================================
 snapshot_piutang AS (
     SELECT
@@ -32879,7 +32850,7 @@ snapshot_piutang AS (
 ),
 
 -- =====================================================
--- 18. REKAP SALDO PIUTANG PER BULAN
+-- 16. REKAP SALDO PIUTANG PER BULAN
 -- =====================================================
 rekap_piutang AS (
     SELECT
@@ -32920,8 +32891,8 @@ rekap_piutang AS (
 ),
 
 -- =====================================================
--- 19. REKAP PENCAIRAN MTD
--- Periode mengikuti tanggal_akhir.
+-- 17. REKAP PENCAIRAN MTD
+-- Bulan ini dan bulan lalu berdasarkan bulan kalender.
 -- =====================================================
 rekap_pencairan AS (
     SELECT
@@ -32932,7 +32903,7 @@ rekap_pencairan AS (
             0
         ) AS pencairan_mtd
 
-    FROM periode_pembayaran pb
+    FROM periode_bulan pb
 
     LEFT JOIN collection_per_piutang_monthly cp
         ON cp.jenis = pb.jenis
@@ -32942,7 +32913,7 @@ rekap_pencairan AS (
 ),
 
 -- =====================================================
--- 20. GABUNGKAN KPI PER BULAN
+-- 18. GABUNGKAN KPI PER BULAN
 -- =====================================================
 kpi_bulanan AS (
     SELECT
@@ -33015,7 +32986,7 @@ kpi_bulanan AS (
 ),
 
 -- =====================================================
--- 21. PIVOT BULAN INI DAN BULAN LALU
+-- 19. PIVOT BULAN INI DAN BULAN LALU
 -- =====================================================
 perbandingan AS (
     SELECT
@@ -33071,7 +33042,7 @@ perbandingan AS (
 )
 
 -- =====================================================
--- 22. HASIL AKHIR
+-- 20. HASIL AKHIR
 -- =====================================================
 SELECT
     -- TOTAL PIUTANG
