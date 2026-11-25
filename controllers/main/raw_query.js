@@ -32505,8 +32505,8 @@ payment_rows AS (
 
     CROSS JOIN periode pr
 
-    WHERE ps.tanggal_bayar <
-        pr.bulan_ini + INTERVAL '1 month'
+    WHERE pr.tanggal_bayar >= p.bulan_ini
+  AND pr.tanggal_bayar < p.bulan_ini + INTERVAL '1 month'
 ),
 
 -- =====================================================
