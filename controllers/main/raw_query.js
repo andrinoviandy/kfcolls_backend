@@ -21832,7 +21832,7 @@ END = 'S'
         p.updated_at
 
     FROM public.d_piutang p
-    JOIN public.d_faktur_petugas fp
+    LEFT JOIN public.d_faktur_petugas fp
         ON fp.piutang_id = p.piutang_id
         AND fp.kegiatan = 'PENAGIHAN'
         AND fp.is_active = 'Y'
