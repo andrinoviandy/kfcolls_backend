@@ -32339,6 +32339,7 @@ const DASHBOARD_CONDITION_NO_DATE = `
 
 // FROM perbandingan
 // `;
+
 query.getDashboardCard1 = `
 WITH
 
@@ -32382,6 +32383,7 @@ periode_bulan AS (
 
 -- =====================================================
 -- 2. DATA PIUTANG
+-- Khusus snapshot bulan ini dan bulan lalu.
 -- =====================================================
 filtered_piutang AS (
     SELECT
@@ -32418,15 +32420,19 @@ filtered_piutang AS (
 ),
 
 -- =====================================================
--- 3. BILLING YANG LOLOS FILTER
+-- 3. BILLING UNTUK PEMBAYARAN
+-- Tidak menggunakan filter posting_date.
+-- Mengambil seluruh billing yang memenuhi filter dashboard.
 -- =====================================================
 filtered_billing AS (
     SELECT DISTINCT
-        BTRIM(COALESCE(no_billing, '')) AS billing_key
+        BTRIM(COALESCE(p.no_billing, '')) AS billing_key
 
-    FROM filtered_piutang
+    FROM public.d_piutang p
 
-    WHERE no_billing IS NOT NULL
+    WHERE p.no_billing IS NOT NULL
+
+    ${DASHBOARD_CONDITION_NO_DATE}
 ),
 
 -- =====================================================
@@ -32465,7 +32471,6 @@ payment_cod AS (
 
 -- =====================================================
 -- 6. GABUNGAN PEMBAYARAN
--- Pembayaran terverifikasi + COD.
 -- =====================================================
 payment_source AS (
     SELECT
@@ -32487,7 +32492,8 @@ payment_source AS (
 
 -- =====================================================
 -- 7. TRANSAKSI PEMBAYARAN
--- Hanya billing yang lolos filter piutang.
+-- Billing mengikuti filter dashboard, bukan posting_date.
+-- Pembayaran historis tetap diambil untuk snapshot piutang.
 -- =====================================================
 payment_rows AS (
     SELECT
@@ -32509,7 +32515,7 @@ payment_rows AS (
 
 -- =====================================================
 -- 8. COLLECTION PER BILLING DAN BULAN
--- Mengambil seluruh transaksi pada bulan terkait.
+-- Dikelompokkan berdasarkan tanggal pembayaran.
 -- =====================================================
 collection_per_billing_monthly AS (
     SELECT
@@ -32541,6 +32547,7 @@ collection_per_billing_monthly AS (
 
 -- =====================================================
 -- 9. TOTAL PEMBAYARAN KUMULATIF PER BILLING
+-- Digunakan untuk snapshot outstanding piutang.
 -- =====================================================
 payment_snapshot AS (
     SELECT
@@ -32564,40 +32571,7 @@ payment_snapshot AS (
 ),
 
 -- =====================================================
--- 10. COLLECTION PER PIUTANG DAN PERIODE
--- Mencocokkan bulan pembayaran dengan bulan snapshot.
--- =====================================================
-collection_per_piutang_monthly AS (
-    SELECT
-        pb.jenis,
-        p.piutang_id,
-        p.no_billing,
-        c.periode,
-        c.total_collection
-
-    FROM periode_bulan pb
-
-    INNER JOIN filtered_piutang p
-        ON p.posting_date >= pb.tanggal_mulai
-
-        AND p.posting_date < (
-            pb.tanggal_akhir + INTERVAL '1 day'
-        )
-
-    INNER JOIN collection_per_billing_monthly c
-        ON c.billing_key = BTRIM(
-            COALESCE(p.no_billing, '')
-        )
-
-        AND c.periode = DATE_TRUNC(
-            'month',
-            pb.tanggal_akhir
-        )
-),
-
--- =====================================================
--- 11. DATA BULANAN UNTUK PERHITUNGAN DOAR
--- Menggunakan tabel d_piutang langsung.
+-- 10. DATA BULANAN UNTUK PERHITUNGAN DOAR
 -- Tetap menghitung YTD.
 -- =====================================================
 doar_monthly AS (
@@ -32641,7 +32615,7 @@ doar_monthly AS (
 ),
 
 -- =====================================================
--- 12. AGREGASI DOAR PER CABANG DAN PERIODE
+-- 11. AGREGASI DOAR PER CABANG DAN PERIODE
 -- =====================================================
 doar_branch_aggregate AS (
     SELECT
@@ -32719,7 +32693,7 @@ doar_branch_aggregate AS (
 ),
 
 -- =====================================================
--- 13. HITUNG DOAR PER CABANG
+-- 12. HITUNG DOAR PER CABANG
 -- =====================================================
 doar_branch_periode AS (
     SELECT
@@ -32755,7 +32729,7 @@ doar_branch_periode AS (
 ),
 
 -- =====================================================
--- 14. REKAP DOAR SELURUH CABANG
+-- 13. REKAP DOAR SELURUH CABANG
 -- =====================================================
 rekap_doar AS (
     SELECT
@@ -32781,7 +32755,7 @@ rekap_doar AS (
 ),
 
 -- =====================================================
--- 15. SNAPSHOT PIUTANG PER AKHIR BULAN
+-- 14. SNAPSHOT PIUTANG PER AKHIR BULAN
 -- =====================================================
 snapshot_piutang AS (
     SELECT
@@ -32850,7 +32824,7 @@ snapshot_piutang AS (
 ),
 
 -- =====================================================
--- 16. REKAP SALDO PIUTANG PER BULAN
+-- 15. REKAP SALDO PIUTANG PER BULAN
 -- =====================================================
 rekap_piutang AS (
     SELECT
@@ -32891,29 +32865,33 @@ rekap_piutang AS (
 ),
 
 -- =====================================================
--- 17. REKAP PENCAIRAN MTD
--- Bulan ini dan bulan lalu berdasarkan bulan kalender.
+-- 16. REKAP PENCAIRAN
+-- Tidak menggunakan posting_date piutang.
+-- Hanya menggunakan bulan tanggal pembayaran.
 -- =====================================================
 rekap_pencairan AS (
     SELECT
         pb.jenis,
 
         COALESCE(
-            SUM(cp.total_collection),
+            SUM(c.total_collection),
             0
         ) AS pencairan_mtd
 
     FROM periode_bulan pb
 
-    LEFT JOIN collection_per_piutang_monthly cp
-        ON cp.jenis = pb.jenis
+    LEFT JOIN collection_per_billing_monthly c
+        ON c.periode = DATE_TRUNC(
+            'month',
+            pb.tanggal_akhir
+        )
 
     GROUP BY
         pb.jenis
 ),
 
 -- =====================================================
--- 18. GABUNGKAN KPI PER BULAN
+-- 17. GABUNGKAN KPI PER BULAN
 -- =====================================================
 kpi_bulanan AS (
     SELECT
@@ -32986,7 +32964,7 @@ kpi_bulanan AS (
 ),
 
 -- =====================================================
--- 19. PIVOT BULAN INI DAN BULAN LALU
+-- 18. PIVOT BULAN INI DAN BULAN LALU
 -- =====================================================
 perbandingan AS (
     SELECT
@@ -33042,7 +33020,7 @@ perbandingan AS (
 )
 
 -- =====================================================
--- 20. HASIL AKHIR
+-- 19. HASIL AKHIR
 -- =====================================================
 SELECT
     -- TOTAL PIUTANG
@@ -33221,6 +33199,7 @@ SELECT
 
 FROM perbandingan
 `;
+
 
 query.getDashboardPiutangByCabang = `
 WITH
