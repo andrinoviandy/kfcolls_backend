@@ -5832,7 +5832,7 @@ exports.insertFakturKembali = async (payload) => {
         const [totalUpdated] =
             await model.d_faktur_petugas.update(
                 {
-                    is_active: ['C','K'].includes(payload?.kd_status) ? 'Y' : 'T',
+                    is_active: ['C','K'].includes(payload?.kd_status) ? 'T' : 'Y',
                     kd_status: payload?.kd_status,
                     alasan_pengembalian: payload?.alasan,
                     updated_by: payload?.updated_by || 'SYSTEM',
