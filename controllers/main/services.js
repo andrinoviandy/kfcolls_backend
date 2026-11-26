@@ -11129,7 +11129,7 @@ exports.getDataReportSales = async (params = {}) => {
         // PAYMENT ROLE CONDITION
         // =========================================
         const rolePaymentCondition = isPetugas
-            ? `AND fp.nip = :role_nip`
+            ? `AND pr.nip = :role_nip`
             : "";
 
         // =========================================

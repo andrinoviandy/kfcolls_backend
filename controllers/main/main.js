@@ -2168,7 +2168,8 @@ dashboardHandlers.forEach((handlerName) => {
     exports[handlerName] = async (req, res) => {
         try {
             const params = {
-                ...req.query
+                ...req.query,
+                dataUser: req.user
             };
 
             const result = await serviceMain[handlerName](params);
