@@ -10998,29 +10998,15 @@ exports.getDataReportSales = async (params = {}) => {
         if (isPetugas) {
             condition += `
                 AND p.cabang = :role_cabang
-
-                AND EXISTS (
-                    SELECT 1
-                    FROM public.d_faktur_petugas fp_role
-                    JOIN LATERAL (
-                        SELECT
-                            ds_role.kd_status
-                        FROM public.d_status ds_role
-                        WHERE ds_role.foreign_id =
-                            fp_role.faktur_petugas_id
-                            AND ds_role.kegiatan = 'PENAGIHAN'
-                        ORDER BY
-                            ds_role.created_at DESC NULLS LAST
-                        LIMIT 1
-                    ) status_role ON TRUE
-                    WHERE fp_role.piutang_id = p.piutang_id
-                        AND fp_role.nip = :role_nip
-                        AND UPPER(
-                            COALESCE(status_role.kd_status, '')
-                        ) = 'S'
-                )
             `;
 
+            // AND EXISTS (
+            //         SELECT 1
+            //         FROM public.d_faktur_petugas fp_role
+            //         WHERE fp_role.piutang_id = p.piutang_id 
+            //             AND fp_role.is_active = 'Y'
+            //             AND fp_role.nip = :role_nip
+            //     )
             filterBind.role_cabang = roleCabang;
             filterBind.role_nip = roleNip;
         }
@@ -11137,10 +11123,10 @@ exports.getDataReportSales = async (params = {}) => {
         // =========================================
         const dataSQL = query.getDataReportSales
             .replace(/:condition/g, condition)
-            .replace(
-                /\/\*ROLE_PAYMENT_CONDITION\*\//g,
-                rolePaymentCondition
-            );
+            // .replace(
+            //     /\/\*ROLE_PAYMENT_CONDITION\*\//g,
+            //     rolePaymentCondition
+            // );
 
         const countSQL = query.countDataReportSales
             .replace(/:condition/g, condition);
@@ -11170,6 +11156,7 @@ exports.getDataReportSales = async (params = {}) => {
                     offset,
                 },
                 type: db.QueryTypes.SELECT,
+                logging: console.log
             }),
 
             db.query(countSQL, {

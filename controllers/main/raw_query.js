@@ -23300,7 +23300,7 @@ query.getDataReportSales = `
             SELECT
                 ds.kd_status
             FROM public.d_status ds
-            WHERE ds.foreign_id = fp.faktur_petugas_id
+            WHERE ds.foreign_id = dp.pembayaran_id
                 AND ds.kegiatan = 'PENAGIHAN'
             ORDER BY
                 ds.created_at DESC NULLS LAST
@@ -23462,7 +23462,7 @@ query.summaryDataReportSales = `
             SELECT
                 ds.kd_status
             FROM public.d_status ds
-            WHERE ds.foreign_id = fp.faktur_petugas_id
+            WHERE ds.foreign_id = dp.pembayaran_id
                 AND ds.kegiatan = 'PENAGIHAN'
             ORDER BY
                 ds.created_at DESC NULLS LAST
