@@ -10997,7 +10997,8 @@ exports.getDataReportSales = async (params = {}) => {
         // =========================================
         if (isPetugas) {
             condition += `
-                AND p.cabang = :role_cabang
+                AND p.cabang = :role_cabang 
+                AND mu.nip = :role_nip 
             `;
 
             // AND EXISTS (
@@ -11123,10 +11124,10 @@ exports.getDataReportSales = async (params = {}) => {
         // =========================================
         const dataSQL = query.getDataReportSales
             .replace(/:condition/g, condition)
-            // .replace(
-            //     /\/\*ROLE_PAYMENT_CONDITION\*\//g,
-            //     rolePaymentCondition
-            // );
+            .replace(
+                /\/\*ROLE_PAYMENT_CONDITION\*\//g,
+                rolePaymentCondition
+            );
 
         const countSQL = query.countDataReportSales
             .replace(/:condition/g, condition);

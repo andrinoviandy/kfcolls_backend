@@ -23241,14 +23241,16 @@ query.getDataReportSales = `
             p.no_billing,
             p.customer,
             p.cabang,
-            p.sales,
+            mu.nip AS sales,
             mu.nama AS nama_sales,
             p.channel_id,
             p.posting_date,
-            COALESCE(p.dpp, 0) AS dpp
+            COALESCE(p.dpp, 0) AS dpp,
+            COALESCE(p.ppn, 0) AS ppn 
         FROM public.d_piutang p 
-        LEFT JOIN m_user mu 
-        ON mu.kode_sales = p.sales
+        JOIN public.d_faktur_petugas dfp 
+        ON dfp.piutang_id = p.piutang_id 
+        LEFT JOIN public.m_user mu ON mu.nip = dfp.nip
         WHERE 1 = 1
             :condition
     ),
@@ -23273,7 +23275,7 @@ query.getDataReportSales = `
             COUNT(DISTINCT no_billing) AS total_transaksi,
             COUNT(DISTINCT customer) AS total_customer,
 
-            COALESCE(SUM(dpp), 0) AS total_penjualan
+            COALESCE(SUM(dpp+ppn), 0) AS total_penjualan
 
         FROM invoice_data
         GROUP BY
@@ -23295,6 +23297,8 @@ query.getDataReportSales = `
 
         INNER JOIN public.d_faktur_petugas fp
             ON fp.piutang_id = pi.piutang_id
+
+        LEFT JOIN m_user mu ON mu.nip = fp.nip
 
         JOIN LATERAL (
             SELECT
@@ -23389,7 +23393,10 @@ query.countDataReportSales = `
             p.sales,
             p.nama_sales,
             p.cabang
-        FROM public.d_piutang p
+        FROM public.d_piutang p 
+        JOIN public.d_faktur_petugas dfp 
+        ON dfp.piutang_id = p.piutang_id 
+        LEFT JOIN public.m_user mu ON mu.nip = dfp.nip 
         WHERE 1 = 1
             :condition
     ),
@@ -23419,13 +23426,17 @@ query.summaryDataReportSales = `
             p.no_billing,
             p.customer,
             p.cabang,
-            p.sales,
-            p.nama_sales,
+            mu.nip AS sales,
+            mu.nama AS nama_sales,
             p.channel_id,
             p.posting_date,
-            COALESCE(p.dpp, 0) AS dpp
-        FROM public.d_piutang p
-        WHERE 1 = 1
+            COALESCE(p.dpp, 0) AS dpp,
+            COALESCE(p.ppn, 0) AS ppn 
+        FROM public.d_piutang p 
+        JOIN public.d_faktur_petugas dfp 
+        ON dfp.piutang_id = p.piutang_id 
+        LEFT JOIN public.m_user mu ON mu.nip = dfp.nip 
+        WHERE 1 = 1 
             :condition
     ),
 
@@ -23438,7 +23449,7 @@ query.summaryDataReportSales = `
     -- TOTAL INVOICE
     invoice_summary AS (
         SELECT
-            COALESCE(SUM(dpp), 0) AS total_penjualan,
+            COALESCE(SUM(dpp+ppn), 0) AS total_penjualan,
             COUNT(DISTINCT no_billing) AS total_transaksi,
             COUNT(DISTINCT customer) AS total_customer
         FROM invoice_data
@@ -23457,6 +23468,8 @@ query.summaryDataReportSales = `
 
         INNER JOIN public.d_faktur_petugas fp
             ON fp.piutang_id = pi.piutang_id
+
+        LEFT JOIN public.m_user mu ON fp.nip = mu.nip 
 
         JOIN LATERAL (
             SELECT
@@ -23542,10 +23555,11 @@ query.getDetailPenjualan = `
     p.pph AS "PPH",
     p.aging AS "Aging"
 
-  FROM public.d_piutang p
-
-  WHERE p.sales::text = :kode_sales
-
+  FROM public.d_piutang p 
+  JOIN d_faktur_petugas fp ON fp.piutang_id = p.piutang_id 
+  LEFT JOIN m_user mu ON mu.nip = fp.nip 
+  WHERE fp.nip = :kode_sales 
+  AND fp.is_active = 'Y' 
   ORDER BY
     p.posting_date DESC NULLS LAST,
     p.no_billing ASC
@@ -23564,11 +23578,13 @@ query.getDetailPencairan = `
     UNION ALL
 
     SELECT
-      no_billing,
-      tanggal_pembayaran,
-      nominal_bayar AS nominal,
+      dp.no_billing,
+      dp.tanggal_pembayaran,
+      dp.nominal_bayar AS nominal,
       'PEMBAYARAN' AS sumber
-    FROM public.d_pembayaran
+    FROM public.d_pembayaran dp 
+    LEFT JOIN d_status ds ON ds.foreign_id = dp.pembayaran_id 
+    WHERE ds.kd_status = 'S'
   ),
 
   payment_totals AS (
@@ -23600,12 +23616,13 @@ query.getDetailPencairan = `
     pay.tanggal_pelunasan AS "Tanggal Pelunasan",
     pay.total_pembayaran AS "Total Pembayaran"
 
-  FROM public.d_piutang p
-
+  FROM public.d_piutang p 
+  JOIN d_faktur_petugas fp ON fp.piutang_id = p.piutang_id 
+  LEFT JOIN m_user mu ON mu.nip = fp.nip 
   INNER JOIN payment_totals pay
     ON pay.no_billing = p.no_billing
 
-  WHERE p.sales::text = :kode_sales
+  WHERE fp.nip = :kode_sales
 
   ORDER BY
     p.posting_date DESC NULLS LAST,
