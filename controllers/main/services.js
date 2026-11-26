@@ -5832,7 +5832,7 @@ exports.insertFakturKembali = async (payload) => {
         const [totalUpdated] =
             await model.d_faktur_petugas.update(
                 {
-                    is_active: ['C','K'].includes(payload?.kd_status) ? 'T' : 'Y',
+                    is_active: ['C', 'K'].includes(payload?.kd_status) ? 'T' : 'Y',
                     kd_status: payload?.kd_status,
                     alasan_pengembalian: payload?.alasan,
                     updated_by: payload?.updated_by || 'SYSTEM',
@@ -9560,31 +9560,31 @@ exports.getDataBayarFaktur = async (params = {}) => {
 };
 
 exports.getHistoryPembayaran = async (params = {}) => {
-  try {
-    const noBilling = String(params?.no_billing || "").trim();
+    try {
+        const noBilling = String(params?.no_billing || "").trim();
 
-    if (!noBilling) {
-      throw new Error("No Billing wajib diisi");
+        if (!noBilling) {
+            throw new Error("No Billing wajib diisi");
+        }
+
+        const result = await db.query(
+            query.getHistoryPembayaranBayarFaktur,
+            {
+                replacements: {
+                    no_billing: noBilling,
+                },
+                type: db.QueryTypes.SELECT,
+            }
+        );
+
+        return {
+            no_billing: noBilling,
+            h_pembayaran: result || [],
+        };
+    } catch (error) {
+        console.error("ERROR SERVICE GET HISTORY PEMBAYARAN:", error);
+        throw error;
     }
-
-    const result = await db.query(
-      query.getHistoryPembayaranBayarFaktur,
-      {
-        replacements: {
-          no_billing: noBilling,
-        },
-        type: db.QueryTypes.SELECT,
-      }
-    );
-
-    return {
-      no_billing: noBilling,
-      h_pembayaran: result || [],
-    };
-  } catch (error) {
-    console.error("ERROR SERVICE GET HISTORY PEMBAYARAN:", error);
-    throw error;
-  }
 };
 
 exports.verifikasiBayarFaktur = async (
@@ -13873,13 +13873,21 @@ const getValues = (params, ...keys) => {
 // PERSIAPAN FILTER
 // =====================================================
 const prepareFilters = (params = {}) => {
-    const cabang = getValues(
-        params,
-        'cabang',
-        'cabang[]',
-        'sales_office',
-        'sales_office[]'
-    );
+    const roleId = String(params?.dataUser?.role_id || '').trim();
+
+    const isRoleCabang = ['02', '03', '04'].includes(roleId);
+
+    const cabang = isRoleCabang
+        ? getValues(params.dataUser, 'cabang_id')
+        : getValues(
+            params,
+            'cabang_id',
+            'cabang_id[]',
+            'cabang',
+            'cabang[]',
+            'sales_office',
+            'sales_office[]'
+        );
 
     const principal = getValues(
         params,
@@ -14293,6 +14301,17 @@ exports.getTrendPencairanPiutang = async (params) => {
 
 exports.getDashboardCard1 = async (params = {}) => {
     try {
+
+        // =====================================================
+        // FILTER CABANG BERDASARKAN ROLE
+        // =====================================================
+        const roleId = String(params?.dataUser?.role_id || '').trim();
+
+        const roleCabangEnabled = ['02', '03', '04'].includes(roleId);
+
+        const roleCabang = roleCabangEnabled
+            ? params?.dataUser?.cabang_id || null
+            : null;
         // =====================================================
         // NORMALIZE FILTER
         // =====================================================
@@ -14396,7 +14415,10 @@ exports.getDashboardCard1 = async (params = {}) => {
             channel_all: channelAll,
             customer_all: customerAll,
 
-            tanggal_akhir: tanggalAkhir
+            tanggal_akhir: tanggalAkhir,
+            // FILTER ROLE
+            role_cabang_enabled: roleCabangEnabled,
+            role_cabang: roleCabang
         };
 
         // =====================================================
@@ -14407,7 +14429,6 @@ exports.getDashboardCard1 = async (params = {}) => {
         return await db.query(query.getDashboardCard1, {
             replacements: filters,
             type: db.QueryTypes.SELECT,
-            logging: console.log
         });
 
     } catch (error) {
@@ -14745,7 +14766,7 @@ exports.getDetailPiutangDashboard = async (params = {}) => {
         );
 
         const limit = Math.min(
-            100,
+            10,
             Math.max(
                 1,
                 Number.parseInt(params.limit, 10) || 10
@@ -15544,7 +15565,25 @@ exports.getSaldoAkhirJatuhTempoDashboard = async (params) => {
             cabang.length &&
             !cabang.some((item) => item.toUpperCase() === 'ALL')
         ) {
-            condition += ` AND p.cabang IN (:cabang)`;
+            if (
+                ['02', '03', '04'].includes(
+                    String(params?.dataUser?.role_id || '')
+                )
+            ) {
+                condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}'`;
+                bind.cabang = cabang;
+            } else {
+                condition += ` AND p.cabang IN (:cabang)`;
+                bind.cabang = cabang;
+            }
+        }
+
+        if (
+            ['02', '03', '04'].includes(
+                String(params?.dataUser?.role_id || '')
+            ) && cabang.length === 0
+        ) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}'`;
             bind.cabang = cabang;
         }
 
@@ -15781,7 +15820,25 @@ exports.getAgingPiutangDashboard = async (params) => {
             cabang.length &&
             !cabang.some((item) => item.toUpperCase() === 'ALL')
         ) {
-            condition += ` AND p.cabang IN (:cabang)`;
+            if (
+                ['02', '03', '04'].includes(
+                    String(params?.dataUser?.role_id || '')
+                )
+            ) {
+                condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}'`;
+                bind.cabang = cabang;
+            } else {
+                condition += ` AND p.cabang IN (:cabang)`;
+                bind.cabang = cabang;
+            }
+        }
+
+        if (
+            ['02', '03', '04'].includes(
+                String(params?.dataUser?.role_id || '')
+            ) && cabang.length === 0
+        ) {
+            condition += ` AND p.cabang = '${params?.dataUser?.cabang_id}'`;
             bind.cabang = cabang;
         }
 

@@ -32417,6 +32417,11 @@ filtered_piutang AS (
     )
 
     ${DASHBOARD_CONDITION_NO_DATE}
+
+    AND (
+        :role_cabang_enabled = FALSE
+        OR p.cabang = :role_cabang
+    )
 ),
 
 -- =====================================================
@@ -32432,7 +32437,12 @@ filtered_billing AS (
 
     WHERE p.no_billing IS NOT NULL
 
-    ${DASHBOARD_CONDITION_NO_DATE}
+    ${DASHBOARD_CONDITION_NO_DATE} 
+
+    AND (
+        :role_cabang_enabled = FALSE
+        OR p.cabang = :role_cabang
+    )
 ),
 
 -- =====================================================
@@ -32608,6 +32618,11 @@ doar_monthly AS (
         )
 
         ${DASHBOARD_CONDITION_NO_DATE}
+
+        AND (
+            :role_cabang_enabled = FALSE
+            OR p.cabang = :role_cabang
+        )
 
     GROUP BY
         p.cabang,
