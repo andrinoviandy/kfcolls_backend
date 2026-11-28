@@ -5982,11 +5982,11 @@ exports.insertTukarFaktur = async (payload, files, transaction) => {
                 transaction
             });
 
-        if (existingData && existingData.length > 0) {
-            throw new Error(
-                `Terdapat ${existingData.length} piutang yang sudah melakukan proses Tukar Faktur`
-            );
-        }
+        // if (existingData && existingData.length > 0) {
+        //     throw new Error(
+        //         `Terdapat ${existingData.length} piutang yang sudah melakukan proses Tukar Faktur`
+        //     );
+        // }
 
         /*
          * Upload 1 file untuk seluruh faktur
