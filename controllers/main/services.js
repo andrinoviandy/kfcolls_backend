@@ -11807,10 +11807,8 @@ exports.getDataPenerimaanLain = async (params) => {
             )
         ) {
             condition += `
-                AND dp.cabang_id = :role_cabang
+                AND dp.cabang_id = '${params.dataUser.cabang_id}'
             `;
-
-            bind.role_cabang = params.dataUser.cabang_id;
         }
 
         // =====================================================
