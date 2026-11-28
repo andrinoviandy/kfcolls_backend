@@ -10728,6 +10728,21 @@ exports.getMonitoringPenugasan = async (params = {}) => {
             summaryBind.keyword = `%${keyword}%`;
         }
 
+        if (
+            ['02', '03', '04'].includes(
+                String(params?.dataUser?.role_id || '')
+            )
+        ) {
+            const cabangCondition = `
+                AND p.cabang = '${params?.dataUser?.cabang_id}'
+            `;
+
+            condition += cabangCondition;
+            summaryCondition += cabangCondition;
+
+            bind.sales_offices = salesOffices;
+            summaryBind.sales_offices = salesOffices;
+        }
         // =========================
         // FILTER CABANG
         // =========================

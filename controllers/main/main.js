@@ -1823,7 +1823,8 @@ exports.getMonitoringPenugasan = async (req, res) => {
     try {
 
         const params = {
-            ...req.query
+            ...req.query,
+            dataUser: req.user
         };
 
         console.log(
