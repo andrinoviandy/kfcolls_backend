@@ -9193,11 +9193,11 @@ exports.getDataBayarFaktur = async (params = {}) => {
                     AND EXISTS (SELECT 1 FROM d_pembayaran dpp where dpp.no_billing = p.no_billing AND dpp.metode_pembayaran = 'BIAYA_LAIN')
                 `;
             }
-            if (['03'].includes(roleId)) {
-                condition += `
-                    AND EXISTS (SELECT 1 FROM d_pembayaran dpp where dpp.no_billing = p.no_billing AND dpp.metode_pembayaran != 'BIAYA_LAIN')
-                `;
-            }
+            // if (['03'].includes(roleId)) {
+            //     condition += `
+            //         AND EXISTS (SELECT 1 FROM d_pembayaran dpp where dpp.no_billing = p.no_billing AND dpp.metode_pembayaran != 'BIAYA_LAIN')
+            //     `;
+            // }
 
             bind.role_cabang = params?.dataUser?.cabang_id;
         }
