@@ -152,7 +152,7 @@ exports.getReferensiByJenis = async (jns_ref, keyword, cabang_id, dataUser) => {
     if (
         ['02', '03', '04'].includes(
             String(dataUser?.role_id || '')
-        )
+        ) && ['cabang_id', 'cabang'].includes(jns_ref)
     ) {
         condition += `
                 AND a.kd_ref = '${dataUser?.cabang_id}'
